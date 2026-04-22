@@ -39,6 +39,9 @@ private slots:
     void combinesNonSpacingMarks();
     void storesWideCharactersAcrossTwoCells();
     void keepsNonBmpWideCharactersAcrossWrites();
+    void encodesCursorKeysByMode();
+    void encodesBracketedPasteByMode();
+    void emitsOutboundDataForKeyAndPaste();
     void clearsState();
 };
 
@@ -373,6 +376,47 @@ void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, emoji);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
+}
+
+void QTermCoreTest::encodesCursorKeysByMode()
+{
+    QTermCore core;
+
+    QCOMPARE(core.encodeKey(Qt::Key_Up), QByteArray("\x1b[A"));
+    QCOMPARE(core.encodeKey(Qt::Key_Home), QByteArray("\x1b[H"));
+
+    core.writePlainText("\x1b[?1h"_L1);
+
+    QCOMPARE(core.encodeKey(Qt::Key_Up), QByteArray("\x1bOA"));
+    QCOMPARE(core.encodeKey(Qt::Key_Home), QByteArray("\x1bOH"));
+    QCOMPARE(core.encodeKey(Qt::Key_A, "a"_L1), QByteArray("a"));
+    QCOMPARE(core.encodeKey(Qt::Key_Return), QByteArray("\r"));
+}
+
+void QTermCoreTest::encodesBracketedPasteByMode()
+{
+    QTermCore core;
+    const QString pastedText = QString::fromUtf8(u8"中a\n");
+
+    QCOMPARE(core.encodePaste(pastedText), pastedText.toUtf8());
+
+    core.writePlainText("\x1b[?2004h"_L1);
+
+    QCOMPARE(core.encodePaste(pastedText), QByteArray("\x1b[200~") + pastedText.toUtf8() + QByteArray("\x1b[201~"));
+}
+
+void QTermCoreTest::emitsOutboundDataForKeyAndPaste()
+{
+    QTermCore core;
+    QSignalSpy spy(&core, &QTermCore::outboundData);
+
+    core.writePlainText("\x1b[?1h\x1b[?2004h"_L1);
+    core.sendKey(Qt::Key_Up);
+    core.sendPaste("hi"_L1);
+
+    QCOMPARE(spy.size(), 2);
+    QCOMPARE(spy.at(0).at(0).toByteArray(), QByteArray("\x1bOA"));
+    QCOMPARE(spy.at(1).at(0).toByteArray(), QByteArray("\x1b[200~hi\x1b[201~"));
 }
 
 void QTermCoreTest::clearsState()

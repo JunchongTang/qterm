@@ -1,5 +1,6 @@
 #include "QTermCore.h"
 
+#include "QTermInputEncoder.h"
 #include "QTermInputExecutor.h"
 
 #include <QtGlobal>
@@ -51,6 +52,16 @@ const QTermModeState &QTermCore::modeState() const noexcept
     return m_modeState;
 }
 
+QByteArray QTermCore::encodeKey(int key, const QString &text) const
+{
+    return QTermInputEncoder::encodeKey(m_modeState, key, text);
+}
+
+QByteArray QTermCore::encodePaste(const QString &text) const
+{
+    return QTermInputEncoder::encodePaste(m_modeState, text);
+}
+
 void QTermCore::clear()
 {
     m_primaryScreen.clear();
@@ -86,6 +97,26 @@ void QTermCore::setTerminalSize(int columns, int rows)
     emit sizeChanged();
     emit debugPlainTextChanged();
     emit cursorStateChanged();
+}
+
+void QTermCore::sendKey(int key, const QString &text)
+{
+    const QByteArray encoded = encodeKey(key, text);
+    if (encoded.isEmpty()) {
+        return;
+    }
+
+    emit outboundData(encoded);
+}
+
+void QTermCore::sendPaste(const QString &text)
+{
+    const QByteArray encoded = encodePaste(text);
+    if (encoded.isEmpty()) {
+        return;
+    }
+
+    emit outboundData(encoded);
 }
 
 const QTermScreenState &QTermCore::activeScreen() const noexcept
