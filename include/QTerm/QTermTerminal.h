@@ -1,6 +1,7 @@
 #ifndef QTERM_QTERMTERMINAL_H
 #define QTERM_QTERMTERMINAL_H
 
+#include <QByteArray>
 #include <QObject>
 #include <QString>
 
@@ -29,6 +30,8 @@ public:
     Q_INVOKABLE void clear();
     Q_INVOKABLE void feedText(const QString &text);
     Q_INVOKABLE void setTerminalSize(int columns, int rows);
+    Q_INVOKABLE void sendKey(int key, const QString &text = QString());
+    Q_INVOKABLE void sendPaste(const QString &text);
 
 public slots:
     void setTitle(const QString &title);
@@ -36,6 +39,7 @@ public slots:
 signals:
     void sizeChanged();
     void titleChanged();
+    void outboundData(const QByteArray &data);
 
 private:
     QTermCore *m_core = nullptr;

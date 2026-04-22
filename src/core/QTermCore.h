@@ -1,6 +1,7 @@
 #ifndef QTERM_QTERMCORE_H
 #define QTERM_QTERMCORE_H
 
+#include <QByteArray>
 #include <QObject>
 #include <QString>
 
@@ -23,15 +24,20 @@ public:
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
     const QTermModeState &modeState() const noexcept;
+    QByteArray encodeKey(int key, const QString &text = QString()) const;
+    QByteArray encodePaste(const QString &text) const;
 
     void clear();
     void writePlainText(const QString &text);
     void setTerminalSize(int columns, int rows);
+    void sendKey(int key, const QString &text = QString());
+    void sendPaste(const QString &text);
 
 signals:
     void sizeChanged();
     void debugPlainTextChanged();
     void cursorStateChanged();
+    void outboundData(const QByteArray &data);
 
 private:
     const QTermScreenState &activeScreen() const noexcept;

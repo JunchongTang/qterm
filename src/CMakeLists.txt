@@ -5,6 +5,8 @@ qt_add_library(qterm STATIC
     core/QTermBuffer.cpp
     core/QTermCell.h
     core/QTermCore.h
+    core/QTermInputEncoder.h
+    core/QTermInputEncoder.cpp
     core/QTermInputExecutor.h
     core/QTermInputExecutor.cpp
     core/QTermLine.h

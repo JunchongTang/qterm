@@ -18,6 +18,8 @@ QTermTerminal::QTermTerminal(QObject *parent)
         m_surfaceModel.setPlainText(m_core->debugPlainText());
     });
 
+    connect(m_core, &QTermCore::outboundData, this, &QTermTerminal::outboundData);
+
     m_surfaceModel.setSize(m_core->columns(), m_core->rows());
     m_surfaceModel.setPlainText(m_core->debugPlainText());
 }
@@ -55,6 +57,16 @@ void QTermTerminal::feedText(const QString &text)
 void QTermTerminal::setTerminalSize(int columns, int rows)
 {
     m_core->setTerminalSize(columns, rows);
+}
+
+void QTermTerminal::sendKey(int key, const QString &text)
+{
+    m_core->sendKey(key, text);
+}
+
+void QTermTerminal::sendPaste(const QString &text)
+{
+    m_core->sendPaste(text);
 }
 
 void QTermTerminal::setTitle(const QString &title)
