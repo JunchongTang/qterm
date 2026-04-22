@@ -1,39 +1,29 @@
 #ifndef QTERM_QTERMINPUTEXECUTOR_H
 #define QTERM_QTERMINPUTEXECUTOR_H
 
-#include <optional>
 #include <QString>
 #include <QVector>
 
-#include "QTermBuffer.h"
-#include "QTermCursorState.h"
+#include "QTermModeState.h"
+#include "QTermScreenState.h"
 
 namespace QTerm {
-
-struct QTermSavedCursorState
-{
-    QTermCursorState cursorState;
-    QTermCellAttributes attributes;
-};
 
 class QTermInputExecutor
 {
 public:
-    QTermInputExecutor(QTermBuffer &buffer,
-                       const QTermCursorState &cursorState,
-                       bool wrapPending,
-                       const QTermCellAttributes &currentAttributes,
-                       const std::optional<QTermSavedCursorState> &savedCursorState,
-                       int scrollTop,
-                       int scrollBottom);
+    QTermInputExecutor(QTermScreenState &primaryScreen,
+                       QTermScreenState &alternateScreen,
+                       QTermModeState &modeState);
 
     QTermCursorState cursorState() const noexcept;
-    bool wrapPending() const noexcept;
+    const QTermModeState &modeState() const noexcept;
     QTermCellAttributes currentAttributes() const noexcept;
     std::optional<QTermSavedCursorState> savedCursorState() const;
     int scrollTop() const noexcept;
     int scrollBottom() const noexcept;
     int rows() const noexcept;
+    bool isAlternateScreenActive() const noexcept;
 
     void print(const QString &text);
     void lineFeed();
@@ -55,19 +45,21 @@ public:
     void setScrollRegion(int top, int bottom);
     void saveCursor();
     void restoreCursor();
+    void setPrivateModes(const QVector<int> &parameters, bool enabled);
 
 private:
+    QTermScreenState &currentScreen() noexcept;
+    const QTermScreenState &currentScreen() const noexcept;
+    QTermScreenState &inactiveScreen() noexcept;
     void setCursorState(const QTermCursorState &cursorState);
     void wrapToNextLine();
     void advanceToNextRow();
+    void enterAlternateScreen(bool saveCursor, bool clearScreen);
+    void leaveAlternateScreen(bool restoreCursor);
 
-    QTermBuffer &m_buffer;
-    QTermCursorState m_cursorState;
-    bool m_wrapPending = false;
-    QTermCellAttributes m_currentAttributes;
-    std::optional<QTermSavedCursorState> m_savedCursorState;
-    int m_scrollTop = 0;
-    int m_scrollBottom = 0;
+    QTermScreenState &m_primaryScreen;
+    QTermScreenState &m_alternateScreen;
+    QTermModeState &m_modeState;
 };
 
 } // namespace QTerm

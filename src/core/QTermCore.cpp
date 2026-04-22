@@ -1,5 +1,7 @@
 #include "QTermCore.h"
 
+#include "QTermInputExecutor.h"
+
 #include <QtGlobal>
 
 namespace {
@@ -14,45 +16,48 @@ namespace QTerm {
 
 QTermCore::QTermCore(QObject *parent)
     : QObject(parent)
-    , m_buffer(80, 24)
+    , m_primaryScreen(80, 24)
+    , m_alternateScreen(80, 24)
 {
 }
 
 int QTermCore::rows() const noexcept
 {
-    return m_buffer.rows();
+    return activeScreen().buffer.rows();
 }
 
 int QTermCore::columns() const noexcept
 {
-    return m_buffer.columns();
+    return activeScreen().buffer.columns();
 }
 
 QString QTermCore::debugPlainText() const
 {
-    return m_buffer.debugPlainText();
+    return activeScreen().buffer.debugPlainText();
 }
 
 QTermCursorState QTermCore::cursorState() const noexcept
 {
-    return m_cursorState;
+    return activeScreen().cursorState;
 }
 
 const QTermBuffer &QTermCore::buffer() const noexcept
 {
-    return m_buffer;
+    return activeScreen().buffer;
+}
+
+const QTermModeState &QTermCore::modeState() const noexcept
+{
+    return m_modeState;
 }
 
 void QTermCore::clear()
 {
-    m_buffer.clear();
-    m_wrapPending = false;
-    m_currentAttributes = QTermCellAttributes();
-    m_savedCursorState.reset();
-    m_scrollTop = 0;
-    m_scrollBottom = rows() - 1;
+    m_primaryScreen.clear();
+    m_alternateScreen.clear();
+    m_modeState = QTermModeState();
     emit debugPlainTextChanged();
-    setCursorState(QTermCursorState());
+    emit cursorStateChanged();
 }
 
 void QTermCore::writePlainText(const QString &text)
@@ -61,62 +66,31 @@ void QTermCore::writePlainText(const QString &text)
         return;
     }
 
-    QTermInputExecutor executor(m_buffer,
-                                m_cursorState,
-                                m_wrapPending,
-                                m_currentAttributes,
-                                m_savedCursorState,
-                                m_scrollTop,
-                                m_scrollBottom);
+    QTermInputExecutor executor(m_primaryScreen, m_alternateScreen, m_modeState);
     m_textParser.parse(text, executor);
-    m_wrapPending = executor.wrapPending();
-    m_currentAttributes = executor.currentAttributes();
-    m_savedCursorState = executor.savedCursorState();
-    m_scrollTop = executor.scrollTop();
-    m_scrollBottom = executor.scrollBottom();
-    setCursorState(executor.cursorState());
 
     emit debugPlainTextChanged();
+    emit cursorStateChanged();
 }
 
 void QTermCore::setTerminalSize(int columns, int rows)
 {
     const int boundedColumns = qMax(columns, kMinimumColumns);
     const int boundedRows = qMax(rows, kMinimumRows);
-    if (m_buffer.columns() == boundedColumns && m_buffer.rows() == boundedRows) {
+    if (m_primaryScreen.buffer.columns() == boundedColumns && m_primaryScreen.buffer.rows() == boundedRows) {
         return;
     }
 
-    m_buffer.resize(boundedColumns, boundedRows);
-    if (m_cursorState.row >= boundedRows) {
-        m_cursorState.row = boundedRows - 1;
-    }
-    if (m_cursorState.column >= boundedColumns) {
-        m_cursorState.column = boundedColumns - 1;
-    }
-    if (m_savedCursorState.has_value()) {
-        m_savedCursorState->cursorState.row = qBound(0, m_savedCursorState->cursorState.row, boundedRows - 1);
-        m_savedCursorState->cursorState.column = qBound(0, m_savedCursorState->cursorState.column, boundedColumns - 1);
-    }
-    m_scrollTop = qBound(0, m_scrollTop, boundedRows - 1);
-    m_scrollBottom = qBound(0, m_scrollBottom, boundedRows - 1);
-    if (m_scrollBottom < m_scrollTop) {
-        m_scrollTop = 0;
-        m_scrollBottom = boundedRows - 1;
-    }
+    m_primaryScreen.resize(boundedColumns, boundedRows);
+    m_alternateScreen.resize(boundedColumns, boundedRows);
     emit sizeChanged();
     emit debugPlainTextChanged();
     emit cursorStateChanged();
 }
 
-void QTermCore::setCursorState(const QTermCursorState &cursorState)
+const QTermScreenState &QTermCore::activeScreen() const noexcept
 {
-    if (m_cursorState.row == cursorState.row && m_cursorState.column == cursorState.column) {
-        return;
-    }
-
-    m_cursorState = cursorState;
-    emit cursorStateChanged();
+    return m_modeState.alternateScreenActive ? m_alternateScreen : m_primaryScreen;
 }
 
 } // namespace QTerm

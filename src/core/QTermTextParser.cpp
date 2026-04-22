@@ -6,13 +6,28 @@ namespace QTerm {
 
 void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
 {
-    for (const QChar character : text) {
+    for (int index = 0; index < text.size(); ++index) {
+        QChar character = text.at(index);
+
+        if (!m_pendingHighSurrogate.isNull() && m_state == State::Ground) {
+            if (character.isLowSurrogate()) {
+                handleGroundTextUnit(QString(m_pendingHighSurrogate) + character, executor);
+                m_pendingHighSurrogate = QChar();
+                continue;
+            }
+
+            handleGroundTextUnit(QString(m_pendingHighSurrogate), executor);
+            m_pendingHighSurrogate = QChar();
+        }
+
         switch (m_state) {
         case State::Ground:
             if (character == u'\x1b') {
                 m_state = State::Escape;
+            } else if (character.isHighSurrogate()) {
+                m_pendingHighSurrogate = character;
             } else {
-                handleGroundCharacter(character, executor);
+                handleGroundTextUnit(QString(character), executor);
             }
             break;
         case State::Escape:
@@ -30,7 +45,7 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
             if (character.isDigit() || character == u';' || character == u'?') {
                 m_csiParameters.append(character);
             } else {
-                handleCsiFinal(character, executor);
+                handleCsiFinal(m_csiParameters.startsWith(u'?'), character, executor);
                 m_csiParameters.clear();
                 m_state = State::Ground;
             }
@@ -73,30 +88,49 @@ QVector<int> QTermTextParser::parseCsiParameters(const QString &text)
     return parameters;
 }
 
-void QTermTextParser::handleGroundCharacter(QChar character, QTermInputExecutor &executor)
+void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecutor &executor)
 {
-    switch (character.unicode()) {
-    case '\n':
-        executor.lineFeed();
-        break;
-    case '\r':
-        executor.carriageReturn();
-        break;
-    case '\b':
-        executor.backspace();
-        break;
-    case '\t':
-        executor.horizontalTab();
-        break;
-    default:
-        executor.print(QString(character));
-        break;
+    if (text.size() == 1) {
+        switch (text.front().unicode()) {
+        case '\n':
+            executor.lineFeed();
+            break;
+        case '\r':
+            executor.carriageReturn();
+            break;
+        case '\b':
+            executor.backspace();
+            break;
+        case '\t':
+            executor.horizontalTab();
+            break;
+        default:
+            executor.print(text);
+            break;
+        }
+        return;
     }
+
+    executor.print(text);
 }
 
-void QTermTextParser::handleCsiFinal(QChar final, QTermInputExecutor &executor)
+void QTermTextParser::handleCsiFinal(bool privateMode, QChar final, QTermInputExecutor &executor)
 {
     const QVector<int> parameters = parseCsiParameters(m_csiParameters);
+
+    if (privateMode) {
+        switch (final.unicode()) {
+        case 'h':
+            executor.setPrivateModes(parameters, true);
+            break;
+        case 'l':
+            executor.setPrivateModes(parameters, false);
+            break;
+        default:
+            break;
+        }
+        return;
+    }
 
     switch (final.unicode()) {
     case 'A':
@@ -161,7 +195,7 @@ void QTermTextParser::handleEscapeFinal(QChar final, QTermInputExecutor &executo
         executor.restoreCursor();
         break;
     default:
-        handleGroundCharacter(final, executor);
+        handleGroundTextUnit(QString(final), executor);
         break;
     }
 }

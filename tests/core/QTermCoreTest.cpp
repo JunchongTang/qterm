@@ -31,6 +31,14 @@ private slots:
     void supportsSaveAndRestoreCursor();
     void supportsEscapeSaveAndRestoreCursor();
     void supportsScrollRegionDuringLineFeed();
+    void togglesCursorVisibilityMode();
+    void togglesBracketedPasteMode();
+    void togglesApplicationCursorKeysMode();
+    void switchesToAlternateScreen();
+    void restoresPrimaryScreenFromAlternate();
+    void combinesNonSpacingMarks();
+    void storesWideCharactersAcrossTwoCells();
+    void keepsNonBmpWideCharactersAcrossWrites();
     void clearsState();
 };
 
@@ -259,6 +267,112 @@ void QTermCoreTest::supportsScrollRegionDuringLineFeed()
     QCOMPARE(core.debugPlainText(), "1\n3\nX"_L1);
     QCOMPARE(core.cursorState().row, 2);
     QCOMPARE(core.cursorState().column, 1);
+}
+
+void QTermCoreTest::togglesCursorVisibilityMode()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[?25l"_L1);
+    QVERIFY(!core.modeState().cursorVisible);
+
+    core.writePlainText("\x1b[?25h"_L1);
+    QVERIFY(core.modeState().cursorVisible);
+}
+
+void QTermCoreTest::togglesBracketedPasteMode()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[?2004h"_L1);
+    QVERIFY(core.modeState().bracketedPaste);
+
+    core.writePlainText("\x1b[?2004l"_L1);
+    QVERIFY(!core.modeState().bracketedPaste);
+}
+
+void QTermCoreTest::togglesApplicationCursorKeysMode()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[?1h"_L1);
+    QVERIFY(core.modeState().applicationCursorKeys);
+
+    core.writePlainText("\x1b[?1l"_L1);
+    QVERIFY(!core.modeState().applicationCursorKeys);
+}
+
+void QTermCoreTest::switchesToAlternateScreen()
+{
+    QTermCore core;
+
+    core.writePlainText("main\x1b[?1049halt"_L1);
+
+    QVERIFY(core.modeState().alternateScreenActive);
+    QCOMPARE(core.debugPlainText(), "alt"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 3);
+}
+
+void QTermCoreTest::restoresPrimaryScreenFromAlternate()
+{
+    QTermCore core;
+
+    core.writePlainText("main"_L1);
+    core.writePlainText("\x1b[?1049halt"_L1);
+    core.writePlainText("\x1b[?1049l"_L1);
+
+    QVERIFY(!core.modeState().alternateScreenActive);
+    QCOMPARE(core.debugPlainText(), "main"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 4);
+}
+
+void QTermCoreTest::combinesNonSpacingMarks()
+{
+    QTermCore core;
+    const QString composed = QString::fromUtf8(u8"A\u0301B");
+    const QString firstCellText = QString::fromUtf8(u8"A\u0301");
+
+    core.writePlainText(composed);
+
+    QCOMPARE(core.debugPlainText(), composed);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 2);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, firstCellText);
+}
+
+void QTermCoreTest::storesWideCharactersAcrossTwoCells()
+{
+    QTermCore core;
+    const QString text = QString::fromUtf8(u8"中a");
+    const QString wideChar = QString::fromUtf8(u8"中");
+
+    core.writePlainText(text);
+
+    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 3);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, wideChar);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
+    QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(2).text, "a"_L1);
+}
+
+void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()
+{
+    QTermCore core;
+    const QString emoji = QString::fromUcs4(U"😀");
+
+    core.writePlainText(emoji.left(1));
+    core.writePlainText(emoji.mid(1) + "a"_L1);
+
+    QCOMPARE(core.debugPlainText(), emoji + "a"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 3);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, emoji);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
+    QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
 }
 
 void QTermCoreTest::clearsState()
