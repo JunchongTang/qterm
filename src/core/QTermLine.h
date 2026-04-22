@@ -19,6 +19,10 @@ public:
     void clearToColumn(int column);
     void insertCells(int column, int count);
     void deleteCells(int column, int count);
+    void clearCharacterAt(int column);
+    bool appendCombiningMark(int column, const QString &mark);
+    void setCharacter(int column, const QString &text, int width, const QTermCellAttributes &attributes);
+    int leadingColumnFor(int column) const;
 
     const QTermCell &cellAt(int column) const;
     void setCell(int column, const QTermCell &cell);

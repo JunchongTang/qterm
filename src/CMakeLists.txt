@@ -9,8 +9,11 @@ qt_add_library(qterm STATIC
     core/QTermInputExecutor.cpp
     core/QTermLine.h
     core/QTermLine.cpp
+    core/QTermModeState.h
     core/QTermCursorState.h
     core/QTermCore.cpp
+    core/QTermSavedCursorState.h
+    core/QTermScreenState.h
     core/QTermTextParser.h
     core/QTermTextParser.cpp
     core/QTermSurfaceModel.cpp

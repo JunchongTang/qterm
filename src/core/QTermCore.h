@@ -3,11 +3,9 @@
 
 #include <QObject>
 #include <QString>
-#include <optional>
 
-#include "QTermBuffer.h"
-#include "QTermCursorState.h"
-#include "QTermInputExecutor.h"
+#include "QTermModeState.h"
+#include "QTermScreenState.h"
 #include "QTermTextParser.h"
 
 namespace QTerm {
@@ -24,6 +22,7 @@ public:
     QString debugPlainText() const;
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
+    const QTermModeState &modeState() const noexcept;
 
     void clear();
     void writePlainText(const QString &text);
@@ -35,16 +34,12 @@ signals:
     void cursorStateChanged();
 
 private:
-    void setCursorState(const QTermCursorState &cursorState);
+    const QTermScreenState &activeScreen() const noexcept;
 
-    QTermBuffer m_buffer;
-    QTermCursorState m_cursorState;
-    bool m_wrapPending = false;
+    QTermScreenState m_primaryScreen;
+    QTermScreenState m_alternateScreen;
+    QTermModeState m_modeState;
     QTermTextParser m_textParser;
-    QTermCellAttributes m_currentAttributes;
-    std::optional<QTermSavedCursorState> m_savedCursorState;
-    int m_scrollTop = 0;
-    int m_scrollBottom = 23;
 };
 
 } // namespace QTerm
