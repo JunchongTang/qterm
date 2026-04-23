@@ -194,6 +194,32 @@ void QTermSurfaceModel::setSelectionSnapshot(bool hasSelection, int startRow, in
     }
 }
 
+void QTermSurfaceModel::setSelectionSnapshot(bool hasSelection,
+                                             int startRow,
+                                             int startColumn,
+                                             int endRow,
+                                             int endColumn,
+                                             const QString &selectedText)
+{
+    const bool selectionChangedState = m_hasSelection != hasSelection ||
+        m_selectionStartRow != startRow ||
+        m_selectionStartColumn != startColumn ||
+        m_selectionEndRow != endRow ||
+        m_selectionEndColumn != endColumn ||
+        m_selectedText != selectedText;
+
+    m_hasSelection = hasSelection;
+    m_selectionStartRow = startRow;
+    m_selectionStartColumn = startColumn;
+    m_selectionEndRow = endRow;
+    m_selectionEndColumn = endColumn;
+    m_selectedText = selectedText;
+
+    if (selectionChangedState) {
+        emit selectionChanged();
+    }
+}
+
 void QTermSurfaceModel::setVisibleLineWrapFlags(const QVariantList &visibleLineWrapFlags)
 {
     if (m_visibleLineWrapFlags == visibleLineWrapFlags) {

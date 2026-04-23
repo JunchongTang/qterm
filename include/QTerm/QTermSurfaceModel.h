@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
     void setSelectionController(QTermTerminal *terminal);
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn);
+    void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
     void setVisibleLineWrapFlags(const QVariantList &visibleLineWrapFlags);
     void setVisibleLineColumnTexts(const QVariantList &visibleLineColumnTexts);
     void setVisibleLines(const QStringList &visibleLines);

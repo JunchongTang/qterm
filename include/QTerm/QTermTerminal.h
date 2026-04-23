@@ -2,6 +2,7 @@
 #define QTERM_QTERMTERMINAL_H
 
 #include <QByteArray>
+#include <memory>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -13,6 +14,7 @@
 namespace QTerm {
 
 class QTermCore;
+class QTermSelectionModel;
 
 class QTermTerminal final : public QObject
 {
@@ -25,6 +27,7 @@ class QTermTerminal final : public QObject
 
 public:
     explicit QTermTerminal(QObject *parent = nullptr);
+    ~QTermTerminal() override;
 
     int rows() const noexcept;
     int columns() const noexcept;
@@ -38,6 +41,7 @@ public:
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
     Q_INVOKABLE void selectWordAt(int row, int column);
+    Q_INVOKABLE void selectLogicalLineAt(int row);
     Q_INVOKABLE void sendKey(int key, const QString &text = QString());
     Q_INVOKABLE void sendPaste(const QString &text);
 
@@ -59,11 +63,7 @@ private:
     QTermCore *m_core = nullptr;
     QPointer<QTermSession> m_session;
     QTermSurfaceModel m_surfaceModel;
-    bool m_hasSelection = false;
-    int m_selectionStartRow = 0;
-    int m_selectionStartColumn = 0;
-    int m_selectionEndRow = 0;
-    int m_selectionEndColumn = 0;
+    std::unique_ptr<QTermSelectionModel> m_selectionModel;
     QString m_title;
     QMetaObject::Connection m_sessionDataConnection;
     QMetaObject::Connection m_sessionDestroyedConnection;
