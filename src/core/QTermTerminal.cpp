@@ -11,10 +11,16 @@ namespace QTerm {
 
 namespace {
 
-void syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core)
+void syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core, int viewportTopProjectionRow)
 {
+    const QTermBuffer &buffer = core->buffer();
     const QTermCursorState cursorState = core->cursorState();
-    surfaceModel.setCursor(cursorState.row, cursorState.column, core->modeState().cursorVisible);
+    const int cursorProjectionRow = buffer.visibleRowOffset() + cursorState.row;
+    const bool cursorInViewport = cursorProjectionRow >= viewportTopProjectionRow &&
+        cursorProjectionRow < viewportTopProjectionRow + core->rows();
+    surfaceModel.setCursor(cursorInViewport ? cursorProjectionRow - viewportTopProjectionRow : 0,
+                           cursorState.column,
+                           core->modeState().cursorVisible && cursorInViewport);
 }
 
 } // namespace
@@ -39,6 +45,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
         m_selectionModel->refreshSelectionText(m_core->buffer());
         syncSurfaceSelection();
         syncSurfaceViewport();
+        syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
         emit sizeChanged();
         if (scrollOffset() != previousScrollOffset) {
             emit viewportChanged();
@@ -53,13 +60,14 @@ QTermTerminal::QTermTerminal(QObject *parent)
         syncSurfaceSelection();
         syncSurfaceViewport();
         m_surfaceModel.setPlainText(m_core->debugPlainText());
+        syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
         if (scrollOffset() != previousScrollOffset) {
             emit viewportChanged();
         }
     });
 
     connect(m_core, &QTermCore::cursorStateChanged, this, [this]() {
-        syncSurfaceCursor(m_surfaceModel, m_core);
+        syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
     });
 
     connect(m_core, &QTermCore::bell, this, &QTermTerminal::bell);
@@ -72,7 +80,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
     m_surfaceModel.setPlainText(m_core->debugPlainText());
-    syncSurfaceCursor(m_surfaceModel, m_core);
+    syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
 }
 
 QTermTerminal::~QTermTerminal() = default;
@@ -193,6 +201,7 @@ void QTermTerminal::scrollByLines(int deltaRows)
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
     syncSurfaceViewport();
+    syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
     if (scrollOffset() != previousScrollOffset) {
         emit viewportChanged();
     }
@@ -207,6 +216,7 @@ void QTermTerminal::scrollToBottom()
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
     syncSurfaceViewport();
+    syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
     if (scrollOffset() != previousScrollOffset) {
         emit viewportChanged();
     }

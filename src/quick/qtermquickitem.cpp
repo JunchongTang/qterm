@@ -6,6 +6,7 @@
 #include <QFont>
 #include <QFontMetricsF>
 #include <QPainter>
+#include <QWheelEvent>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -17,6 +18,7 @@ namespace {
 
 constexpr int kMinimumColumns = 20;
 constexpr int kMinimumRows = 8;
+constexpr int kWheelScrollRowsPerStep = 3;
 
 QColor colorFromRgb(int rgb)
 {
@@ -410,6 +412,33 @@ void QTermQuickItem::geometryChange(const QRectF &newGeometry, const QRectF &old
     if (newGeometry.size() != oldGeometry.size()) {
         syncTerminalSize();
     }
+}
+
+void QTermQuickItem::wheelEvent(QWheelEvent *event)
+{
+    if (!m_terminal) {
+        QQuickPaintedItem::wheelEvent(event);
+        return;
+    }
+
+    int deltaRows = 0;
+    const QPoint angleDelta = event->angleDelta();
+    if (angleDelta.y() != 0) {
+        const int stepCount = qMax(1, qAbs(angleDelta.y()) / 120);
+        deltaRows = (angleDelta.y() > 0 ? 1 : -1) * stepCount * kWheelScrollRowsPerStep;
+    } else if (event->pixelDelta().y() != 0) {
+        const int pixelRows = static_cast<int>(std::round(event->pixelDelta().y() / qMax<qreal>(1.0, m_cellHeight)));
+        deltaRows = pixelRows != 0 ? pixelRows : (event->pixelDelta().y() > 0 ? 1 : -1);
+    }
+
+    if (deltaRows == 0) {
+        QQuickPaintedItem::wheelEvent(event);
+        return;
+    }
+
+    m_terminal->scrollByLines(deltaRows);
+    emit wheelScrolled(m_terminal->scrollOffset());
+    event->accept();
 }
 
 void QTermQuickItem::reconnectSurfaceModel()

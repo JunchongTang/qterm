@@ -65,6 +65,7 @@ private slots:
     void terminalEmitsBellFromSessionData();
     void terminalProjectsCursorStateToSurfaceModel();
     void terminalProjectsCursorVisibilityMode();
+    void terminalHidesCursorWhenScrolledFromBottom();
     void terminalProjectsVisibleLinesToSurfaceModel();
     void terminalKeepsVisibleLineCountOnResize();
     void terminalProjectsVisibleLineRunsToSurfaceModel();
@@ -209,6 +210,30 @@ void QTermSessionTest::terminalProjectsCursorVisibilityMode()
 
     terminal.feedText("\x1b[?25h"_L1);
     QVERIFY(terminal.surfaceModel()->cursorVisible());
+}
+
+void QTermSessionTest::terminalHidesCursorWhenScrolledFromBottom()
+{
+    QTermTerminal terminal;
+
+    terminal.setTerminalSize(5, 2);
+    terminal.feedText("alpha\r\nbeta\r\ngamma"_L1);
+
+    QVERIFY(terminal.surfaceModel()->cursorVisible());
+    QCOMPARE(terminal.surfaceModel()->cursorRow(), 1);
+    QCOMPARE(terminal.surfaceModel()->cursorColumn(), 4);
+
+    terminal.scrollByLines(1);
+
+    QCOMPARE(terminal.scrollOffset(), 1);
+    QVERIFY(!terminal.surfaceModel()->cursorVisible());
+
+    terminal.scrollToBottom();
+
+    QCOMPARE(terminal.scrollOffset(), 0);
+    QVERIFY(terminal.surfaceModel()->cursorVisible());
+    QCOMPARE(terminal.surfaceModel()->cursorRow(), 1);
+    QCOMPARE(terminal.surfaceModel()->cursorColumn(), 4);
 }
 
 void QTermSessionTest::terminalProjectsVisibleLinesToSurfaceModel()
