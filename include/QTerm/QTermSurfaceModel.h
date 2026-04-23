@@ -19,6 +19,7 @@ class QTermSurfaceModel final : public QObject
     Q_PROPERTY(int cursorColumn READ cursorColumn NOTIFY cursorChanged)
     Q_PROPERTY(bool cursorVisible READ cursorVisible NOTIFY cursorChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+    Q_PROPERTY(bool selectionVisible READ selectionVisible NOTIFY selectionChanged)
     Q_PROPERTY(int selectionStartRow READ selectionStartRow NOTIFY selectionChanged)
     Q_PROPERTY(int selectionStartColumn READ selectionStartColumn NOTIFY selectionChanged)
     Q_PROPERTY(int selectionEndRow READ selectionEndRow NOTIFY selectionChanged)
@@ -37,6 +38,7 @@ public:
     int cursorColumn() const noexcept;
     bool cursorVisible() const noexcept;
     bool hasSelection() const noexcept;
+    bool selectionVisible() const noexcept;
     int selectionStartRow() const noexcept;
     int selectionStartColumn() const noexcept;
     int selectionEndRow() const noexcept;

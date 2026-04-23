@@ -5,6 +5,106 @@
 
 namespace QTerm {
 
+namespace {
+
+struct LogicalLineProjection
+{
+    QVector<QTermCell> cells;
+    int displayColumns = 0;
+    bool containsCursor = false;
+    int cursorDisplayOffset = 0;
+};
+
+int lastRelevantColumn(const QTermLine &line)
+{
+    for (int column = line.columns() - 1; column >= 0; --column) {
+        const QTermCell &cell = line.cellAt(column);
+        if (cell.continuation) {
+            continue;
+        }
+
+        if (!cell.text.isEmpty()) {
+            return column + qMax(1, cell.width);
+        }
+    }
+
+    return 0;
+}
+
+void appendLineCells(LogicalLineProjection &logicalLine, const QTermLine &line, int includeColumns)
+{
+    const int boundedColumns = qBound(0, includeColumns, line.columns());
+    for (int column = 0; column < boundedColumns; ++column) {
+        const QTermCell &cell = line.cellAt(column);
+        if (cell.continuation) {
+            continue;
+        }
+
+        logicalLine.cells.append(cell);
+        logicalLine.displayColumns += qMax(1, cell.width);
+    }
+}
+
+QVector<LogicalLineProjection> snapshotLogicalLines(const QVector<QTermLine> &historyLines,
+                                                    const QVector<QTermLine> &visibleLines,
+                                                    int cursorRow,
+                                                    int cursorColumn)
+{
+    QVector<QTermLine> projection;
+    projection.reserve(historyLines.size() + visibleLines.size());
+    projection.append(historyLines);
+    projection.append(visibleLines);
+
+    int firstRelevantIndex = -1;
+    int lastRelevantIndex = -1;
+    for (int index = 0; index < projection.size(); ++index) {
+        if (lastRelevantColumn(projection.at(index)) > 0) {
+            if (firstRelevantIndex < 0) {
+                firstRelevantIndex = index;
+            }
+            lastRelevantIndex = index;
+        }
+    }
+
+    QVector<LogicalLineProjection> logicalLines;
+    LogicalLineProjection currentLine;
+    const int cursorProjectionRow = historyLines.size() + qBound(0, cursorRow, qMax(0, visibleLines.size() - 1));
+    const int startIndex = firstRelevantIndex >= 0 ? qMin(firstRelevantIndex, cursorProjectionRow) : cursorProjectionRow;
+    const int endIndex = lastRelevantIndex >= 0 ? qMax(lastRelevantIndex, cursorProjectionRow) : cursorProjectionRow;
+
+    for (int index = startIndex; index <= endIndex && index < projection.size(); ++index) {
+        const QTermLine &line = projection.at(index);
+        const bool isCursorRow = !visibleLines.isEmpty() && index == cursorProjectionRow;
+        const int includeColumns = line.wrappedToNextLine()
+            ? line.columns()
+            : qMax(lastRelevantColumn(line), isCursorRow ? qBound(0, cursorColumn, line.columns()) : 0);
+
+        if (isCursorRow) {
+            currentLine.containsCursor = true;
+            currentLine.cursorDisplayOffset = currentLine.displayColumns + qBound(0, cursorColumn, line.columns());
+        }
+
+        appendLineCells(currentLine, line, includeColumns);
+
+        if (!line.wrappedToNextLine()) {
+            logicalLines.append(currentLine);
+            currentLine = LogicalLineProjection();
+        }
+    }
+
+    if (!currentLine.cells.isEmpty() || currentLine.containsCursor) {
+        logicalLines.append(currentLine);
+    }
+
+    if (logicalLines.isEmpty()) {
+        logicalLines.append(LogicalLineProjection());
+    }
+
+    return logicalLines;
+}
+
+} // namespace
+
 QTermBuffer::QTermBuffer(int columns, int rows)
     : m_columns(columns)
     , m_rows(rows)
@@ -25,26 +125,90 @@ int QTermBuffer::columns() const noexcept
     return m_columns;
 }
 
-void QTermBuffer::resize(int columns, int rows)
+int QTermBuffer::historyLineCount() const noexcept
 {
+    return m_historyLines.size();
+}
+
+int QTermBuffer::projectionRowCount() const noexcept
+{
+    return m_historyLines.size() + m_visibleLines.size();
+}
+
+int QTermBuffer::visibleRowOffset() const noexcept
+{
+    return m_historyLines.size();
+}
+
+QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorState &cursorState)
+{
+    const QVector<LogicalLineProjection> logicalLines = snapshotLogicalLines(m_historyLines,
+                                                                             m_visibleLines,
+                                                                             cursorState.row,
+                                                                             cursorState.column);
+
+    QVector<QTermLine> reflowedLines;
+    reflowedLines.reserve(logicalLines.size() + rows);
+    QTermCursorState reflowedCursor;
+    bool cursorResolved = false;
+
+    for (const LogicalLineProjection &logicalLine : logicalLines) {
+        const int logicalStartRow = reflowedLines.size();
+
+        if (logicalLine.cells.isEmpty()) {
+            reflowedLines.append(QTermLine(columns));
+        } else {
+            QTermLine currentLine(columns);
+            int currentColumn = 0;
+
+            for (const QTermCell &cell : logicalLine.cells) {
+                const int cellWidth = qMax(1, cell.width);
+                if (currentColumn > 0 && currentColumn + cellWidth > columns) {
+                    currentLine.setWrappedToNextLine(true);
+                    reflowedLines.append(currentLine);
+                    currentLine = QTermLine(columns);
+                    currentColumn = 0;
+                }
+
+                currentLine.setCharacter(currentColumn, cell.text, cellWidth, cell.attributes);
+                currentColumn += cellWidth;
+            }
+
+            reflowedLines.append(currentLine);
+        }
+
+        if (logicalLine.containsCursor) {
+            const int logicalCursorRow = logicalLine.cursorDisplayOffset / columns;
+            const int logicalCursorColumn = logicalLine.cursorDisplayOffset % columns;
+            const int lastLogicalRow = reflowedLines.size() - 1;
+            reflowedCursor.row = qMin(logicalStartRow + logicalCursorRow, lastLogicalRow);
+            reflowedCursor.column = logicalCursorColumn;
+            cursorResolved = true;
+        }
+    }
+
     m_columns = columns;
     m_rows = rows;
 
-    for (QTermLine &line : m_historyLines) {
-        line.resize(columns);
+    if (!cursorResolved) {
+        reflowedCursor = QTermCursorState();
     }
 
-    for (QTermLine &line : m_visibleLines) {
-        line.resize(columns);
-    }
-
-    while (m_visibleLines.size() > rows) {
-        m_historyLines.append(m_visibleLines.takeFirst());
-    }
+    const int historyCount = qMax(0, reflowedLines.size() - rows);
+    m_historyLines = reflowedLines.first(historyCount);
+    m_visibleLines = reflowedLines.mid(historyCount);
 
     while (m_visibleLines.size() < rows) {
         appendEmptyVisibleLine();
     }
+
+    if (m_visibleLines.isEmpty()) {
+        appendEmptyVisibleLine();
+    }
+
+    reflowedCursor.row = qBound(0, reflowedCursor.row - historyCount, qMax(0, rows - 1));
+    reflowedCursor.column = qBound(0, reflowedCursor.column, qMax(0, columns - 1));
+    return reflowedCursor;
 }
 
 void QTermBuffer::clear()
@@ -128,6 +292,15 @@ QTermLine &QTermBuffer::lineAt(int row)
 const QTermLine &QTermBuffer::lineAt(int row) const
 {
     return m_visibleLines.at(row);
+}
+
+const QTermLine &QTermBuffer::projectionLineAt(int projectionRow) const
+{
+    if (projectionRow < m_historyLines.size()) {
+        return m_historyLines.at(projectionRow);
+    }
+
+    return m_visibleLines.at(projectionRow - m_historyLines.size());
 }
 
 QStringList QTermBuffer::visibleLineTexts() const

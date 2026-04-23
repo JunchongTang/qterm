@@ -33,7 +33,9 @@ ApplicationWindow {
     readonly property string geometryText: root.terminal.surfaceModel.columns + " x " + root.terminal.surfaceModel.rows
     readonly property string cursorText: "Cursor " + (root.terminal.surfaceModel.cursorRow + 1) + ":" + (root.terminal.surfaceModel.cursorColumn + 1)
     readonly property string selectionText: root.terminal.surfaceModel.hasSelection
-        ? "Selection " + root.terminal.surfaceModel.selectedText.length + " chars"
+        ? (root.terminal.surfaceModel.selectionVisible
+            ? "Selection " + root.terminal.surfaceModel.selectedText.length + " chars"
+            : "Selection offscreen " + root.terminal.surfaceModel.selectedText.length + " chars")
         : "Selection none"
     readonly property string activityText: root.lastBackendError.length > 0
         ? "Error: " + root.lastBackendError
@@ -413,7 +415,7 @@ ApplicationWindow {
                                     : lineItem.index < root.terminal.surfaceModel.selectionStartRow || lineItem.index > root.terminal.surfaceModel.selectionEndRow ? 0
                                     : lineItem.index === root.terminal.surfaceModel.selectionEndRow ? root.terminal.surfaceModel.selectionEndColumn : root.terminal.surfaceModel.columns
 
-                                visible: root.terminal.surfaceModel.hasSelection && selectionEnd > selectionStart
+                                visible: root.terminal.surfaceModel.selectionVisible && selectionEnd > selectionStart
                                 x: selectionStart * terminalMetrics.averageCharacterWidth
                                 y: 0
                                 width: (selectionEnd - selectionStart) * terminalMetrics.averageCharacterWidth

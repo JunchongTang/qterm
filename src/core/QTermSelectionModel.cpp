@@ -2,6 +2,7 @@
 
 #include "QTermBuffer.h"
 
+#include <optional>
 #include <QStringList>
 #include <QVector>
 #include <QtGlobal>
@@ -37,6 +38,18 @@ struct LogicalRowSpan
 {
     int startRow = 0;
     int endRow = 0;
+};
+
+struct ProjectionRowSpan
+{
+    int startProjectionRow = 0;
+    int endProjectionRow = 0;
+};
+
+struct ProjectionEndpoint
+{
+    int projectionRow = 0;
+    int column = 0;
 };
 
 NormalizedSelectionRange normalizeSelectionRange(int rows,
@@ -152,9 +165,23 @@ QString textForLogicalRange(const QVector<LogicalColumnRef> &logicalColumns, int
 
 bool isUrlLikeSelectionText(const QString &text)
 {
-    return text.startsWith(QStringLiteral("http://")) ||
-        text.startsWith(QStringLiteral("https://")) ||
-        text.startsWith(QStringLiteral("ftp://"));
+    if (text.startsWith(QStringLiteral("www."))) {
+        return true;
+    }
+
+    const int colonIndex = text.indexOf(u':');
+    if (colonIndex <= 0) {
+        return false;
+    }
+
+    for (int index = 0; index < colonIndex; ++index) {
+        const QChar character = text.at(index);
+        if (!(character.isLetterOrNumber() || character == u'+' || character == u'-' || character == u'.')) {
+            return false;
+        }
+    }
+
+    return text.at(0).isLetter();
 }
 
 bool isTrimmedTrailingUrlPunctuation(const QString &text, int index)
@@ -219,6 +246,223 @@ int lastRelevantColumn(const QStringList &lineColumns)
     return 0;
 }
 
+QVector<LogicalRowSpan> collectVisibleLogicalLineSpans(const QTermBuffer &buffer)
+{
+    QVector<LogicalRowSpan> spans;
+
+    for (int row = 0; row < buffer.rows(); ++row) {
+        const int startRow = row;
+        while (row < buffer.rows() - 1 && buffer.lineAt(row).wrappedToNextLine()) {
+            ++row;
+        }
+
+        spans.append(LogicalRowSpan{startRow, row});
+    }
+
+    return spans;
+}
+
+QVector<ProjectionRowSpan> collectProjectionLogicalLineSpans(const QTermBuffer &buffer)
+{
+    QVector<ProjectionRowSpan> spans;
+
+    for (int projectionRow = 0; projectionRow < buffer.projectionRowCount(); ++projectionRow) {
+        const int startProjectionRow = projectionRow;
+        while (projectionRow < buffer.projectionRowCount() - 1 && buffer.projectionLineAt(projectionRow).wrappedToNextLine()) {
+            ++projectionRow;
+        }
+
+        spans.append(ProjectionRowSpan{startProjectionRow, projectionRow});
+    }
+
+    return spans;
+}
+
+int logicalLineDisplayColumns(const QTermBuffer &buffer, const LogicalRowSpan &span)
+{
+    int totalColumns = 0;
+    for (int row = span.startRow; row <= span.endRow; ++row) {
+        if (row < span.endRow) {
+            totalColumns += buffer.columns();
+        } else {
+            totalColumns += lastRelevantColumn(buffer.lineAt(row).columnTexts());
+        }
+    }
+
+    return totalColumns;
+}
+
+int displayOffsetWithinLogicalLine(const QTermBuffer &buffer,
+                                   const LogicalRowSpan &span,
+                                   int row,
+                                   int column)
+{
+    int offset = 0;
+    for (int currentRow = span.startRow; currentRow < row; ++currentRow) {
+        offset += currentRow < span.endRow
+            ? buffer.columns()
+            : lastRelevantColumn(buffer.lineAt(currentRow).columnTexts());
+    }
+
+    return offset + qMax(0, column);
+}
+
+QString selectionTextFromBuffer(const QTermBuffer &buffer, const QTermSelectionSnapshot &snapshot)
+{
+    QString selectionText;
+
+    for (int row = snapshot.startRow; row <= snapshot.endRow; ++row) {
+        if (row > snapshot.startRow && !buffer.lineAt(row - 1).wrappedToNextLine()) {
+            selectionText.append(u'\n');
+        }
+
+        const QStringList lineColumns = buffer.lineAt(row).columnTexts();
+        if (snapshot.startRow == snapshot.endRow) {
+            for (int column = snapshot.startColumn; column < snapshot.endColumn && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+            continue;
+        }
+
+        if (row == snapshot.startRow) {
+            const int lineEnd = lastRelevantColumn(lineColumns);
+            for (int column = snapshot.startColumn; column < lineEnd && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+        } else if (row == snapshot.endRow) {
+            for (int column = 0; column < snapshot.endColumn && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+        } else {
+            const int lineEnd = lastRelevantColumn(lineColumns);
+            for (int column = 0; column < lineEnd && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+        }
+    }
+
+    return selectionText;
+}
+
+QString selectionTextFromProjection(const QTermBuffer &buffer,
+                                   const ProjectionEndpoint &start,
+                                   const ProjectionEndpoint &end)
+{
+    QString selectionText;
+
+    for (int projectionRow = start.projectionRow; projectionRow <= end.projectionRow; ++projectionRow) {
+        if (projectionRow > start.projectionRow && !buffer.projectionLineAt(projectionRow - 1).wrappedToNextLine()) {
+            selectionText.append(u'\n');
+        }
+
+        const QStringList lineColumns = buffer.projectionLineAt(projectionRow).columnTexts();
+        if (start.projectionRow == end.projectionRow) {
+            for (int column = start.column; column < end.column && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+            continue;
+        }
+
+        if (projectionRow == start.projectionRow) {
+            const int lineEnd = lastRelevantColumn(lineColumns);
+            for (int column = start.column; column < lineEnd && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+        } else if (projectionRow == end.projectionRow) {
+            for (int column = 0; column < end.column && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+        } else {
+            const int lineEnd = lastRelevantColumn(lineColumns);
+            for (int column = 0; column < lineEnd && column < lineColumns.size(); ++column) {
+                selectionText.append(lineColumns.at(column));
+            }
+        }
+    }
+
+    return selectionText;
+}
+
+int projectionRowDisplayColumns(const QTermBuffer &buffer, const ProjectionRowSpan &span, int projectionRow)
+{
+    if (projectionRow < span.endProjectionRow) {
+        return buffer.columns();
+    }
+
+    return lastRelevantColumn(buffer.projectionLineAt(projectionRow).columnTexts());
+}
+
+int displayOffsetWithinProjectionLogicalLine(const QTermBuffer &buffer,
+                                             const ProjectionRowSpan &span,
+                                             int projectionRow,
+                                             int column)
+{
+    int offset = 0;
+    for (int currentProjectionRow = span.startProjectionRow; currentProjectionRow < projectionRow; ++currentProjectionRow) {
+        offset += projectionRowDisplayColumns(buffer, span, currentProjectionRow);
+    }
+
+    return offset + qMax(0, column);
+}
+
+QTermSelectionModel::LogicalEndpointAnchor captureLogicalAnchor(const QTermBuffer &buffer,
+                                                                const QVector<ProjectionRowSpan> &spans,
+                                                                int row,
+                                                                int column)
+{
+    const int boundedRow = qBound(0, row, qMax(0, buffer.rows() - 1));
+    const int projectionRow = buffer.visibleRowOffset() + boundedRow;
+    for (int index = 0; index < spans.size(); ++index) {
+        const ProjectionRowSpan &span = spans.at(index);
+        if (projectionRow < span.startProjectionRow || projectionRow > span.endProjectionRow) {
+            continue;
+        }
+
+        return QTermSelectionModel::LogicalEndpointAnchor{
+            index,
+            displayOffsetWithinProjectionLogicalLine(buffer, span, projectionRow, column)
+        };
+    }
+
+    return QTermSelectionModel::LogicalEndpointAnchor();
+}
+
+ProjectionEndpoint mapLogicalAnchorToProjectionEndpoint(const QTermBuffer &buffer,
+                                                        const QVector<ProjectionRowSpan> &spans,
+                                                        const QTermSelectionModel::LogicalEndpointAnchor &anchor)
+{
+    if (spans.isEmpty()) {
+        return ProjectionEndpoint();
+    }
+
+    const ProjectionRowSpan &span = spans.at(qBound(0, anchor.logicalLineIndex, spans.size() - 1));
+    int remainingColumns = qMax(0, anchor.displayColumn);
+
+    for (int projectionRow = span.startProjectionRow; projectionRow <= span.endProjectionRow; ++projectionRow) {
+        const int rowColumns = projectionRowDisplayColumns(buffer, span, projectionRow);
+        if (remainingColumns <= rowColumns || projectionRow == span.endProjectionRow) {
+            return ProjectionEndpoint{projectionRow, qMin(remainingColumns, rowColumns)};
+        }
+
+        remainingColumns -= rowColumns;
+    }
+
+    return ProjectionEndpoint{span.endProjectionRow,
+                              qMax(0, projectionRowDisplayColumns(buffer, span, span.endProjectionRow))};
+}
+
+bool selectionEndpointsAreVisible(const QTermBuffer &buffer,
+                                  const ProjectionEndpoint &start,
+                                  const ProjectionEndpoint &end)
+{
+    const int firstVisibleProjectionRow = buffer.visibleRowOffset();
+    const int lastVisibleProjectionRow = firstVisibleProjectionRow + qMax(0, buffer.rows() - 1);
+    return start.projectionRow >= firstVisibleProjectionRow &&
+        start.projectionRow <= lastVisibleProjectionRow &&
+        end.projectionRow >= firstVisibleProjectionRow &&
+        end.projectionRow <= lastVisibleProjectionRow;
+}
+
 } // namespace
 
 void QTermSelectionModel::setTerminalSize(int columns, int rows)
@@ -230,7 +474,7 @@ void QTermSelectionModel::setTerminalSize(int columns, int rows)
     m_columns = columns;
     m_rows = rows;
 
-    if (m_snapshot.hasSelection) {
+    if (m_snapshot.hasSelection && m_snapshot.startRow >= 0 && m_snapshot.endRow >= 0) {
         const NormalizedSelectionRange range = normalizeSelectionRange(m_rows,
                                                                       m_columns,
                                                                       m_snapshot.startRow,
@@ -244,19 +488,89 @@ void QTermSelectionModel::setTerminalSize(int columns, int rows)
         m_snapshot.endColumn = range.endColumn;
     }
 
-    updateSelectedText();
+    if (!m_snapshot.hasSelection) {
+        m_snapshot.selectedText.clear();
+    }
 }
 
-void QTermSelectionModel::setVisibleProjection(const QVariantList &visibleLineWrapFlags,
-                                               const QVariantList &visibleLineColumnTexts)
+void QTermSelectionModel::prepareForResize(const QTermBuffer &buffer)
 {
-    m_visibleLineWrapFlags = visibleLineWrapFlags;
-    m_visibleLineColumnTexts = visibleLineColumnTexts;
-    updateSelectedText();
+    if (!m_snapshot.hasSelection || m_snapshot.startRow < 0 || m_snapshot.endRow < 0 || buffer.rows() <= 0) {
+        return;
+    }
+
+    const QVector<ProjectionRowSpan> spans = collectProjectionLogicalLineSpans(buffer);
+    if (spans.isEmpty()) {
+        return;
+    }
+
+    m_selectionAnchors = LogicalSelectionAnchors{
+        captureLogicalAnchor(buffer, spans, m_snapshot.startRow, m_snapshot.startColumn),
+        captureLogicalAnchor(buffer, spans, m_snapshot.endRow, m_snapshot.endColumn)
+    };
+}
+
+void QTermSelectionModel::completeResize(const QTermBuffer &buffer, int columns, int rows)
+{
+    m_columns = columns;
+    m_rows = rows;
+
+    if (!m_snapshot.hasSelection) {
+        m_selectionAnchors.reset();
+        m_snapshot.selectedText.clear();
+        return;
+    }
+
+    if (!m_selectionAnchors.has_value()) {
+        if (m_snapshot.startRow >= 0 && m_snapshot.endRow >= 0) {
+            prepareForResize(buffer);
+        }
+
+        if (!m_selectionAnchors.has_value()) {
+            m_snapshot.selectedText.clear();
+            m_snapshot.hasSelection = false;
+        }
+        return;
+    }
+
+    const QVector<ProjectionRowSpan> spans = collectProjectionLogicalLineSpans(buffer);
+    if (spans.isEmpty()) {
+        clearSelection();
+        return;
+    }
+
+    const ProjectionEndpoint start = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->start);
+    const ProjectionEndpoint end = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->end);
+
+    m_snapshot.hasSelection = true;
+    if (selectionEndpointsAreVisible(buffer, start, end)) {
+        const int visibleRowOffset = buffer.visibleRowOffset();
+        m_snapshot.startRow = start.projectionRow - visibleRowOffset;
+        m_snapshot.startColumn = start.column;
+        m_snapshot.endRow = end.projectionRow - visibleRowOffset;
+        m_snapshot.endColumn = end.column;
+    } else {
+        m_snapshot.startRow = -1;
+        m_snapshot.startColumn = 0;
+        m_snapshot.endRow = -1;
+        m_snapshot.endColumn = 0;
+    }
+
+    m_snapshot.selectedText = selectionTextFromProjection(buffer, start, end);
+}
+
+void QTermSelectionModel::refreshSelectionText(const QTermBuffer &buffer)
+{
+    if (m_snapshot.hasSelection && m_snapshot.startRow >= 0 && m_snapshot.endRow >= 0) {
+        prepareForResize(buffer);
+    }
+
+    updateSelectedText(buffer);
 }
 
 void QTermSelectionModel::clearSelection()
 {
+    m_selectionAnchors.reset();
     m_snapshot = QTermSelectionSnapshot();
 }
 
@@ -273,7 +587,6 @@ void QTermSelectionModel::setSelectionRange(int startRow, int startColumn, int e
     m_snapshot.startColumn = range.startColumn;
     m_snapshot.endRow = range.endRow;
     m_snapshot.endColumn = range.endColumn;
-    updateSelectedText();
 }
 
 void QTermSelectionModel::selectWordAt(const QTermBuffer &buffer, int row, int column)
@@ -384,61 +697,47 @@ const QTermSelectionSnapshot &QTermSelectionModel::snapshot() const noexcept
     return m_snapshot;
 }
 
-void QTermSelectionModel::updateSelectedText()
+void QTermSelectionModel::updateSelectedText(const QTermBuffer &buffer)
 {
-    QString selectionText;
-
-    if (m_snapshot.hasSelection) {
-        const auto projectionLastRelevantColumn = [](const QStringList &lineColumns) {
-            for (int column = lineColumns.size() - 1; column >= 0; --column) {
-                const QString &columnText = lineColumns.at(column);
-                if (!columnText.isEmpty() && columnText != QStringLiteral(" ")) {
-                    return column + 1;
-                }
-            }
-
-            return 0;
-        };
-
-        for (int row = m_snapshot.startRow; row <= m_snapshot.endRow; ++row) {
-            if (row > m_snapshot.startRow) {
-                const bool previousRowWrapped = row - 1 < m_visibleLineWrapFlags.size()
-                    ? m_visibleLineWrapFlags.at(row - 1).toBool()
-                    : false;
-                if (!previousRowWrapped) {
-                    selectionText.append(u'\n');
-                }
-            }
-
-            const QStringList lineColumns = row < m_visibleLineColumnTexts.size()
-                ? m_visibleLineColumnTexts.at(row).toStringList()
-                : QStringList();
-            if (m_snapshot.startRow == m_snapshot.endRow) {
-                for (int column = m_snapshot.startColumn; column < m_snapshot.endColumn && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-                continue;
-            }
-
-            if (row == m_snapshot.startRow) {
-                const int lineEnd = projectionLastRelevantColumn(lineColumns);
-                for (int column = m_snapshot.startColumn; column < lineEnd && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-            } else if (row == m_snapshot.endRow) {
-                for (int column = 0; column < m_snapshot.endColumn && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-            } else {
-                const int lineEnd = projectionLastRelevantColumn(lineColumns);
-                for (int column = 0; column < lineEnd && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-            }
-        }
+    if (!m_snapshot.hasSelection) {
+        m_selectionAnchors.reset();
+        m_snapshot.selectedText.clear();
+        return;
     }
 
-    m_snapshot.selectedText = selectionText;
+    if (!m_selectionAnchors.has_value()) {
+        if (m_snapshot.startRow < 0 || m_snapshot.endRow < 0) {
+            m_snapshot.selectedText.clear();
+            return;
+        }
+
+        const QTermSelectionSnapshot visibleSnapshot = m_snapshot;
+        m_snapshot.selectedText = selectionTextFromBuffer(buffer, visibleSnapshot);
+        return;
+    }
+
+    const QVector<ProjectionRowSpan> spans = collectProjectionLogicalLineSpans(buffer);
+    if (spans.isEmpty()) {
+        m_snapshot.selectedText.clear();
+        return;
+    }
+
+    const ProjectionEndpoint start = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->start);
+    const ProjectionEndpoint end = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->end);
+    if (selectionEndpointsAreVisible(buffer, start, end)) {
+        const int visibleRowOffset = buffer.visibleRowOffset();
+        m_snapshot.startRow = start.projectionRow - visibleRowOffset;
+        m_snapshot.startColumn = start.column;
+        m_snapshot.endRow = end.projectionRow - visibleRowOffset;
+        m_snapshot.endColumn = end.column;
+    } else {
+        m_snapshot.startRow = -1;
+        m_snapshot.startColumn = 0;
+        m_snapshot.endRow = -1;
+        m_snapshot.endColumn = 0;
+    }
+
+    m_snapshot.selectedText = selectionTextFromProjection(buffer, start, end);
 }
 
 } // namespace QTerm

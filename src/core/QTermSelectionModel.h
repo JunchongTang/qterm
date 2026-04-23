@@ -1,8 +1,9 @@
 #ifndef QTERM_QTERMSELECTIONMODEL_H
 #define QTERM_QTERMSELECTIONMODEL_H
 
+#include <optional>
+
 #include <QString>
-#include <QVariantList>
 
 namespace QTerm {
 
@@ -21,9 +22,22 @@ struct QTermSelectionSnapshot
 class QTermSelectionModel
 {
 public:
+    struct LogicalEndpointAnchor
+    {
+        int logicalLineIndex = 0;
+        int displayColumn = 0;
+    };
+
+    struct LogicalSelectionAnchors
+    {
+        LogicalEndpointAnchor start;
+        LogicalEndpointAnchor end;
+    };
+
     void setTerminalSize(int columns, int rows);
-    void setVisibleProjection(const QVariantList &visibleLineWrapFlags,
-                              const QVariantList &visibleLineColumnTexts);
+    void prepareForResize(const QTermBuffer &buffer);
+    void completeResize(const QTermBuffer &buffer, int columns, int rows);
+    void refreshSelectionText(const QTermBuffer &buffer);
 
     void clearSelection();
     void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
@@ -33,12 +47,11 @@ public:
     const QTermSelectionSnapshot &snapshot() const noexcept;
 
 private:
-    void updateSelectedText();
+    void updateSelectedText(const QTermBuffer &buffer);
 
     int m_rows = 24;
     int m_columns = 80;
-    QVariantList m_visibleLineWrapFlags;
-    QVariantList m_visibleLineColumnTexts;
+    std::optional<LogicalSelectionAnchors> m_selectionAnchors;
     QTermSelectionSnapshot m_snapshot;
 };
 

@@ -47,6 +47,11 @@ private slots:
     void encodesCursorKeysByMode();
     void encodesBracketedPasteByMode();
     void emitsOutboundDataForKeyAndPaste();
+    void reflowsVisibleContentWhenNarrowing();
+    void reflowsBackWhenWidening();
+    void preservesWrappedBoundarySemanticsAcrossReflow();
+    void reflowsWideCharactersAcrossResize();
+    void preservesWideWrappedBoundarySemanticsAcrossReflow();
     void clearsState();
 };
 
@@ -426,6 +431,94 @@ void QTermCoreTest::emitsBellWithoutChangingBuffer()
     QCOMPARE(core.debugPlainText(), "ab"_L1);
 }
 
+void QTermCoreTest::reflowsVisibleContentWhenNarrowing()
+{
+    QTermCore core;
+
+    core.setTerminalSize(10, 4);
+    core.writePlainText("alpha beta"_L1);
+    core.setTerminalSize(5, 4);
+
+    QCOMPARE(core.debugPlainText(), "alpha beta"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "alpha"_L1);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), " beta"_L1);
+    QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
+}
+
+void QTermCoreTest::reflowsBackWhenWidening()
+{
+    QTermCore core;
+
+    core.setTerminalSize(10, 4);
+    core.writePlainText("abc"_L1);
+    core.setTerminalSize(2, 4);
+    QCOMPARE(core.cursorState().row, 1);
+    QCOMPARE(core.cursorState().column, 1);
+
+    core.setTerminalSize(5, 4);
+
+    QCOMPARE(core.debugPlainText(), "abc"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "abc"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 3);
+}
+
+void QTermCoreTest::preservesWrappedBoundarySemanticsAcrossReflow()
+{
+    QTermCore core;
+
+    core.setTerminalSize(5, 4);
+    core.writePlainText("abcde"_L1);
+
+    core.setTerminalSize(2, 4);
+    QCOMPARE(core.debugPlainText(), "abcde"_L1);
+
+    core.setTerminalSize(5, 4);
+    core.writePlainText("X"_L1);
+
+    QCOMPARE(core.debugPlainText(), "abcdeX"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "abcde"_L1);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
+    QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
+}
+
+void QTermCoreTest::reflowsWideCharactersAcrossResize()
+{
+    QTermCore core;
+    const QString text = QString::fromUtf8(u8"中ab");
+
+    core.setTerminalSize(4, 4);
+    core.writePlainText(text);
+    core.setTerminalSize(2, 4);
+
+    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), QString::fromUtf8(u8"中"));
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "ab"_L1);
+
+    core.setTerminalSize(4, 4);
+
+    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), text);
+}
+
+void QTermCoreTest::preservesWideWrappedBoundarySemanticsAcrossReflow()
+{
+    QTermCore core;
+    const QString text = QString::fromUtf8(u8"中ab");
+
+    core.setTerminalSize(4, 4);
+    core.writePlainText(text);
+    core.setTerminalSize(2, 4);
+    QCOMPARE(core.debugPlainText(), text);
+
+    core.setTerminalSize(4, 4);
+    core.writePlainText("X"_L1);
+
+    QCOMPARE(core.debugPlainText(), QString::fromUtf8(u8"中abX"));
+    QCOMPARE(core.buffer().lineAt(0).plainText(), text);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
+    QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
+}
 void QTermCoreTest::supports256ColorSgrAttributes()
 {
     QTermCore core;
