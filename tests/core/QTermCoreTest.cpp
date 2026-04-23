@@ -39,6 +39,8 @@ private slots:
     void combinesNonSpacingMarks();
     void storesWideCharactersAcrossTwoCells();
     void keepsNonBmpWideCharactersAcrossWrites();
+    void updatesWindowTitleFromOscBel();
+    void keepsPartialOscTitleStateAcrossWrites();
     void encodesCursorKeysByMode();
     void encodesBracketedPasteByMode();
     void emitsOutboundDataForKeyAndPaste();
@@ -360,6 +362,29 @@ void QTermCoreTest::storesWideCharactersAcrossTwoCells()
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
     QCOMPARE(core.buffer().lineAt(0).cellAt(2).text, "a"_L1);
+}
+
+void QTermCoreTest::updatesWindowTitleFromOscBel()
+{
+    QTermCore core;
+    QSignalSpy titleSpy(&core, &QTermCore::titleChanged);
+
+    core.writePlainText("\x1b]0;qterm-title\x07"_L1);
+
+    QCOMPARE(core.title(), "qterm-title"_L1);
+    QCOMPARE(titleSpy.size(), 1);
+    QCOMPARE(titleSpy.at(0).at(0).toString(), "qterm-title"_L1);
+}
+
+void QTermCoreTest::keepsPartialOscTitleStateAcrossWrites()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b]2;split"_L1);
+    QCOMPARE(core.title(), QString());
+
+    core.writePlainText("-title\x1b\\"_L1);
+    QCOMPARE(core.title(), "split-title"_L1);
 }
 
 void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()

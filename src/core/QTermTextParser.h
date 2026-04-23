@@ -18,6 +18,8 @@ private:
         Ground,
         Escape,
         Csi,
+        Osc,
+        OscEscape,
     };
 
     static int parameterAt(const QVector<int> &parameters, int index, int defaultValue);
@@ -25,9 +27,11 @@ private:
     void handleGroundTextUnit(const QString &text, QTermInputExecutor &executor);
     void handleCsiFinal(bool privateMode, QChar final, QTermInputExecutor &executor);
     void handleEscapeFinal(QChar final, QTermInputExecutor &executor);
+    void handleOscTerminator(QTermInputExecutor &executor);
 
     State m_state = State::Ground;
     QString m_csiParameters;
+    QString m_oscData;
     QChar m_pendingHighSurrogate;
 };
 

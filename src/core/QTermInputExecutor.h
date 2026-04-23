@@ -1,6 +1,7 @@
 #ifndef QTERM_QTERMINPUTEXECUTOR_H
 #define QTERM_QTERMINPUTEXECUTOR_H
 
+#include <functional>
 #include <QString>
 #include <QVector>
 
@@ -24,6 +25,7 @@ public:
     int scrollBottom() const noexcept;
     int rows() const noexcept;
     bool isAlternateScreenActive() const noexcept;
+    void setWindowTitleHandler(const std::function<void(const QString &)> &handler);
 
     void print(const QString &text);
     void lineFeed();
@@ -46,6 +48,7 @@ public:
     void saveCursor();
     void restoreCursor();
     void setPrivateModes(const QVector<int> &parameters, bool enabled);
+    void setWindowTitle(const QString &title);
 
 private:
     QTermScreenState &currentScreen() noexcept;
@@ -60,6 +63,7 @@ private:
     QTermScreenState &m_primaryScreen;
     QTermScreenState &m_alternateScreen;
     QTermModeState &m_modeState;
+    std::function<void(const QString &)> m_windowTitleHandler;
 };
 
 } // namespace QTerm

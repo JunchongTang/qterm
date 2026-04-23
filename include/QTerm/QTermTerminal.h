@@ -3,8 +3,11 @@
 
 #include <QByteArray>
 #include <QObject>
+#include <QPointer>
 #include <QString>
+#include <QStringDecoder>
 
+#include <QTerm/QTermSession.h>
 #include <QTerm/QTermSurfaceModel.h>
 
 namespace QTerm {
@@ -16,6 +19,7 @@ class QTermTerminal final : public QObject
     Q_OBJECT
     Q_PROPERTY(int rows READ rows NOTIFY sizeChanged)
     Q_PROPERTY(int columns READ columns NOTIFY sizeChanged)
+    Q_PROPERTY(QTerm::QTermSession *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(QTerm::QTermSurfaceModel *surfaceModel READ surfaceModel CONSTANT)
 
@@ -24,6 +28,7 @@ public:
 
     int rows() const noexcept;
     int columns() const noexcept;
+    QTermSession *session() const noexcept;
     QString title() const;
     QTermSurfaceModel *surfaceModel() noexcept;
 
@@ -33,18 +38,27 @@ public:
     Q_INVOKABLE void sendKey(int key, const QString &text = QString());
     Q_INVOKABLE void sendPaste(const QString &text);
 
+    void setSession(QTermSession *session);
+
 public slots:
     void setTitle(const QString &title);
 
 signals:
     void sizeChanged();
+    void sessionChanged();
     void titleChanged();
     void outboundData(const QByteArray &data);
 
 private:
     QTermCore *m_core = nullptr;
+    QPointer<QTermSession> m_session;
     QTermSurfaceModel m_surfaceModel;
     QString m_title;
+    QMetaObject::Connection m_sessionDataConnection;
+    QMetaObject::Connection m_sessionDestroyedConnection;
+    QMetaObject::Connection m_coreOutboundConnection;
+    QMetaObject::Connection m_sizeToSessionResizeConnection;
+    QStringDecoder m_sessionUtf8Decoder = QStringDecoder(QStringDecoder::Utf8);
 };
 
 } // namespace QTerm

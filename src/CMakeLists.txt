@@ -1,5 +1,8 @@
 qt_add_library(qterm STATIC
+    ../include/QTerm/QTermLocalPtyBackend.h
     ../include/QTerm/QTermSurfaceModel.h
+    ../include/QTerm/QTermSession.h
+    ../include/QTerm/QTermSessionBackend.h
     ../include/QTerm/QTermTerminal.h
     core/QTermBuffer.h
     core/QTermBuffer.cpp
@@ -20,7 +23,14 @@ qt_add_library(qterm STATIC
     core/QTermTextParser.cpp
     core/QTermSurfaceModel.cpp
     core/QTermTerminal.cpp
+    session/local/QTermLocalPtyBackend.cpp
+    session/QTermSession.cpp
+    session/QTermSessionBackend.cpp
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(qterm PRIVATE util)
+endif()
 
 add_library(QTerm::qterm ALIAS qterm)
 
