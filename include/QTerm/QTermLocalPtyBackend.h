@@ -36,6 +36,7 @@ public:
     void resize(int columns, int rows) override;
 
 private:
+    void applyPendingResize();
     void handleReadable();
     void pollChildExit();
     void closeMasterFd();
@@ -54,6 +55,7 @@ private:
     int m_masterFd = -1;
     qint64 m_childPid = -1;
     QSocketNotifier *m_readNotifier = nullptr;
+    QTimer *m_resizeDebounceTimer = nullptr;
     QTimer *m_childExitPollTimer = nullptr;
 };
 

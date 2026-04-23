@@ -26,6 +26,7 @@
 namespace {
 
 constexpr int kExitPollIntervalMs = 50;
+constexpr int kResizeDebounceIntervalMs = 60;
 
 QString childExitMessage(int status)
 {
@@ -47,11 +48,18 @@ namespace QTerm {
 QTermLocalPtyBackend::QTermLocalPtyBackend(QObject *parent)
     : QTermSessionBackend(parent)
     , m_readNotifier(new QSocketNotifier(QSocketNotifier::Read, this))
+    , m_resizeDebounceTimer(new QTimer(this))
     , m_childExitPollTimer(new QTimer(this))
 {
     m_readNotifier->setEnabled(false);
     connect(m_readNotifier, &QSocketNotifier::activated, this, [this]() {
         handleReadable();
+    });
+
+    m_resizeDebounceTimer->setSingleShot(true);
+    m_resizeDebounceTimer->setInterval(kResizeDebounceIntervalMs);
+    connect(m_resizeDebounceTimer, &QTimer::timeout, this, [this]() {
+        applyPendingResize();
     });
 
     m_childExitPollTimer->setInterval(kExitPollIntervalMs);
@@ -268,13 +276,24 @@ void QTermLocalPtyBackend::resize(int columns, int rows)
         return;
     }
 
+    m_resizeDebounceTimer->start();
+#else
+    Q_UNUSED(columns);
+    Q_UNUSED(rows);
+#endif
+}
+
+void QTermLocalPtyBackend::applyPendingResize()
+{
+#if defined(Q_OS_UNIX)
+    if (m_masterFd < 0) {
+        return;
+    }
+
     struct winsize winsizeData = {};
     winsizeData.ws_col = static_cast<unsigned short>(m_columns);
     winsizeData.ws_row = static_cast<unsigned short>(m_rows);
     ::ioctl(m_masterFd, TIOCSWINSZ, &winsizeData);
-#else
-    Q_UNUSED(columns);
-    Q_UNUSED(rows);
 #endif
 }
 
@@ -369,6 +388,7 @@ void QTermLocalPtyBackend::closeMasterFd()
 void QTermLocalPtyBackend::stopRuntimeWatchers()
 {
     m_readNotifier->setEnabled(false);
+    m_resizeDebounceTimer->stop();
     m_childExitPollTimer->stop();
 }
 
