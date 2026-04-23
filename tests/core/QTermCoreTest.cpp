@@ -30,7 +30,9 @@ private slots:
     void supportsDeleteLines();
     void supportsSaveAndRestoreCursor();
     void supportsEscapeSaveAndRestoreCursor();
+    void ignoresUnsupportedEscapeFinals();
     void supportsScrollRegionDuringLineFeed();
+    void preservesScrollbackAcrossFullScreenLineFeed();
     void togglesCursorVisibilityMode();
     void togglesBracketedPasteMode();
     void togglesApplicationCursorKeysMode();
@@ -49,9 +51,11 @@ private slots:
     void emitsOutboundDataForKeyAndPaste();
     void reflowsVisibleContentWhenNarrowing();
     void reflowsBackWhenWidening();
+    void reflowsCombiningCharactersAcrossResize();
     void preservesWrappedBoundarySemanticsAcrossReflow();
     void reflowsWideCharactersAcrossResize();
     void preservesWideWrappedBoundarySemanticsAcrossReflow();
+    void preservesComplexPromptAcrossRepeatedResizeCycles();
     void clearsState();
 };
 
@@ -280,6 +284,17 @@ void QTermCoreTest::supportsEscapeSaveAndRestoreCursor()
     QCOMPARE(core.cursorState().column, 3);
 }
 
+void QTermCoreTest::ignoresUnsupportedEscapeFinals()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b=\x1b>prompt"_L1);
+
+    QCOMPARE(core.debugPlainText(), "prompt"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 6);
+}
+
 void QTermCoreTest::supportsScrollRegionDuringLineFeed()
 {
     QTermCore core;
@@ -300,6 +315,18 @@ void QTermCoreTest::togglesCursorVisibilityMode()
 
     core.writePlainText("\x1b[?25h"_L1);
     QVERIFY(core.modeState().cursorVisible);
+}
+
+void QTermCoreTest::preservesScrollbackAcrossFullScreenLineFeed()
+{
+    QTermCore core;
+
+    core.setTerminalSize(5, 2);
+    core.writePlainText("alpha\r\nbeta\r\ngamma"_L1);
+
+    QCOMPARE(core.debugPlainText(), "alpha\nbeta\ngamma"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "beta"_L1);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "gamma"_L1);
 }
 
 void QTermCoreTest::togglesBracketedPasteMode()
@@ -463,6 +490,28 @@ void QTermCoreTest::reflowsBackWhenWidening()
     QCOMPARE(core.cursorState().column, 3);
 }
 
+void QTermCoreTest::reflowsCombiningCharactersAcrossResize()
+{
+    QTermCore core;
+    const QString text = QStringLiteral("e\u0301abc");
+
+    core.setTerminalSize(4, 4);
+    core.writePlainText(text);
+    core.setTerminalSize(2, 4);
+
+    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), QStringLiteral("e\u0301a"));
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "bc"_L1);
+
+    core.setTerminalSize(4, 4);
+    core.writePlainText("X"_L1);
+
+    QCOMPARE(core.debugPlainText(), QStringLiteral("e\u0301abcX"));
+    QCOMPARE(core.buffer().lineAt(0).plainText(), text);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
+    QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
+}
+
 void QTermCoreTest::preservesWrappedBoundarySemanticsAcrossReflow()
 {
     QTermCore core;
@@ -519,6 +568,32 @@ void QTermCoreTest::preservesWideWrappedBoundarySemanticsAcrossReflow()
     QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
     QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
 }
+
+void QTermCoreTest::preservesComplexPromptAcrossRepeatedResizeCycles()
+{
+    QTermCore core;
+    const QString prompt = QStringLiteral("user@host:~/src$ echo alpha-beta/gamma?x=1&y=2");
+
+    core.setTerminalSize(64, 6);
+    core.writePlainText(prompt);
+
+    core.setTerminalSize(11, 6);
+    QCOMPARE(core.debugPlainText(), prompt);
+
+    core.setTerminalSize(19, 6);
+    QCOMPARE(core.debugPlainText(), prompt);
+
+    core.setTerminalSize(7, 6);
+    QCOMPARE(core.debugPlainText(), prompt);
+
+    core.setTerminalSize(64, 6);
+
+    QCOMPARE(core.debugPlainText(), prompt);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), prompt);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, prompt.size());
+}
+
 void QTermCoreTest::supports256ColorSgrAttributes()
 {
     QTermCore core;

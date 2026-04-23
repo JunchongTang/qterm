@@ -303,48 +303,48 @@ const QTermLine &QTermBuffer::projectionLineAt(int projectionRow) const
     return m_visibleLines.at(projectionRow - m_historyLines.size());
 }
 
-QStringList QTermBuffer::visibleLineTexts() const
+QStringList QTermBuffer::viewportLineTexts(int topProjectionRow, int rowCount) const
 {
     QStringList lines;
-    lines.reserve(m_visibleLines.size());
-    for (const QTermLine &line : m_visibleLines) {
-        lines.append(line.plainText());
+    lines.reserve(qMax(0, rowCount));
+
+    for (int row = 0; row < rowCount; ++row) {
+        const int projectionRow = topProjectionRow + row;
+        if (projectionRow >= 0 && projectionRow < projectionRowCount()) {
+            lines.append(projectionLineAt(projectionRow).plainText());
+        } else {
+            lines.append(QString());
+        }
     }
 
     return lines;
 }
 
-QVariantList QTermBuffer::visibleLineWrapFlags() const
-{
-    QVariantList wrapFlags;
-    wrapFlags.reserve(m_visibleLines.size());
-    for (const QTermLine &line : m_visibleLines) {
-        wrapFlags.append(line.wrappedToNextLine());
-    }
-
-    return wrapFlags;
-}
-
-QVariantList QTermBuffer::visibleLineColumnTexts() const
+QVariantList QTermBuffer::viewportLineRuns(int topProjectionRow, int rowCount) const
 {
     QVariantList lines;
-    lines.reserve(m_visibleLines.size());
-    for (const QTermLine &line : m_visibleLines) {
-        lines.append(QVariant::fromValue(line.columnTexts()));
+    lines.reserve(qMax(0, rowCount));
+
+    for (int row = 0; row < rowCount; ++row) {
+        const int projectionRow = topProjectionRow + row;
+        if (projectionRow >= 0 && projectionRow < projectionRowCount()) {
+            lines.append(QVariant::fromValue(projectionLineAt(projectionRow).styleRuns()));
+        } else {
+            lines.append(QVariant::fromValue(QVariantList()));
+        }
     }
 
     return lines;
+}
+
+QStringList QTermBuffer::visibleLineTexts() const
+{
+    return viewportLineTexts(visibleRowOffset(), m_visibleLines.size());
 }
 
 QVariantList QTermBuffer::visibleLineRuns() const
 {
-    QVariantList lines;
-    lines.reserve(m_visibleLines.size());
-    for (const QTermLine &line : m_visibleLines) {
-        lines.append(QVariant::fromValue(line.styleRuns()));
-    }
-
-    return lines;
+    return viewportLineRuns(visibleRowOffset(), m_visibleLines.size());
 }
 
 QString QTermBuffer::debugPlainText() const

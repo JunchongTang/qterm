@@ -27,20 +27,35 @@ QTermTerminal::QTermTerminal(QObject *parent)
 {
     m_surfaceModel.setSelectionController(this);
     m_selectionModel->setTerminalSize(m_core->columns(), m_core->rows());
+    m_viewportTopProjectionRow = qMax(0, m_core->buffer().projectionRowCount() - m_core->rows());
+    m_selectionModel->setViewport(m_viewportTopProjectionRow);
 
     connect(m_core, &QTermCore::sizeChanged, this, [this]() {
+        const int previousScrollOffset = scrollOffset();
         m_surfaceModel.setSize(m_core->columns(), m_core->rows());
         m_selectionModel->completeResize(m_core->buffer(), m_core->columns(), m_core->rows());
+        clampViewportToBuffer();
+        m_selectionModel->setViewport(m_viewportTopProjectionRow);
+        m_selectionModel->refreshSelectionText(m_core->buffer());
         syncSurfaceSelection();
+        syncSurfaceViewport();
         emit sizeChanged();
+        if (scrollOffset() != previousScrollOffset) {
+            emit viewportChanged();
+        }
     });
 
     connect(m_core, &QTermCore::debugPlainTextChanged, this, [this]() {
+        const int previousScrollOffset = scrollOffset();
+        clampViewportToBuffer();
+        m_selectionModel->setViewport(m_viewportTopProjectionRow);
         m_selectionModel->refreshSelectionText(m_core->buffer());
         syncSurfaceSelection();
-        m_surfaceModel.setVisibleLines(m_core->buffer().visibleLineTexts());
-        m_surfaceModel.setVisibleLineRuns(m_core->buffer().visibleLineRuns());
+        syncSurfaceViewport();
         m_surfaceModel.setPlainText(m_core->debugPlainText());
+        if (scrollOffset() != previousScrollOffset) {
+            emit viewportChanged();
+        }
     });
 
     connect(m_core, &QTermCore::cursorStateChanged, this, [this]() {
@@ -53,10 +68,9 @@ QTermTerminal::QTermTerminal(QObject *parent)
     connect(m_core, &QTermCore::outboundData, this, &QTermTerminal::outboundData);
 
     m_surfaceModel.setSize(m_core->columns(), m_core->rows());
+    syncSurfaceViewport();
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
-    m_surfaceModel.setVisibleLines(m_core->buffer().visibleLineTexts());
-    m_surfaceModel.setVisibleLineRuns(m_core->buffer().visibleLineRuns());
     m_surfaceModel.setPlainText(m_core->debugPlainText());
     syncSurfaceCursor(m_surfaceModel, m_core);
 }
@@ -71,6 +85,16 @@ int QTermTerminal::rows() const noexcept
 int QTermTerminal::columns() const noexcept
 {
     return m_core->columns();
+}
+
+int QTermTerminal::scrollOffset() const noexcept
+{
+    return maxViewportTopProjectionRow() - m_viewportTopProjectionRow;
+}
+
+int QTermTerminal::maxScrollOffset() const noexcept
+{
+    return maxViewportTopProjectionRow();
 }
 
 QTermSession *QTermTerminal::session() const noexcept
@@ -153,6 +177,41 @@ void QTermTerminal::selectLogicalLineAt(int row)
     syncSurfaceSelection();
 }
 
+void QTermTerminal::scrollByLines(int deltaRows)
+{
+    const int previousScrollOffset = scrollOffset();
+    const int nextViewportTop = qBound(0,
+                                       m_viewportTopProjectionRow - deltaRows,
+                                       maxViewportTopProjectionRow());
+    if (nextViewportTop == m_viewportTopProjectionRow) {
+        return;
+    }
+
+    m_viewportTopProjectionRow = nextViewportTop;
+    m_viewportPinnedToBottom = m_viewportTopProjectionRow == maxViewportTopProjectionRow();
+    m_selectionModel->setViewport(m_viewportTopProjectionRow);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
+    syncSurfaceSelection();
+    syncSurfaceViewport();
+    if (scrollOffset() != previousScrollOffset) {
+        emit viewportChanged();
+    }
+}
+
+void QTermTerminal::scrollToBottom()
+{
+    const int previousScrollOffset = scrollOffset();
+    m_viewportPinnedToBottom = true;
+    clampViewportToBuffer();
+    m_selectionModel->setViewport(m_viewportTopProjectionRow);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
+    syncSurfaceSelection();
+    syncSurfaceViewport();
+    if (scrollOffset() != previousScrollOffset) {
+        emit viewportChanged();
+    }
+}
+
 void QTermTerminal::sendKey(int key, const QString &text)
 {
     m_core->sendKey(key, text);
@@ -222,6 +281,30 @@ void QTermTerminal::syncSurfaceSelection()
                                         snapshot.endRow,
                                         snapshot.endColumn,
                                         snapshot.selectedText);
+}
+
+int QTermTerminal::maxViewportTopProjectionRow() const noexcept
+{
+    return qMax(0, m_core->buffer().projectionRowCount() - rows());
+}
+
+void QTermTerminal::clampViewportToBuffer()
+{
+    const int maxTop = maxViewportTopProjectionRow();
+    if (m_viewportPinnedToBottom) {
+        m_viewportTopProjectionRow = maxTop;
+    } else {
+        m_viewportTopProjectionRow = qBound(0, m_viewportTopProjectionRow, maxTop);
+        if (m_viewportTopProjectionRow == maxTop) {
+            m_viewportPinnedToBottom = true;
+        }
+    }
+}
+
+void QTermTerminal::syncSurfaceViewport()
+{
+    m_surfaceModel.setVisibleLines(m_core->buffer().viewportLineTexts(m_viewportTopProjectionRow, rows()));
+    m_surfaceModel.setVisibleLineRuns(m_core->buffer().viewportLineRuns(m_viewportTopProjectionRow, rows()));
 }
 
 } // namespace QTerm

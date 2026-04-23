@@ -55,8 +55,6 @@ public:
     void setSelectionController(QTermTerminal *terminal);
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn);
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
-    void setVisibleLineWrapFlags(const QVariantList &visibleLineWrapFlags);
-    void setVisibleLineColumnTexts(const QVariantList &visibleLineColumnTexts);
     void setVisibleLines(const QStringList &visibleLines);
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
     void setPlainText(const QString &plainText);
@@ -70,8 +68,6 @@ signals:
     void plainTextChanged();
 
 private:
-    void updateSelectedText();
-
     int m_rows = 24;
     int m_columns = 80;
     int m_cursorRow = 0;
@@ -84,8 +80,6 @@ private:
     int m_selectionEndColumn = 0;
     QTermTerminal *m_selectionController = nullptr;
     QString m_selectedText;
-    QVariantList m_visibleLineWrapFlags;
-    QVariantList m_visibleLineColumnTexts;
     QStringList m_visibleLines;
     QVariantList m_visibleLineRuns;
     QString m_plainText;

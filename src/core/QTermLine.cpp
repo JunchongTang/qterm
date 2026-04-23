@@ -214,16 +214,18 @@ QVariantList QTermLine::styleRuns() const
     QVariantList runs;
 
     QString currentText;
+    int currentColumns = 0;
     QTermCellAttributes currentAttributes;
     bool hasCurrentRun = false;
 
-    const auto flushRun = [&runs, &currentText, &currentAttributes, &hasCurrentRun]() {
+    const auto flushRun = [&runs, &currentText, &currentColumns, &currentAttributes, &hasCurrentRun]() {
         if (!hasCurrentRun) {
             return;
         }
 
         QVariantMap run;
         run.insert(QStringLiteral("text"), currentText);
+        run.insert(QStringLiteral("columns"), currentColumns);
         run.insert(QStringLiteral("bold"), currentAttributes.bold);
         run.insert(QStringLiteral("dim"), currentAttributes.dim);
         run.insert(QStringLiteral("italic"), currentAttributes.italic);
@@ -237,6 +239,7 @@ QVariantList QTermLine::styleRuns() const
         runs.append(run);
 
         currentText.clear();
+        currentColumns = 0;
         hasCurrentRun = false;
     };
 
@@ -246,8 +249,10 @@ QVariantList QTermLine::styleRuns() const
         }
 
         const QString cellText = cell.text.isEmpty() ? QStringLiteral(" ") : cell.text;
+        const int cellColumns = qMax(1, cell.width);
         if (!hasCurrentRun) {
             currentText = cellText;
+            currentColumns = cellColumns;
             currentAttributes = cell.attributes;
             hasCurrentRun = true;
             continue;
@@ -264,11 +269,13 @@ QVariantList QTermLine::styleRuns() const
             currentAttributes.foregroundRgb == cell.attributes.foregroundRgb &&
             currentAttributes.backgroundRgb == cell.attributes.backgroundRgb) {
             currentText.append(cellText);
+            currentColumns += cellColumns;
             continue;
         }
 
         flushRun();
         currentText = cellText;
+        currentColumns = cellColumns;
         currentAttributes = cell.attributes;
         hasCurrentRun = true;
     }
@@ -289,8 +296,10 @@ QString QTermLine::plainText() const
         text.append(cell.text.isEmpty() ? QStringLiteral(" ") : cell.text);
     }
 
-    while (!text.isEmpty() && text.back() == u' ') {
-        text.chop(1);
+    if (!m_wrappedToNextLine) {
+        while (!text.isEmpty() && text.back() == u' ') {
+            text.chop(1);
+        }
     }
 
     return text;

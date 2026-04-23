@@ -544,6 +544,11 @@ void QTermInputExecutor::wrapToNextLine()
 void QTermInputExecutor::advanceToNextRow()
 {
     if (currentScreen().cursorState.row == currentScreen().scrollBottom) {
+        if (currentScreen().scrollTop == 0 && currentScreen().scrollBottom == currentScreen().buffer.rows() - 1) {
+            currentScreen().buffer.scrollUp();
+            return;
+        }
+
         currentScreen().buffer.deleteLines(currentScreen().scrollTop,
                                            1,
                                            currentScreen().scrollTop,

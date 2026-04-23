@@ -180,23 +180,7 @@ void QTermSurfaceModel::setSelectionController(QTermTerminal *terminal)
 
 void QTermSurfaceModel::setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn)
 {
-    const bool selectionChangedState = m_hasSelection != hasSelection ||
-        m_selectionStartRow != startRow ||
-        m_selectionStartColumn != startColumn ||
-        m_selectionEndRow != endRow ||
-        m_selectionEndColumn != endColumn;
-    const QString previousSelectedText = m_selectedText;
-
-    m_hasSelection = hasSelection;
-    m_selectionStartRow = startRow;
-    m_selectionStartColumn = startColumn;
-    m_selectionEndRow = endRow;
-    m_selectionEndColumn = endColumn;
-    updateSelectedText();
-
-    if (selectionChangedState || m_selectedText != previousSelectedText) {
-        emit selectionChanged();
-    }
+    setSelectionSnapshot(hasSelection, startRow, startColumn, endRow, endColumn, QString());
 }
 
 void QTermSurfaceModel::setSelectionSnapshot(bool hasSelection,
@@ -221,36 +205,6 @@ void QTermSurfaceModel::setSelectionSnapshot(bool hasSelection,
     m_selectedText = selectedText;
 
     if (selectionChangedState) {
-        emit selectionChanged();
-    }
-}
-
-void QTermSurfaceModel::setVisibleLineWrapFlags(const QVariantList &visibleLineWrapFlags)
-{
-    if (m_visibleLineWrapFlags == visibleLineWrapFlags) {
-        return;
-    }
-
-    const QString previousSelectedText = m_selectedText;
-    m_visibleLineWrapFlags = visibleLineWrapFlags;
-    updateSelectedText();
-
-    if (m_hasSelection && m_selectedText != previousSelectedText) {
-        emit selectionChanged();
-    }
-}
-
-void QTermSurfaceModel::setVisibleLineColumnTexts(const QVariantList &visibleLineColumnTexts)
-{
-    if (m_visibleLineColumnTexts == visibleLineColumnTexts) {
-        return;
-    }
-
-    const QString previousSelectedText = m_selectedText;
-    m_visibleLineColumnTexts = visibleLineColumnTexts;
-    updateSelectedText();
-
-    if (m_hasSelection && m_selectedText != previousSelectedText) {
         emit selectionChanged();
     }
 }
@@ -283,63 +237,6 @@ void QTermSurfaceModel::setPlainText(const QString &plainText)
 
     m_plainText = plainText;
     emit plainTextChanged();
-}
-
-void QTermSurfaceModel::updateSelectedText()
-{
-    QString selectionText;
-
-    if (m_hasSelection) {
-        const auto lastRelevantColumn = [](const QStringList &lineColumns) {
-            for (int column = lineColumns.size() - 1; column >= 0; --column) {
-                const QString &columnText = lineColumns.at(column);
-                if (!columnText.isEmpty() && columnText != QStringLiteral(" ")) {
-                    return column + 1;
-                }
-            }
-
-            return 0;
-        };
-
-        for (int row = m_selectionStartRow; row <= m_selectionEndRow; ++row) {
-            if (row > m_selectionStartRow) {
-                const bool previousRowWrapped = row - 1 < m_visibleLineWrapFlags.size()
-                    ? m_visibleLineWrapFlags.at(row - 1).toBool()
-                    : false;
-                if (!previousRowWrapped) {
-                selectionText.append(u'\n');
-                }
-            }
-
-            const QStringList lineColumns = row < m_visibleLineColumnTexts.size()
-                ? m_visibleLineColumnTexts.at(row).toStringList()
-                : QStringList();
-            if (m_selectionStartRow == m_selectionEndRow) {
-                for (int column = m_selectionStartColumn; column < m_selectionEndColumn && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-                continue;
-            }
-
-            if (row == m_selectionStartRow) {
-                const int lineEnd = lastRelevantColumn(lineColumns);
-                for (int column = m_selectionStartColumn; column < lineEnd && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-            } else if (row == m_selectionEndRow) {
-                for (int column = 0; column < m_selectionEndColumn && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-            } else {
-                const int lineEnd = lastRelevantColumn(lineColumns);
-                for (int column = 0; column < lineEnd && column < lineColumns.size(); ++column) {
-                    selectionText.append(lineColumns.at(column));
-                }
-            }
-        }
-    }
-
-    m_selectedText = selectionText;
 }
 
 } // namespace QTerm

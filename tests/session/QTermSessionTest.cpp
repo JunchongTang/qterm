@@ -85,6 +85,7 @@ private slots:
     void terminalPreservesSelectionAcrossReflowResize();
     void terminalKeepsSelectedTextWhenResizePushesSelectionIntoHistory();
     void surfaceModelProjectsSelectionVisibility();
+    void terminalSelectsFromScrolledViewport();
 };
 
 void QTermSessionTest::forwardsBackendOperations()
@@ -565,6 +566,40 @@ void QTermSessionTest::surfaceModelProjectsSelectionVisibility()
     surfaceModel.clearSelection();
     QVERIFY(!surfaceModel.hasSelection());
     QVERIFY(!surfaceModel.selectionVisible());
+}
+
+void QTermSessionTest::terminalSelectsFromScrolledViewport()
+{
+    QTermTerminal terminal;
+
+    terminal.setTerminalSize(5, 2);
+    terminal.feedText("alpha\r\nbeta\r\ngamma"_L1);
+
+    QCOMPARE(terminal.surfaceModel()->visibleLines().at(0), "beta"_L1);
+    QCOMPARE(terminal.surfaceModel()->visibleLines().at(1), "gamma"_L1);
+
+    terminal.scrollByLines(1);
+    QCOMPARE(terminal.scrollOffset(), 1);
+    QCOMPARE(terminal.surfaceModel()->visibleLines().at(0), "alpha"_L1);
+    QCOMPARE(terminal.surfaceModel()->visibleLines().at(1), "beta"_L1);
+
+    terminal.setSelectionRange(0, 0, 0, 5);
+    QVERIFY(terminal.surfaceModel()->hasSelection());
+    QVERIFY(terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
+
+    terminal.scrollToBottom();
+    QCOMPARE(terminal.scrollOffset(), 0);
+    QVERIFY(terminal.surfaceModel()->hasSelection());
+    QVERIFY(!terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+
+    terminal.scrollByLines(1);
+    QVERIFY(terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
 }
 
 } // namespace QTerm
