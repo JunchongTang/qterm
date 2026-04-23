@@ -6,6 +6,7 @@
 #include <QFont>
 #include <QFontMetricsF>
 #include <QPainter>
+#include <QTimer>
 #include <QWheelEvent>
 #include <QVariantList>
 #include <QVariantMap>
@@ -19,6 +20,7 @@ namespace {
 constexpr int kMinimumColumns = 20;
 constexpr int kMinimumRows = 8;
 constexpr int kWheelScrollRowsPerStep = 3;
+constexpr int kResizeDebounceIntervalMs = 60;
 
 QColor colorFromRgb(int rgb)
 {
@@ -144,11 +146,17 @@ QFont buildFont(const QString &family, int pixelSize)
 
 QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
+    , m_resizeDebounceTimer(new QTimer(this))
 {
     setOpaquePainting(true);
     setAcceptedMouseButtons(Qt::NoButton);
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
+    });
+    m_resizeDebounceTimer->setSingleShot(true);
+    m_resizeDebounceTimer->setInterval(kResizeDebounceIntervalMs);
+    connect(m_resizeDebounceTimer, &QTimer::timeout, this, [this]() {
+        syncTerminalSize();
     });
     updateMetrics();
 }
@@ -167,7 +175,7 @@ void QTermQuickItem::setTerminal(QTermTerminal *terminal)
     disconnectSurfaceModel();
     m_terminal = terminal;
     reconnectSurfaceModel();
-    syncTerminalSize();
+    scheduleTerminalSizeSync();
     update();
     emit terminalChanged();
 }
@@ -410,7 +418,7 @@ void QTermQuickItem::geometryChange(const QRectF &newGeometry, const QRectF &old
 {
     QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
     if (newGeometry.size() != oldGeometry.size()) {
-        syncTerminalSize();
+        scheduleTerminalSizeSync();
     }
 }
 
@@ -490,8 +498,21 @@ void QTermQuickItem::updateMetrics()
 
     if (!qFuzzyCompare(previousCellWidth, m_cellWidth) || !qFuzzyCompare(previousCellHeight, m_cellHeight)) {
         emit metricsChanged();
-        syncTerminalSize();
+        scheduleTerminalSizeSync();
     }
+}
+
+void QTermQuickItem::scheduleTerminalSizeSync()
+{
+    if (!m_terminal) {
+        return;
+    }
+
+    if (width() <= 0.0 || height() <= 0.0) {
+        return;
+    }
+
+    m_resizeDebounceTimer->start();
 }
 
 void QTermQuickItem::syncTerminalSize()

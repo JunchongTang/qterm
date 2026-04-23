@@ -75,6 +75,7 @@ private:
     void reconnectSurfaceModel();
     void disconnectSurfaceModel();
     void updateMetrics();
+    void scheduleTerminalSizeSync();
     void syncTerminalSize();
 
     QPointer<QTermTerminal> m_terminal;
@@ -83,6 +84,7 @@ private:
     QMetaObject::Connection m_surfaceSelectionConnection;
     QMetaObject::Connection m_surfaceVisibleRunsConnection;
     QMetaObject::Connection m_surfaceDestroyedConnection;
+    QTimer *m_resizeDebounceTimer = nullptr;
     QString m_fontFamily = QStringLiteral("Menlo");
     int m_fontPixelSize = 18;
     qreal m_cellWidth = 1.0;
