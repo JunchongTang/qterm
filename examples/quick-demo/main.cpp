@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QClipboard>
 #include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
 #include <QVariant>
@@ -9,6 +10,25 @@
 #include <QTerm/QTermTerminal.h>
 
 #include <QTerm/QTermSurfaceModel.h>
+
+namespace {
+
+class DemoClipboardBridge final : public QObject
+{
+    Q_OBJECT
+
+public:
+    using QObject::QObject;
+
+    Q_INVOKABLE void copyText(const QString &text)
+    {
+        if (QGuiApplication::clipboard()) {
+            QGuiApplication::clipboard()->setText(text);
+        }
+    }
+};
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -24,6 +44,7 @@ int main(int argc, char *argv[])
     QTerm::QTermTerminal terminal;
     QTerm::QTermSession session;
     QTerm::QTermLocalPtyBackend backend;
+    DemoClipboardBridge clipboardBridge;
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
     environment.insert(QStringLiteral("PS1"), QString::fromUtf8("\x1b]0;QTerm Local Shell\x07qterm$ "));
@@ -39,7 +60,8 @@ int main(int argc, char *argv[])
     session.open();
 
     engine.setInitialProperties({
-        {QStringLiteral("terminal"), QVariant::fromValue(&terminal)}
+        {QStringLiteral("terminal"), QVariant::fromValue(&terminal)},
+        {QStringLiteral("clipboardBridge"), QVariant::fromValue(&clipboardBridge)}
     });
     engine.loadFromModule("QTermDemo", "Main");
 
@@ -49,3 +71,5 @@ int main(int argc, char *argv[])
 
     return app.exec();
 }
+
+#include "main.moc"

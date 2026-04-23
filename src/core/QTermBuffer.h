@@ -1,6 +1,8 @@
 #ifndef QTERM_QTERMBUFFER_H
 #define QTERM_QTERMBUFFER_H
 
+#include <QStringList>
+#include <QVariantList>
 #include <QVector>
 
 #include "QTermLine.h"
@@ -27,6 +29,10 @@ public:
     QTermLine &lineAt(int row);
     const QTermLine &lineAt(int row) const;
 
+    QStringList visibleLineTexts() const;
+    QVariantList visibleLineWrapFlags() const;
+    QVariantList visibleLineColumnTexts() const;
+    QVariantList visibleLineRuns() const;
     QString debugPlainText() const;
 
 private:

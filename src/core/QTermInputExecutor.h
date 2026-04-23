@@ -25,6 +25,7 @@ public:
     int scrollBottom() const noexcept;
     int rows() const noexcept;
     bool isAlternateScreenActive() const noexcept;
+    void setBellHandler(const std::function<void()> &handler);
     void setWindowTitleHandler(const std::function<void(const QString &)> &handler);
 
     void print(const QString &text);
@@ -47,6 +48,7 @@ public:
     void setScrollRegion(int top, int bottom);
     void saveCursor();
     void restoreCursor();
+    void bell();
     void setPrivateModes(const QVector<int> &parameters, bool enabled);
     void setWindowTitle(const QString &title);
 
@@ -63,6 +65,7 @@ private:
     QTermScreenState &m_primaryScreen;
     QTermScreenState &m_alternateScreen;
     QTermModeState &m_modeState;
+    std::function<void()> m_bellHandler;
     std::function<void(const QString &)> m_windowTitleHandler;
 };
 

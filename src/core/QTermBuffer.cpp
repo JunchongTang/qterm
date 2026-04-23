@@ -130,6 +130,50 @@ const QTermLine &QTermBuffer::lineAt(int row) const
     return m_visibleLines.at(row);
 }
 
+QStringList QTermBuffer::visibleLineTexts() const
+{
+    QStringList lines;
+    lines.reserve(m_visibleLines.size());
+    for (const QTermLine &line : m_visibleLines) {
+        lines.append(line.plainText());
+    }
+
+    return lines;
+}
+
+QVariantList QTermBuffer::visibleLineWrapFlags() const
+{
+    QVariantList wrapFlags;
+    wrapFlags.reserve(m_visibleLines.size());
+    for (const QTermLine &line : m_visibleLines) {
+        wrapFlags.append(line.wrappedToNextLine());
+    }
+
+    return wrapFlags;
+}
+
+QVariantList QTermBuffer::visibleLineColumnTexts() const
+{
+    QVariantList lines;
+    lines.reserve(m_visibleLines.size());
+    for (const QTermLine &line : m_visibleLines) {
+        lines.append(QVariant::fromValue(line.columnTexts()));
+    }
+
+    return lines;
+}
+
+QVariantList QTermBuffer::visibleLineRuns() const
+{
+    QVariantList lines;
+    lines.reserve(m_visibleLines.size());
+    for (const QTermLine &line : m_visibleLines) {
+        lines.append(QVariant::fromValue(line.styleRuns()));
+    }
+
+    return lines;
+}
+
 QString QTermBuffer::debugPlainText() const
 {
     QVector<QTermLine> projection;

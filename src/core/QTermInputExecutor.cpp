@@ -7,6 +7,18 @@ namespace {
 
 constexpr int kTabWidth = 8;
 
+int clampColorComponent(int value)
+{
+    return qBound(0, value, 255);
+}
+
+int packRgb(int red, int green, int blue)
+{
+    return (clampColorComponent(red) << 16) |
+           (clampColorComponent(green) << 8) |
+           clampColorComponent(blue);
+}
+
 bool isCombiningMark(const QString &text)
 {
     const QList<uint> codePoints = text.toUcs4();
@@ -52,6 +64,41 @@ int displayWidth(const QString &text)
     }
 
     return isWideCodePoint(codePoints.front()) ? 2 : 1;
+}
+
+int consumeExtendedColor(const QVector<int> &parameters, int parameterIndex, bool foreground, QTerm::QTermCellAttributes &attributes)
+{
+    if (parameterIndex + 1 >= parameters.size()) {
+        return 1;
+    }
+
+    const int colorMode = parameters.at(parameterIndex + 1);
+    if (colorMode == 5 && parameterIndex + 2 < parameters.size()) {
+        if (foreground) {
+            attributes.foregroundIndex = qBound(0, parameters.at(parameterIndex + 2), 255);
+            attributes.foregroundRgb = -1;
+        } else {
+            attributes.backgroundIndex = qBound(0, parameters.at(parameterIndex + 2), 255);
+            attributes.backgroundRgb = -1;
+        }
+        return 3;
+    }
+
+    if (colorMode == 2 && parameterIndex + 4 < parameters.size()) {
+        const int rgb = packRgb(parameters.at(parameterIndex + 2),
+                                parameters.at(parameterIndex + 3),
+                                parameters.at(parameterIndex + 4));
+        if (foreground) {
+            attributes.foregroundIndex = -1;
+            attributes.foregroundRgb = rgb;
+        } else {
+            attributes.backgroundIndex = -1;
+            attributes.backgroundRgb = rgb;
+        }
+        return 5;
+    }
+
+    return 1;
 }
 
 } // namespace
@@ -105,6 +152,11 @@ int QTermInputExecutor::rows() const noexcept
 bool QTermInputExecutor::isAlternateScreenActive() const noexcept
 {
     return m_modeState.alternateScreenActive;
+}
+
+void QTermInputExecutor::setBellHandler(const std::function<void()> &handler)
+{
+    m_bellHandler = handler;
 }
 
 void QTermInputExecutor::setWindowTitleHandler(const std::function<void(const QString &)> &handler)
@@ -264,45 +316,89 @@ void QTermInputExecutor::characterAttributes(const QVector<int> &parameters)
 {
     const QVector<int> normalized = parameters.isEmpty() ? QVector<int>{0} : parameters;
 
-    for (int parameter : normalized) {
+    for (int parameterIndex = 0; parameterIndex < normalized.size();) {
+        const int parameter = normalized.at(parameterIndex);
         switch (parameter) {
         case 0:
             currentScreen().currentAttributes = QTermCellAttributes();
+            ++parameterIndex;
             break;
         case 1:
             currentScreen().currentAttributes.bold = true;
+            ++parameterIndex;
+            break;
+        case 2:
+            currentScreen().currentAttributes.dim = true;
+            ++parameterIndex;
             break;
         case 3:
             currentScreen().currentAttributes.italic = true;
+            ++parameterIndex;
             break;
         case 4:
             currentScreen().currentAttributes.underline = true;
+            ++parameterIndex;
+            break;
+        case 7:
+            currentScreen().currentAttributes.inverse = true;
+            ++parameterIndex;
+            break;
+        case 9:
+            currentScreen().currentAttributes.strikethrough = true;
+            ++parameterIndex;
             break;
         case 22:
             currentScreen().currentAttributes.bold = false;
+            currentScreen().currentAttributes.dim = false;
+            ++parameterIndex;
             break;
         case 23:
             currentScreen().currentAttributes.italic = false;
+            ++parameterIndex;
             break;
         case 24:
             currentScreen().currentAttributes.underline = false;
+            ++parameterIndex;
+            break;
+        case 27:
+            currentScreen().currentAttributes.inverse = false;
+            ++parameterIndex;
+            break;
+        case 29:
+            currentScreen().currentAttributes.strikethrough = false;
+            ++parameterIndex;
             break;
         case 39:
             currentScreen().currentAttributes.foregroundIndex = -1;
+            currentScreen().currentAttributes.foregroundRgb = -1;
+            ++parameterIndex;
             break;
         case 49:
             currentScreen().currentAttributes.backgroundIndex = -1;
+            currentScreen().currentAttributes.backgroundRgb = -1;
+            ++parameterIndex;
             break;
         default:
             if (parameter >= 30 && parameter <= 37) {
                 currentScreen().currentAttributes.foregroundIndex = parameter - 30;
+                currentScreen().currentAttributes.foregroundRgb = -1;
             } else if (parameter >= 40 && parameter <= 47) {
                 currentScreen().currentAttributes.backgroundIndex = parameter - 40;
+                currentScreen().currentAttributes.backgroundRgb = -1;
             } else if (parameter >= 90 && parameter <= 97) {
                 currentScreen().currentAttributes.foregroundIndex = 8 + (parameter - 90);
+                currentScreen().currentAttributes.foregroundRgb = -1;
             } else if (parameter >= 100 && parameter <= 107) {
                 currentScreen().currentAttributes.backgroundIndex = 8 + (parameter - 100);
+                currentScreen().currentAttributes.backgroundRgb = -1;
+            } else if (parameter == 38) {
+                parameterIndex += consumeExtendedColor(normalized, parameterIndex, true, currentScreen().currentAttributes);
+                continue;
+            } else if (parameter == 48) {
+                parameterIndex += consumeExtendedColor(normalized, parameterIndex, false, currentScreen().currentAttributes);
+                continue;
             }
+            ++parameterIndex;
             break;
         }
     }
@@ -367,6 +463,13 @@ void QTermInputExecutor::restoreCursor()
     currentScreen().currentAttributes = currentScreen().savedCursorState->attributes;
     setCursorState(currentScreen().savedCursorState->cursorState);
     currentScreen().wrapPending = false;
+}
+
+void QTermInputExecutor::bell()
+{
+    if (m_bellHandler) {
+        m_bellHandler();
+    }
 }
 
 void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool enabled)

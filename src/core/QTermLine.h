@@ -1,6 +1,8 @@
 #ifndef QTERM_QTERMLINE_H
 #define QTERM_QTERMLINE_H
 
+#include <QStringList>
+#include <QVariantList>
 #include <QVector>
 
 #include "QTermCell.h"
@@ -30,6 +32,9 @@ public:
     bool wrappedToNextLine() const noexcept;
     void setWrappedToNextLine(bool wrapped);
 
+    QString textInColumnRange(int startColumn, int endColumn) const;
+    QStringList columnTexts() const;
+    QVariantList styleRuns() const;
     QString plainText() const;
 
 private:

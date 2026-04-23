@@ -113,6 +113,9 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
 {
     if (text.size() == 1) {
         switch (text.front().unicode()) {
+        case '\a':
+            executor.bell();
+            break;
         case '\n':
             executor.lineFeed();
             break;

@@ -41,6 +41,9 @@ private slots:
     void keepsNonBmpWideCharactersAcrossWrites();
     void updatesWindowTitleFromOscBel();
     void keepsPartialOscTitleStateAcrossWrites();
+    void emitsBellWithoutChangingBuffer();
+    void supports256ColorSgrAttributes();
+    void supportsTrueColorSgrAttributes();
     void encodesCursorKeysByMode();
     void encodesBracketedPasteByMode();
     void emitsOutboundDataForKeyAndPaste();
@@ -174,12 +177,15 @@ void QTermCoreTest::preservesSgrAttributesOnCells()
 {
     QTermCore core;
 
-    core.writePlainText("\x1b[1;4;31mA"_L1);
+    core.writePlainText("\x1b[1;2;4;7;9;31mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
     QCOMPARE(cell.text, "A"_L1);
     QVERIFY(cell.attributes.bold);
+    QVERIFY(cell.attributes.dim);
     QVERIFY(cell.attributes.underline);
+    QVERIFY(cell.attributes.inverse);
+    QVERIFY(cell.attributes.strikethrough);
     QCOMPARE(cell.attributes.foregroundIndex, 1);
 }
 
@@ -187,13 +193,19 @@ void QTermCoreTest::resetsSgrAttributes()
 {
     QTermCore core;
 
-    core.writePlainText("\x1b[1;31mA\x1b[0mB"_L1);
+    core.writePlainText("\x1b[1;2;7;9;31mA\x1b[22;27;29;39mB"_L1);
 
     const QTermCell &firstCell = core.buffer().lineAt(0).cellAt(0);
     const QTermCell &secondCell = core.buffer().lineAt(0).cellAt(1);
     QVERIFY(firstCell.attributes.bold);
+    QVERIFY(firstCell.attributes.dim);
+    QVERIFY(firstCell.attributes.inverse);
+    QVERIFY(firstCell.attributes.strikethrough);
     QCOMPARE(firstCell.attributes.foregroundIndex, 1);
     QVERIFY(!secondCell.attributes.bold);
+    QVERIFY(!secondCell.attributes.dim);
+    QVERIFY(!secondCell.attributes.inverse);
+    QVERIFY(!secondCell.attributes.strikethrough);
     QCOMPARE(secondCell.attributes.foregroundIndex, -1);
 }
 
@@ -401,6 +413,45 @@ void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, emoji);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
+}
+
+void QTermCoreTest::emitsBellWithoutChangingBuffer()
+{
+    QTermCore core;
+    QSignalSpy bellSpy(&core, &QTermCore::bell);
+
+    core.writePlainText("a\ab"_L1);
+
+    QCOMPARE(bellSpy.size(), 1);
+    QCOMPARE(core.debugPlainText(), "ab"_L1);
+}
+
+void QTermCoreTest::supports256ColorSgrAttributes()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[38;5;196;48;5;33mA"_L1);
+
+    const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
+    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(cell.attributes.foregroundIndex, 196);
+    QCOMPARE(cell.attributes.foregroundRgb, -1);
+    QCOMPARE(cell.attributes.backgroundIndex, 33);
+    QCOMPARE(cell.attributes.backgroundRgb, -1);
+}
+
+void QTermCoreTest::supportsTrueColorSgrAttributes()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[38;2;12;34;56;48;2;200;210;220mA"_L1);
+
+    const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
+    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(cell.attributes.foregroundIndex, -1);
+    QCOMPARE(cell.attributes.foregroundRgb, 0x0c2238);
+    QCOMPARE(cell.attributes.backgroundIndex, -1);
+    QCOMPARE(cell.attributes.backgroundRgb, 0xc8d2dc);
 }
 
 void QTermCoreTest::encodesCursorKeysByMode()
