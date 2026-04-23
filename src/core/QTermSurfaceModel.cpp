@@ -80,6 +80,11 @@ bool QTermSurfaceModel::hasSelection() const noexcept
     return m_hasSelection;
 }
 
+bool QTermSurfaceModel::selectionVisible() const noexcept
+{
+    return m_hasSelection && m_selectionStartRow >= 0 && m_selectionEndRow >= 0;
+}
+
 int QTermSurfaceModel::selectionStartRow() const noexcept
 {
     return m_selectionStartRow;

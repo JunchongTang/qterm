@@ -31,9 +31,7 @@ struct QTermScreenState
 
     void resize(int columns, int rows)
     {
-        buffer.resize(columns, rows);
-        cursorState.row = qBound(0, cursorState.row, rows - 1);
-        cursorState.column = qBound(0, cursorState.column, columns - 1);
+        cursorState = buffer.resize(columns, rows, cursorState);
         if (savedCursorState.has_value()) {
             savedCursorState->cursorState.row = qBound(0, savedCursorState->cursorState.row, rows - 1);
             savedCursorState->cursorState.column = qBound(0, savedCursorState->cursorState.column, columns - 1);

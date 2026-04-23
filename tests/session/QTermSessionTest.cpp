@@ -79,8 +79,12 @@ private slots:
     void terminalSelectsUrlAndAssignmentTokensByViewportColumns();
     void terminalExcludesTrailingPunctuationFromUrlSelection();
     void terminalExcludesSentenceTrailingDotFromUrlSelection();
+    void terminalExcludesTrailingPunctuationFromGenericUrlSchemes();
     void terminalExtractsSelectedTextFromSurfaceModel();
     void terminalExtractsWideCharacterSelectionByColumns();
+    void terminalPreservesSelectionAcrossReflowResize();
+    void terminalKeepsSelectedTextWhenResizePushesSelectionIntoHistory();
+    void surfaceModelProjectsSelectionVisibility();
 };
 
 void QTermSessionTest::forwardsBackendOperations()
@@ -430,6 +434,22 @@ void QTermSessionTest::terminalExcludesSentenceTrailingDotFromUrlSelection()
     QCOMPARE(terminal.surfaceModel()->selectedText(), "https://example.com/path"_L1);
 }
 
+void QTermSessionTest::terminalExcludesTrailingPunctuationFromGenericUrlSchemes()
+{
+    QTermTerminal terminal;
+
+    terminal.feedText("mailto:user@example.com, file:///tmp/foo.txt; www.example.com/path."_L1);
+
+    terminal.selectWordAt(0, 10);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "mailto:user@example.com"_L1);
+
+    terminal.selectWordAt(0, 33);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "file:///tmp/foo.txt"_L1);
+
+    terminal.selectWordAt(0, 56);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "www.example.com/path"_L1);
+}
+
 void QTermSessionTest::terminalExtractsSelectedTextFromSurfaceModel()
 {
     QTermTerminal terminal;
@@ -460,6 +480,91 @@ void QTermSessionTest::terminalExtractsWideCharacterSelectionByColumns()
 
     terminal.setSelectionRange(0, 0, 0, 3);
     QCOMPARE(terminal.surfaceModel()->selectedText(), text);
+}
+
+void QTermSessionTest::terminalPreservesSelectionAcrossReflowResize()
+{
+    QTermTerminal terminal;
+
+    terminal.setTerminalSize(10, 4);
+    terminal.feedText("alpha beta"_L1);
+    terminal.selectWordAt(0, 7);
+
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "beta"_L1);
+    QVERIFY(terminal.surfaceModel()->selectionVisible());
+
+    terminal.setTerminalSize(5, 4);
+
+    QVERIFY(terminal.surfaceModel()->hasSelection());
+    QVERIFY(terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "beta"_L1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 1);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 1);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 5);
+
+    terminal.setTerminalSize(10, 4);
+
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "beta"_L1);
+    QVERIFY(terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 6);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 10);
+}
+
+void QTermSessionTest::terminalKeepsSelectedTextWhenResizePushesSelectionIntoHistory()
+{
+    QTermTerminal terminal;
+
+    terminal.setTerminalSize(10, 2);
+    terminal.feedText("alpha beta\r\ngamma"_L1);
+    terminal.selectWordAt(0, 1);
+
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
+
+    terminal.setTerminalSize(5, 2);
+
+    QVERIFY(terminal.surfaceModel()->hasSelection());
+    QVERIFY(!terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), -1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), -1);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 0);
+
+    terminal.setTerminalSize(10, 2);
+
+    QVERIFY(terminal.surfaceModel()->hasSelection());
+    QVERIFY(terminal.surfaceModel()->selectionVisible());
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 5);
+}
+
+void QTermSessionTest::surfaceModelProjectsSelectionVisibility()
+{
+    QTermSurfaceModel surfaceModel;
+
+    QVERIFY(!surfaceModel.hasSelection());
+    QVERIFY(!surfaceModel.selectionVisible());
+
+    surfaceModel.setSelectionSnapshot(true, 0, 1, 0, 4, "bcd"_L1);
+    QVERIFY(surfaceModel.hasSelection());
+    QVERIFY(surfaceModel.selectionVisible());
+
+    surfaceModel.setSelectionSnapshot(true, -1, 0, -1, 0, "alpha"_L1);
+    QVERIFY(surfaceModel.hasSelection());
+    QVERIFY(!surfaceModel.selectionVisible());
+    QCOMPARE(surfaceModel.selectedText(), "alpha"_L1);
+
+    surfaceModel.clearSelection();
+    QVERIFY(!surfaceModel.hasSelection());
+    QVERIFY(!surfaceModel.selectionVisible());
 }
 
 } // namespace QTerm

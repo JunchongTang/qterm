@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <QString>
+#include <QtGlobal>
 
 namespace QTerm {
 
@@ -29,14 +30,13 @@ QTermTerminal::QTermTerminal(QObject *parent)
 
     connect(m_core, &QTermCore::sizeChanged, this, [this]() {
         m_surfaceModel.setSize(m_core->columns(), m_core->rows());
-        m_selectionModel->setTerminalSize(m_core->columns(), m_core->rows());
+        m_selectionModel->completeResize(m_core->buffer(), m_core->columns(), m_core->rows());
         syncSurfaceSelection();
         emit sizeChanged();
     });
 
     connect(m_core, &QTermCore::debugPlainTextChanged, this, [this]() {
-        m_selectionModel->setVisibleProjection(m_core->buffer().visibleLineWrapFlags(),
-                                              m_core->buffer().visibleLineColumnTexts());
+        m_selectionModel->refreshSelectionText(m_core->buffer());
         syncSurfaceSelection();
         m_surfaceModel.setVisibleLines(m_core->buffer().visibleLineTexts());
         m_surfaceModel.setVisibleLineRuns(m_core->buffer().visibleLineRuns());
@@ -53,8 +53,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
     connect(m_core, &QTermCore::outboundData, this, &QTermTerminal::outboundData);
 
     m_surfaceModel.setSize(m_core->columns(), m_core->rows());
-    m_selectionModel->setVisibleProjection(m_core->buffer().visibleLineWrapFlags(),
-                                          m_core->buffer().visibleLineColumnTexts());
+    m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
     m_surfaceModel.setVisibleLines(m_core->buffer().visibleLineTexts());
     m_surfaceModel.setVisibleLineRuns(m_core->buffer().visibleLineRuns());
@@ -102,6 +101,13 @@ void QTermTerminal::feedText(const QString &text)
 
 void QTermTerminal::setTerminalSize(int columns, int rows)
 {
+    const int boundedColumns = qMax(columns, 2);
+    const int boundedRows = qMax(rows, 1);
+    if (boundedColumns == m_core->columns() && boundedRows == m_core->rows()) {
+        return;
+    }
+
+    m_selectionModel->prepareForResize(m_core->buffer());
     m_core->setTerminalSize(columns, rows);
 }
 
@@ -119,6 +125,7 @@ void QTermTerminal::setSelectionRange(int startRow, int startColumn, int endRow,
 {
     const QTermSelectionSnapshot previousSnapshot = m_selectionModel->snapshot();
     m_selectionModel->setSelectionRange(startRow, startColumn, endRow, endColumn);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
     const QTermSelectionSnapshot &currentSnapshot = m_selectionModel->snapshot();
     if (previousSnapshot.hasSelection == currentSnapshot.hasSelection &&
         previousSnapshot.startRow == currentSnapshot.startRow &&
@@ -135,12 +142,14 @@ void QTermTerminal::setSelectionRange(int startRow, int startColumn, int endRow,
 void QTermTerminal::selectWordAt(int row, int column)
 {
     m_selectionModel->selectWordAt(m_core->buffer(), row, column);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
 }
 
 void QTermTerminal::selectLogicalLineAt(int row)
 {
     m_selectionModel->selectLogicalLineAt(m_core->buffer(), row);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
 }
 

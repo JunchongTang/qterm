@@ -5,6 +5,7 @@
 #include <QVariantList>
 #include <QVector>
 
+#include "QTermCursorState.h"
 #include "QTermLine.h"
 
 namespace QTerm {
@@ -16,8 +17,11 @@ public:
 
     int rows() const noexcept;
     int columns() const noexcept;
+    int historyLineCount() const noexcept;
+    int projectionRowCount() const noexcept;
+    int visibleRowOffset() const noexcept;
 
-    void resize(int columns, int rows);
+    QTermCursorState resize(int columns, int rows, const QTermCursorState &cursorState);
     void clear();
     void clearVisible();
     void clearVisibleFrom(int row, int column);
@@ -28,6 +32,7 @@ public:
 
     QTermLine &lineAt(int row);
     const QTermLine &lineAt(int row) const;
+    const QTermLine &projectionLineAt(int projectionRow) const;
 
     QStringList visibleLineTexts() const;
     QVariantList visibleLineWrapFlags() const;
