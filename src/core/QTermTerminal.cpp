@@ -2,6 +2,8 @@
 
 #include "QTermCore.h"
 
+#include <QString>
+
 namespace QTerm {
 
 QTermTerminal::QTermTerminal(QObject *parent)
@@ -18,6 +20,8 @@ QTermTerminal::QTermTerminal(QObject *parent)
         m_surfaceModel.setPlainText(m_core->debugPlainText());
     });
 
+    connect(m_core, &QTermCore::titleChanged, this, &QTermTerminal::setTitle);
+
     connect(m_core, &QTermCore::outboundData, this, &QTermTerminal::outboundData);
 
     m_surfaceModel.setSize(m_core->columns(), m_core->rows());
@@ -32,6 +36,11 @@ int QTermTerminal::rows() const noexcept
 int QTermTerminal::columns() const noexcept
 {
     return m_core->columns();
+}
+
+QTermSession *QTermTerminal::session() const noexcept
+{
+    return m_session;
 }
 
 QString QTermTerminal::title() const
@@ -67,6 +76,46 @@ void QTermTerminal::sendKey(int key, const QString &text)
 void QTermTerminal::sendPaste(const QString &text)
 {
     m_core->sendPaste(text);
+}
+
+void QTermTerminal::setSession(QTermSession *session)
+{
+    if (m_session == session) {
+        return;
+    }
+
+    QObject::disconnect(m_sessionDataConnection);
+    QObject::disconnect(m_sessionDestroyedConnection);
+    QObject::disconnect(m_coreOutboundConnection);
+    QObject::disconnect(m_sizeToSessionResizeConnection);
+
+    m_sessionUtf8Decoder = QStringDecoder(QStringDecoder::Utf8);
+
+    m_session = session;
+
+    if (m_session) {
+        m_sessionDataConnection = connect(m_session, &QTermSession::dataReceived, this, [this](const QByteArray &data) {
+            m_core->writePlainText(m_sessionUtf8Decoder(data));
+        });
+        m_sessionDestroyedConnection = connect(m_session, &QObject::destroyed, this, [this]() {
+            QObject::disconnect(m_sessionDataConnection);
+            QObject::disconnect(m_sessionDestroyedConnection);
+            QObject::disconnect(m_coreOutboundConnection);
+            QObject::disconnect(m_sizeToSessionResizeConnection);
+            m_sessionUtf8Decoder = QStringDecoder(QStringDecoder::Utf8);
+            m_session = nullptr;
+            emit sessionChanged();
+        });
+        m_coreOutboundConnection = connect(m_core, &QTermCore::outboundData, m_session, &QTermSession::writeData);
+        m_sizeToSessionResizeConnection = connect(this, &QTermTerminal::sizeChanged, this, [this]() {
+            if (m_session) {
+                m_session->resize(columns(), rows());
+            }
+        });
+        m_session->resize(columns(), rows());
+    }
+
+    emit sessionChanged();
 }
 
 void QTermTerminal::setTitle(const QString &title)

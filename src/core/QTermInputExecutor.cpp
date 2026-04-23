@@ -107,6 +107,11 @@ bool QTermInputExecutor::isAlternateScreenActive() const noexcept
     return m_modeState.alternateScreenActive;
 }
 
+void QTermInputExecutor::setWindowTitleHandler(const std::function<void(const QString &)> &handler)
+{
+    m_windowTitleHandler = handler;
+}
+
 void QTermInputExecutor::print(const QString &text)
 {
     const int width = displayWidth(text);
@@ -395,6 +400,13 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         default:
             break;
         }
+    }
+}
+
+void QTermInputExecutor::setWindowTitle(const QString &title)
+{
+    if (m_windowTitleHandler) {
+        m_windowTitleHandler(title);
     }
 }
 

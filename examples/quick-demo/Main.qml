@@ -12,6 +12,24 @@ Window {
     color: "#10151c"
     title: root.terminal.title
 
+    function updateTerminalSize() {
+        const innerWidth = terminalView.width
+        const innerHeight = terminalView.height
+        const columns = Math.max(20, Math.floor(innerWidth / Math.max(1, terminalMetrics.averageCharacterWidth)))
+        const rows = Math.max(8, Math.floor(innerHeight / Math.max(1, terminalMetrics.height)))
+        root.terminal.setTerminalSize(columns, rows)
+    }
+
+    Component.onCompleted: updateTerminalSize()
+    onWidthChanged: updateTerminalSize()
+    onHeightChanged: updateTerminalSize()
+
+    FontMetrics {
+        id: terminalMetrics
+        font.family: terminalView.font.family
+        font.pixelSize: terminalView.font.pixelSize
+    }
+
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
@@ -40,7 +58,7 @@ Window {
         font.family: "Helvetica Neue"
         font.pixelSize: 28
         font.weight: Font.DemiBold
-        text: "QTerm Architecture Baseline"
+        text: "QTerm Local PTY Demo"
     }
 
     Text {
@@ -50,7 +68,7 @@ Window {
         color: "#8ea2b8"
         font.family: "Helvetica Neue"
         font.pixelSize: 15
-        text: "Qt-native terminal stack, structured around xterm.js-inspired layering."
+        text: "Type directly into the window. The demo shell is running through QTermSession and a local PTY backend."
     }
 
     Rectangle {
@@ -67,10 +85,16 @@ Window {
     }
 
     TextEdit {
+        id: terminalView
         anchors.fill: parent
         anchors.margins: 64
         readOnly: true
         selectByMouse: true
+        focus: true
+        Keys.onPressed: event => {
+            root.terminal.sendKey(event.key, event.text)
+            event.accepted = true
+        }
         color: "#d2f7d0"
         text: root.terminal.surfaceModel.plainText
         wrapMode: TextEdit.Wrap

@@ -34,6 +34,9 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
             if (character == u'[') {
                 m_state = State::Csi;
                 m_csiParameters.clear();
+            } else if (character == u']') {
+                m_state = State::Osc;
+                m_oscData.clear();
             } else if (character == u'\x1b') {
                 m_state = State::Escape;
             } else {
@@ -48,6 +51,24 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 handleCsiFinal(m_csiParameters.startsWith(u'?'), character, executor);
                 m_csiParameters.clear();
                 m_state = State::Ground;
+            }
+            break;
+        case State::Osc:
+            if (character == u'\x07') {
+                handleOscTerminator(executor);
+            } else if (character == u'\x1b') {
+                m_state = State::OscEscape;
+            } else {
+                m_oscData.append(character);
+            }
+            break;
+        case State::OscEscape:
+            if (character == u'\\') {
+                handleOscTerminator(executor);
+            } else {
+                m_oscData.append(u'\x1b');
+                m_oscData.append(character);
+                m_state = State::Osc;
             }
             break;
         }
@@ -198,6 +219,20 @@ void QTermTextParser::handleEscapeFinal(QChar final, QTermInputExecutor &executo
         handleGroundTextUnit(QString(final), executor);
         break;
     }
+}
+
+void QTermTextParser::handleOscTerminator(QTermInputExecutor &executor)
+{
+    const qsizetype separatorIndex = m_oscData.indexOf(u';');
+    if (separatorIndex > 0) {
+        const QString command = m_oscData.left(separatorIndex);
+        if (command == u"0" || command == u"2") {
+            executor.setWindowTitle(m_oscData.sliced(separatorIndex + 1));
+        }
+    }
+
+    m_oscData.clear();
+    m_state = State::Ground;
 }
 
 } // namespace QTerm

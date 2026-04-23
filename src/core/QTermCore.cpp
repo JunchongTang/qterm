@@ -32,6 +32,11 @@ int QTermCore::columns() const noexcept
     return activeScreen().buffer.columns();
 }
 
+QString QTermCore::title() const
+{
+    return m_title;
+}
+
 QString QTermCore::debugPlainText() const
 {
     return activeScreen().buffer.debugPlainText();
@@ -78,6 +83,14 @@ void QTermCore::writePlainText(const QString &text)
     }
 
     QTermInputExecutor executor(m_primaryScreen, m_alternateScreen, m_modeState);
+    executor.setWindowTitleHandler([this](const QString &title) {
+        if (m_title == title) {
+            return;
+        }
+
+        m_title = title;
+        emit titleChanged(m_title);
+    });
     m_textParser.parse(text, executor);
 
     emit debugPlainTextChanged();

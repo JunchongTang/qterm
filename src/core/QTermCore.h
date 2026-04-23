@@ -20,6 +20,7 @@ public:
 
     int rows() const noexcept;
     int columns() const noexcept;
+    QString title() const;
     QString debugPlainText() const;
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
@@ -35,6 +36,7 @@ public:
 
 signals:
     void sizeChanged();
+    void titleChanged(const QString &title);
     void debugPlainTextChanged();
     void cursorStateChanged();
     void outboundData(const QByteArray &data);
@@ -46,6 +48,7 @@ private:
     QTermScreenState m_alternateScreen;
     QTermModeState m_modeState;
     QTermTextParser m_textParser;
+    QString m_title;
 };
 
 } // namespace QTerm

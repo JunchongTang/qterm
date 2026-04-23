@@ -1,8 +1,11 @@
 #include <QGuiApplication>
+#include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
 #include <QVariant>
 #include <qqml.h>
 
+#include <QTerm/QTermLocalPtyBackend.h>
+#include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
 
 #include <QTerm/QTermSurfaceModel.h>
@@ -19,13 +22,21 @@ int main(int argc, char *argv[])
         "QTerm", 1, 0, "QTermSurfaceModel", "QTermSurfaceModel is provided by QTermTerminal.");
 
     QTerm::QTermTerminal terminal;
-    terminal.setTitle(QStringLiteral("QTerm Bootstrap"));
-    terminal.feedText(QStringLiteral(
-        "QTerm bootstrap demo\r\n"
-        "\r\n"
-        "Design and roadmap are in place.\r\n"
-        "Next milestone: headless core buffer types, parser MVP, and resize invariants.\r\n"
-    ));
+    QTerm::QTermSession session;
+    QTerm::QTermLocalPtyBackend backend;
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
+    environment.insert(QStringLiteral("PS1"), QString::fromUtf8("\x1b]0;QTerm Local Shell\x07qterm$ "));
+    environment.insert(QStringLiteral("ENV"), QStringLiteral("/dev/null"));
+
+    backend.setProgram(QStringLiteral("/bin/sh"));
+    backend.setArguments({QStringLiteral("-i")});
+    backend.setProcessEnvironment(environment);
+
+    session.setBackend(&backend);
+    terminal.setSession(&session);
+    terminal.setTitle(QStringLiteral("QTerm Local PTY Demo"));
+    session.open();
 
     engine.setInitialProperties({
         {QStringLiteral("terminal"), QVariant::fromValue(&terminal)}
