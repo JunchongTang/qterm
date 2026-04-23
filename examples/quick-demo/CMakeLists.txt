@@ -15,5 +15,6 @@ target_link_libraries(qterm_quick_demo
         Qt6::Gui
         Qt6::Quick
         Qt6::Qml
+        Qt6::QuickControls2
         QTerm::qterm
 )

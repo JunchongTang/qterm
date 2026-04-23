@@ -83,6 +83,9 @@ void QTermCore::writePlainText(const QString &text)
     }
 
     QTermInputExecutor executor(m_primaryScreen, m_alternateScreen, m_modeState);
+    executor.setBellHandler([this]() {
+        emit bell();
+    });
     executor.setWindowTitleHandler([this](const QString &title) {
         if (m_title == title) {
             return;

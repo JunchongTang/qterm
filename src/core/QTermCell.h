@@ -8,10 +8,15 @@ namespace QTerm {
 struct QTermCellAttributes
 {
     bool bold = false;
+    bool dim = false;
     bool italic = false;
     bool underline = false;
+    bool strikethrough = false;
+    bool inverse = false;
     int foregroundIndex = -1;
     int backgroundIndex = -1;
+    int foregroundRgb = -1;
+    int backgroundRgb = -1;
 };
 
 struct QTermCell

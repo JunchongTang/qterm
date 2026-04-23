@@ -1,5 +1,6 @@
 #include "QTermLine.h"
 
+#include <QVariantMap>
 #include <QtGlobal>
 
 namespace QTerm {
@@ -172,6 +173,108 @@ bool QTermLine::wrappedToNextLine() const noexcept
 void QTermLine::setWrappedToNextLine(bool wrapped)
 {
     m_wrappedToNextLine = wrapped;
+}
+
+QString QTermLine::textInColumnRange(int startColumn, int endColumn) const
+{
+    QString text;
+
+    const int boundedStart = qBound(0, startColumn, m_cells.size());
+    const int boundedEnd = qBound(0, endColumn, m_cells.size());
+    if (boundedStart >= boundedEnd) {
+        return text;
+    }
+
+    for (int column = boundedStart; column < boundedEnd; ++column) {
+        const QTermCell &cell = m_cells.at(column);
+        if (cell.continuation) {
+            continue;
+        }
+
+        text.append(cell.text.isEmpty() ? QStringLiteral(" ") : cell.text);
+    }
+
+    return text;
+}
+
+QStringList QTermLine::columnTexts() const
+{
+    QStringList columns;
+    columns.reserve(m_cells.size());
+
+    for (const QTermCell &cell : m_cells) {
+        columns.append(cell.continuation ? QString() : (cell.text.isEmpty() ? QStringLiteral(" ") : cell.text));
+    }
+
+    return columns;
+}
+
+QVariantList QTermLine::styleRuns() const
+{
+    QVariantList runs;
+
+    QString currentText;
+    QTermCellAttributes currentAttributes;
+    bool hasCurrentRun = false;
+
+    const auto flushRun = [&runs, &currentText, &currentAttributes, &hasCurrentRun]() {
+        if (!hasCurrentRun) {
+            return;
+        }
+
+        QVariantMap run;
+        run.insert(QStringLiteral("text"), currentText);
+        run.insert(QStringLiteral("bold"), currentAttributes.bold);
+        run.insert(QStringLiteral("dim"), currentAttributes.dim);
+        run.insert(QStringLiteral("italic"), currentAttributes.italic);
+        run.insert(QStringLiteral("underline"), currentAttributes.underline);
+        run.insert(QStringLiteral("strikethrough"), currentAttributes.strikethrough);
+        run.insert(QStringLiteral("inverse"), currentAttributes.inverse);
+        run.insert(QStringLiteral("foregroundIndex"), currentAttributes.foregroundIndex);
+        run.insert(QStringLiteral("backgroundIndex"), currentAttributes.backgroundIndex);
+        run.insert(QStringLiteral("foregroundRgb"), currentAttributes.foregroundRgb);
+        run.insert(QStringLiteral("backgroundRgb"), currentAttributes.backgroundRgb);
+        runs.append(run);
+
+        currentText.clear();
+        hasCurrentRun = false;
+    };
+
+    for (const QTermCell &cell : m_cells) {
+        if (cell.continuation) {
+            continue;
+        }
+
+        const QString cellText = cell.text.isEmpty() ? QStringLiteral(" ") : cell.text;
+        if (!hasCurrentRun) {
+            currentText = cellText;
+            currentAttributes = cell.attributes;
+            hasCurrentRun = true;
+            continue;
+        }
+
+        if (currentAttributes.bold == cell.attributes.bold &&
+            currentAttributes.dim == cell.attributes.dim &&
+            currentAttributes.italic == cell.attributes.italic &&
+            currentAttributes.underline == cell.attributes.underline &&
+            currentAttributes.strikethrough == cell.attributes.strikethrough &&
+            currentAttributes.inverse == cell.attributes.inverse &&
+            currentAttributes.foregroundIndex == cell.attributes.foregroundIndex &&
+            currentAttributes.backgroundIndex == cell.attributes.backgroundIndex &&
+            currentAttributes.foregroundRgb == cell.attributes.foregroundRgb &&
+            currentAttributes.backgroundRgb == cell.attributes.backgroundRgb) {
+            currentText.append(cellText);
+            continue;
+        }
+
+        flushRun();
+        currentText = cellText;
+        currentAttributes = cell.attributes;
+        hasCurrentRun = true;
+    }
+
+    flushRun();
+    return runs;
 }
 
 QString QTermLine::plainText() const

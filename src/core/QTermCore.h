@@ -35,6 +35,7 @@ public:
     void sendPaste(const QString &text);
 
 signals:
+    void bell();
     void sizeChanged();
     void titleChanged(const QString &title);
     void debugPlainTextChanged();
