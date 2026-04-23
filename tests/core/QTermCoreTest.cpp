@@ -56,6 +56,7 @@ private slots:
     void reflowsWideCharactersAcrossResize();
     void preservesWideWrappedBoundarySemanticsAcrossReflow();
     void preservesComplexPromptAcrossRepeatedResizeCycles();
+    void preservesTreeListingAcrossRepeatedResizeCycles();
     void clearsState();
 };
 
@@ -592,6 +593,74 @@ void QTermCoreTest::preservesComplexPromptAcrossRepeatedResizeCycles()
     QCOMPARE(core.buffer().lineAt(0).plainText(), prompt);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, prompt.size());
+}
+
+void QTermCoreTest::preservesTreeListingAcrossRepeatedResizeCycles()
+{
+    QTermCore core;
+    const QStringList lines = {
+        QString::fromUtf8(u8"."),
+        QString::fromUtf8(u8"├── cmake_install.cmake"),
+        QString::fromUtf8(u8"├── CMakeFiles"),
+        QString::fromUtf8(u8"│   ├── qterm_quick_demo_autogen.dir"),
+        QString::fromUtf8(u8"│   │   ├── AutogenInfo.json"),
+        QString::fromUtf8(u8"│   │   ├── AutogenUsed.txt"),
+        QString::fromUtf8(u8"│   │   └── ParseCache.txt"),
+        QString::fromUtf8(u8"│   └── qterm_quick_demo.dir"),
+        QString::fromUtf8(u8"│       ├── main.cpp.o"),
+        QString::fromUtf8(u8"│       ├── qterm_quick_demo_autogen"),
+        QString::fromUtf8(u8"│       │   └── mocs_compilation.cpp.o"),
+        QString::fromUtf8(u8"│       └── qterm_quick_demo_qmltyperegistrations.cpp.o"),
+        QString::fromUtf8(u8"├── CTestTestfile.cmake"),
+        QString::fromUtf8(u8"├── meta_types"),
+        QString::fromUtf8(u8"│   ├── qt6qterm_quick_demo_debug_metatypes.json"),
+        QString::fromUtf8(u8"│   ├── qt6qterm_quick_demo_debug_metatypes.json.gen"),
+        QString::fromUtf8(u8"│   ├── qterm_quick_demo_json_file_list.txt"),
+        QString::fromUtf8(u8"│   └── qterm_quick_demo_json_file_list.txt.timestamp"),
+        QString::fromUtf8(u8"├── qmltypes"),
+        QString::fromUtf8(u8"│   └── qterm_quick_demo_foreign_types.txt"),
+        QString::fromUtf8(u8"├── qterm_quick_demo"),
+        QString::fromUtf8(u8"├── qterm_quick_demo_autogen"),
+        QString::fromUtf8(u8"│   ├── deps"),
+        QString::fromUtf8(u8"│   ├── include"),
+        QString::fromUtf8(u8"│   │   ├── main.moc"),
+        QString::fromUtf8(u8"│   │   ├── main.moc.d"),
+        QString::fromUtf8(u8"│   │   └── main.moc.json"),
+        QString::fromUtf8(u8"│   ├── moc_predefs.h"),
+        QString::fromUtf8(u8"│   ├── mocs_compilation.cpp"),
+        QString::fromUtf8(u8"│   └── timestamp"),
+        QString::fromUtf8(u8"├── qterm_quick_demo_qmltyperegistrations.cpp"),
+        QString::fromUtf8(u8"└── QTermDemo"),
+        QString::fromUtf8(u8"    ├── DebugStatusBar.qml"),
+        QString::fromUtf8(u8"    ├── Main.qml"),
+        QString::fromUtf8(u8"    ├── qmldir"),
+        QString::fromUtf8(u8"    ├── qterm_quick_demo_qml_module_dir_map.qrc"),
+        QString::fromUtf8(u8"    ├── qterm_quick_demo.qmltypes"),
+        QString::fromUtf8(u8"    └── StatusBar.qml"),
+        QString(),
+        QString::fromUtf8(u8"10 directories, 28 files"),
+        QString::fromUtf8(u8"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo")
+    };
+    const QString inputTranscript = lines.join(QStringLiteral("\r\n"));
+    const QString projectedTranscript = lines.join(QStringLiteral("\n"));
+
+    core.setTerminalSize(92, 14);
+    core.writePlainText(inputTranscript);
+
+    core.setTerminalSize(58, 14);
+    QCOMPARE(core.debugPlainText(), projectedTranscript);
+
+    core.setTerminalSize(44, 14);
+    QCOMPARE(core.debugPlainText(), projectedTranscript);
+
+    core.setTerminalSize(73, 14);
+    QCOMPARE(core.debugPlainText(), projectedTranscript);
+
+    core.setTerminalSize(39, 14);
+    QCOMPARE(core.debugPlainText(), projectedTranscript);
+
+    core.setTerminalSize(88, 14);
+    QCOMPARE(core.debugPlainText(), projectedTranscript);
 }
 
 void QTermCoreTest::supports256ColorSgrAttributes()
