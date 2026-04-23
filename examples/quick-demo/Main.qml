@@ -15,6 +15,10 @@ ApplicationWindow {
     property int terminalFontPixelSize: 18
     property int selectionAnchorRow: -1
     property int selectionAnchorColumn: -1
+    property int clickStreak: 0
+    property int lastClickRow: -1
+    property int lastClickColumn: -1
+    property bool suppressSelectionRelease: false
     property int bellCount: 0
     property int copyCount: 0
     property string lastBackendError: ""
@@ -214,6 +218,18 @@ ApplicationWindow {
         }
     }
 
+    Timer {
+        id: clickResetTimer
+
+        interval: 360
+        repeat: false
+        onTriggered: {
+            root.clickStreak = 0
+            root.lastClickRow = -1
+            root.lastClickColumn = -1
+        }
+    }
+
     background: Rectangle {
         color: "#f5f5f7"
 
@@ -320,8 +336,29 @@ ApplicationWindow {
 
                     onPressed: mouse => {
                         terminalView.forceActiveFocus()
-                        root.selectionAnchorRow = root.cellRowForY(mouse.y)
-                        root.selectionAnchorColumn = root.cellColumnForX(mouse.x)
+                        const row = root.cellRowForY(mouse.y)
+                        const column = root.cellColumnForX(mouse.x)
+                        if (clickResetTimer.running && root.lastClickRow === row && root.lastClickColumn === column)
+                            root.clickStreak += 1
+                        else
+                            root.clickStreak = 1
+
+                        root.lastClickRow = row
+                        root.lastClickColumn = column
+                        clickResetTimer.restart()
+
+                        if (root.clickStreak >= 3) {
+                            root.selectionAnchorRow = -1
+                            root.selectionAnchorColumn = -1
+                            root.suppressSelectionRelease = true
+                            root.terminal.selectLogicalLineAt(row)
+                            root.statusNote = root.terminal.surfaceModel.hasSelection ? "Logical line selected" : "Selection cleared"
+                            return
+                        }
+
+                        root.selectionAnchorRow = row
+                        root.selectionAnchorColumn = column
+                        root.suppressSelectionRelease = false
                         root.terminal.clearSelection()
                         root.statusNote = "Selecting"
                     }
@@ -335,11 +372,16 @@ ApplicationWindow {
                     }
 
                     onPositionChanged: mouse => {
-                        if (pressed)
+                        if (pressed && !root.suppressSelectionRelease)
                             root.updateSelectionAt(mouse.x, mouse.y)
                     }
 
                     onReleased: mouse => {
+                        if (root.suppressSelectionRelease) {
+                            root.suppressSelectionRelease = false
+                            return
+                        }
+
                         root.updateSelectionAt(mouse.x, mouse.y)
                         root.selectionAnchorRow = -1
                         root.selectionAnchorColumn = -1

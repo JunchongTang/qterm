@@ -15,6 +15,8 @@ qt_add_library(qterm STATIC
     core/QTermLine.h
     core/QTermLine.cpp
     core/QTermModeState.h
+    core/QTermSelectionModel.h
+    core/QTermSelectionModel.cpp
     core/QTermCursorState.h
     core/QTermCore.cpp
     core/QTermSavedCursorState.h

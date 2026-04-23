@@ -74,6 +74,11 @@ private slots:
     void surfaceModelDelegatesSelectionControlToTerminal();
     void terminalSelectsWordByViewportColumns();
     void terminalSelectsWordAcrossSoftWrappedRows();
+    void terminalSelectsLogicalLineAcrossSoftWrappedRows();
+    void terminalSelectsShellStyleTokenByViewportColumns();
+    void terminalSelectsUrlAndAssignmentTokensByViewportColumns();
+    void terminalExcludesTrailingPunctuationFromUrlSelection();
+    void terminalExcludesSentenceTrailingDotFromUrlSelection();
     void terminalExtractsSelectedTextFromSurfaceModel();
     void terminalExtractsWideCharacterSelectionByColumns();
 };
@@ -355,6 +360,74 @@ void QTermSessionTest::terminalSelectsWordAcrossSoftWrappedRows()
     QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 1);
     QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 2);
     QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+}
+
+void QTermSessionTest::terminalSelectsLogicalLineAcrossSoftWrappedRows()
+{
+    QTermTerminal terminal;
+
+    terminal.setTerminalSize(3, 4);
+    terminal.feedText("alpha\r\n  beta"_L1);
+    terminal.selectLogicalLineAt(2);
+
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 2);
+    QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 3);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 3);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "  beta"_L1);
+
+    terminal.selectLogicalLineAt(1);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 1);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 2);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
+}
+
+void QTermSessionTest::terminalSelectsShellStyleTokenByViewportColumns()
+{
+    QTermTerminal terminal;
+
+    terminal.feedText("/tmp/foo-bar.txt foo::bar"_L1);
+
+    terminal.selectWordAt(0, 9);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "/tmp/foo-bar.txt"_L1);
+
+    terminal.selectWordAt(0, 22);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "foo::bar"_L1);
+}
+
+void QTermSessionTest::terminalSelectsUrlAndAssignmentTokensByViewportColumns()
+{
+    QTermTerminal terminal;
+
+    terminal.feedText("https://example.com/a?b=1#frag FOO=bar"_L1);
+
+    terminal.selectWordAt(0, 12);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "https://example.com/a?b=1#frag"_L1);
+
+    terminal.selectWordAt(0, 36);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "FOO=bar"_L1);
+}
+
+void QTermSessionTest::terminalExcludesTrailingPunctuationFromUrlSelection()
+{
+    QTermTerminal terminal;
+
+    terminal.feedText("(https://example.com/a?b=1#frag),"_L1);
+
+    terminal.selectWordAt(0, 12);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "https://example.com/a?b=1#frag"_L1);
+}
+
+void QTermSessionTest::terminalExcludesSentenceTrailingDotFromUrlSelection()
+{
+    QTermTerminal terminal;
+
+    terminal.feedText("See https://example.com/path."_L1);
+
+    terminal.selectWordAt(0, 12);
+    QCOMPARE(terminal.surfaceModel()->selectedText(), "https://example.com/path"_L1);
 }
 
 void QTermSessionTest::terminalExtractsSelectedTextFromSurfaceModel()
