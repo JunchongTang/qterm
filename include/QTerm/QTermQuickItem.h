@@ -65,9 +65,11 @@ signals:
     void metricsChanged();
     void paletteChanged();
     void cursorOpacityChanged();
+    void wheelScrolled(int scrollOffset);
 
 protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
+    void wheelEvent(QWheelEvent *event) override;
 
 private:
     void reconnectSurfaceModel();

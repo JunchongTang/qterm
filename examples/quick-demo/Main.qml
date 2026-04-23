@@ -56,6 +56,44 @@ ApplicationWindow {
                                         column)
     }
 
+    function scrollBarThumbSize() {
+        const totalRows = root.terminal.surfaceModel.rows + root.terminal.maxScrollOffset
+        if (totalRows <= 0)
+            return 1.0
+
+        return Math.max(0.08, Math.min(1.0, root.terminal.surfaceModel.rows / totalRows))
+    }
+
+    function scrollBarPosition() {
+        if (root.terminal.maxScrollOffset <= 0)
+            return 0.0
+
+        const trackSpan = Math.max(0.0, 1.0 - root.scrollBarThumbSize())
+        if (trackSpan <= 0.0)
+            return 0.0
+
+        return trackSpan * ((root.terminal.maxScrollOffset - root.terminal.scrollOffset) / root.terminal.maxScrollOffset)
+    }
+
+    function scrollToOffset(targetOffset) {
+        const boundedOffset = Math.max(0, Math.min(root.terminal.maxScrollOffset, Math.round(targetOffset)))
+        const deltaRows = boundedOffset - root.terminal.scrollOffset
+        if (deltaRows !== 0)
+            root.terminal.scrollByLines(deltaRows)
+    }
+
+    function scrollOffsetFromBarPosition(position, size) {
+        if (root.terminal.maxScrollOffset <= 0)
+            return 0
+
+        const trackSpan = Math.max(0.0, 1.0 - size)
+        if (trackSpan <= 0.0)
+            return 0
+
+        const normalized = Math.max(0.0, Math.min(1.0, position / trackSpan))
+        return root.terminal.maxScrollOffset * (1.0 - normalized)
+    }
+
     function sessionStateLabel(state) {
         switch (state) {
         case 0:
@@ -226,6 +264,12 @@ ApplicationWindow {
                 fontPixelSize: root.terminalFontPixelSize
                 cursorOpacity: root.cursorBlinkOpacity
 
+                onWheelScrolled: scrollOffset => {
+                    root.statusNote = scrollOffset > 0
+                        ? "Scrolled " + scrollOffset + " rows above bottom"
+                        : "Returned to bottom"
+                }
+
                 Keys.onPressed: event => {
                     if (event.matches(StandardKey.Copy)) {
                         const selectedText = root.terminal.surfaceModel.selectedText
@@ -242,22 +286,6 @@ ApplicationWindow {
                     root.statusNote = event.text.length > 0 ? "Input forwarded" : "Control key forwarded"
                     root.terminal.sendKey(event.key, event.text)
                     event.accepted = true
-                }
-
-                WheelHandler {
-                    target: null
-
-                    onWheel: event => {
-                        if (event.angleDelta.y === 0)
-                            return
-
-                        const deltaRows = event.angleDelta.y > 0 ? 3 : -3
-                        root.terminal.scrollByLines(deltaRows)
-                        root.statusNote = root.terminal.scrollOffset > 0
-                            ? "Scrolled " + root.terminal.scrollOffset + " rows above bottom"
-                            : "Returned to bottom"
-                        event.accepted = true
-                    }
                 }
 
                 MouseArea {
@@ -318,6 +346,40 @@ ApplicationWindow {
                         root.selectionAnchorColumn = -1
                         root.statusNote = root.terminal.surfaceModel.hasSelection ? "Selection updated" : "Selection cleared"
                     }
+                }
+            }
+
+            ScrollBar {
+                id: viewportScrollBar
+
+                anchors.top: terminalView.top
+                anchors.right: parent.right
+                anchors.bottom: terminalView.bottom
+                anchors.rightMargin: 8
+                orientation: Qt.Vertical
+                policy: root.terminal.maxScrollOffset > 0 ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                active: hovered || pressed || root.terminal.maxScrollOffset > 0
+                size: root.scrollBarThumbSize()
+                position: root.scrollBarPosition()
+                hoverEnabled: true
+
+                onPositionChanged: {
+                    if (pressed)
+                        root.scrollToOffset(root.scrollOffsetFromBarPosition(position, size))
+                }
+
+                contentItem: Rectangle {
+                    implicitWidth: 10
+                    radius: width / 2
+                    color: viewportScrollBar.pressed ? "#d7fbe0" : (viewportScrollBar.hovered ? "#a8c4db" : "#6c7b8b")
+                    opacity: viewportScrollBar.policy === ScrollBar.AlwaysOff ? 0.0 : 0.92
+                }
+
+                background: Rectangle {
+                    implicitWidth: 10
+                    radius: width / 2
+                    color: "#18212b"
+                    opacity: viewportScrollBar.policy === ScrollBar.AlwaysOff ? 0.0 : 0.7
                 }
             }
         }
