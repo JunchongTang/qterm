@@ -34,9 +34,9 @@ public:
     const QTermLine &lineAt(int row) const;
     const QTermLine &projectionLineAt(int projectionRow) const;
 
+    QStringList viewportLineTexts(int topProjectionRow, int rowCount) const;
+    QVariantList viewportLineRuns(int topProjectionRow, int rowCount) const;
     QStringList visibleLineTexts() const;
-    QVariantList visibleLineWrapFlags() const;
-    QVariantList visibleLineColumnTexts() const;
     QVariantList visibleLineRuns() const;
     QString debugPlainText() const;
 

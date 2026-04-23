@@ -29,15 +29,9 @@ enum class TokenClass {
 
 struct LogicalColumnRef
 {
-    int row = 0;
+    int projectionRow = 0;
     int column = 0;
     QString text;
-};
-
-struct LogicalRowSpan
-{
-    int startRow = 0;
-    int endRow = 0;
 };
 
 struct ProjectionRowSpan
@@ -120,27 +114,27 @@ TokenClass classifyColumnText(const QString &columnText)
     return TokenClass::Punctuation;
 }
 
-LogicalRowSpan logicalLineRowSpan(const QTermBuffer &buffer, int row)
+ProjectionRowSpan projectionLogicalLineRowSpan(const QTermBuffer &buffer, int projectionRow)
 {
-    LogicalRowSpan span{row, row};
-    while (span.startRow > 0 && buffer.lineAt(span.startRow - 1).wrappedToNextLine()) {
-        --span.startRow;
+    ProjectionRowSpan span{projectionRow, projectionRow};
+    while (span.startProjectionRow > 0 && buffer.projectionLineAt(span.startProjectionRow - 1).wrappedToNextLine()) {
+        --span.startProjectionRow;
     }
 
-    while (span.endRow < buffer.rows() - 1 && buffer.lineAt(span.endRow).wrappedToNextLine()) {
-        ++span.endRow;
+    while (span.endProjectionRow < buffer.projectionRowCount() - 1 && buffer.projectionLineAt(span.endProjectionRow).wrappedToNextLine()) {
+        ++span.endProjectionRow;
     }
 
     return span;
 }
 
-QVector<LogicalColumnRef> collectLogicalLineColumns(const QTermBuffer &buffer, int row)
+QVector<LogicalColumnRef> collectProjectionLogicalLineColumns(const QTermBuffer &buffer, int projectionRow)
 {
     QVector<LogicalColumnRef> logicalColumns;
-    const LogicalRowSpan rowSpan = logicalLineRowSpan(buffer, row);
+    const ProjectionRowSpan rowSpan = projectionLogicalLineRowSpan(buffer, projectionRow);
 
-    for (int currentRow = rowSpan.startRow; currentRow <= rowSpan.endRow; ++currentRow) {
-        const QStringList lineColumns = buffer.lineAt(currentRow).columnTexts();
+    for (int currentRow = rowSpan.startProjectionRow; currentRow <= rowSpan.endProjectionRow; ++currentRow) {
+        const QStringList lineColumns = buffer.projectionLineAt(currentRow).columnTexts();
         for (int column = 0; column < lineColumns.size(); ++column) {
             logicalColumns.append(LogicalColumnRef{currentRow, column, lineColumns.at(column)});
         }
@@ -246,22 +240,6 @@ int lastRelevantColumn(const QStringList &lineColumns)
     return 0;
 }
 
-QVector<LogicalRowSpan> collectVisibleLogicalLineSpans(const QTermBuffer &buffer)
-{
-    QVector<LogicalRowSpan> spans;
-
-    for (int row = 0; row < buffer.rows(); ++row) {
-        const int startRow = row;
-        while (row < buffer.rows() - 1 && buffer.lineAt(row).wrappedToNextLine()) {
-            ++row;
-        }
-
-        spans.append(LogicalRowSpan{startRow, row});
-    }
-
-    return spans;
-}
-
 QVector<ProjectionRowSpan> collectProjectionLogicalLineSpans(const QTermBuffer &buffer)
 {
     QVector<ProjectionRowSpan> spans;
@@ -276,35 +254,6 @@ QVector<ProjectionRowSpan> collectProjectionLogicalLineSpans(const QTermBuffer &
     }
 
     return spans;
-}
-
-int logicalLineDisplayColumns(const QTermBuffer &buffer, const LogicalRowSpan &span)
-{
-    int totalColumns = 0;
-    for (int row = span.startRow; row <= span.endRow; ++row) {
-        if (row < span.endRow) {
-            totalColumns += buffer.columns();
-        } else {
-            totalColumns += lastRelevantColumn(buffer.lineAt(row).columnTexts());
-        }
-    }
-
-    return totalColumns;
-}
-
-int displayOffsetWithinLogicalLine(const QTermBuffer &buffer,
-                                   const LogicalRowSpan &span,
-                                   int row,
-                                   int column)
-{
-    int offset = 0;
-    for (int currentRow = span.startRow; currentRow < row; ++currentRow) {
-        offset += currentRow < span.endRow
-            ? buffer.columns()
-            : lastRelevantColumn(buffer.lineAt(currentRow).columnTexts());
-    }
-
-    return offset + qMax(0, column);
 }
 
 QString selectionTextFromBuffer(const QTermBuffer &buffer, const QTermSelectionSnapshot &snapshot)
@@ -407,11 +356,9 @@ int displayOffsetWithinProjectionLogicalLine(const QTermBuffer &buffer,
 
 QTermSelectionModel::LogicalEndpointAnchor captureLogicalAnchor(const QTermBuffer &buffer,
                                                                 const QVector<ProjectionRowSpan> &spans,
-                                                                int row,
+                                                                int projectionRow,
                                                                 int column)
 {
-    const int boundedRow = qBound(0, row, qMax(0, buffer.rows() - 1));
-    const int projectionRow = buffer.visibleRowOffset() + boundedRow;
     for (int index = 0; index < spans.size(); ++index) {
         const ProjectionRowSpan &span = spans.at(index);
         if (projectionRow < span.startProjectionRow || projectionRow > span.endProjectionRow) {
@@ -451,12 +398,12 @@ ProjectionEndpoint mapLogicalAnchorToProjectionEndpoint(const QTermBuffer &buffe
                               qMax(0, projectionRowDisplayColumns(buffer, span, span.endProjectionRow))};
 }
 
-bool selectionEndpointsAreVisible(const QTermBuffer &buffer,
+bool selectionEndpointsAreVisible(int firstVisibleProjectionRow,
+                                  int visibleRowCount,
                                   const ProjectionEndpoint &start,
                                   const ProjectionEndpoint &end)
 {
-    const int firstVisibleProjectionRow = buffer.visibleRowOffset();
-    const int lastVisibleProjectionRow = firstVisibleProjectionRow + qMax(0, buffer.rows() - 1);
+    const int lastVisibleProjectionRow = firstVisibleProjectionRow + qMax(0, visibleRowCount - 1);
     return start.projectionRow >= firstVisibleProjectionRow &&
         start.projectionRow <= lastVisibleProjectionRow &&
         end.projectionRow >= firstVisibleProjectionRow &&
@@ -493,6 +440,11 @@ void QTermSelectionModel::setTerminalSize(int columns, int rows)
     }
 }
 
+void QTermSelectionModel::setViewport(int topProjectionRow)
+{
+    m_viewportTopProjectionRow = qMax(0, topProjectionRow);
+}
+
 void QTermSelectionModel::prepareForResize(const QTermBuffer &buffer)
 {
     if (!m_snapshot.hasSelection || m_snapshot.startRow < 0 || m_snapshot.endRow < 0 || buffer.rows() <= 0) {
@@ -505,8 +457,8 @@ void QTermSelectionModel::prepareForResize(const QTermBuffer &buffer)
     }
 
     m_selectionAnchors = LogicalSelectionAnchors{
-        captureLogicalAnchor(buffer, spans, m_snapshot.startRow, m_snapshot.startColumn),
-        captureLogicalAnchor(buffer, spans, m_snapshot.endRow, m_snapshot.endColumn)
+        captureLogicalAnchor(buffer, spans, m_viewportTopProjectionRow + m_snapshot.startRow, m_snapshot.startColumn),
+        captureLogicalAnchor(buffer, spans, m_viewportTopProjectionRow + m_snapshot.endRow, m_snapshot.endColumn)
     };
 }
 
@@ -543,11 +495,10 @@ void QTermSelectionModel::completeResize(const QTermBuffer &buffer, int columns,
     const ProjectionEndpoint end = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->end);
 
     m_snapshot.hasSelection = true;
-    if (selectionEndpointsAreVisible(buffer, start, end)) {
-        const int visibleRowOffset = buffer.visibleRowOffset();
-        m_snapshot.startRow = start.projectionRow - visibleRowOffset;
+    if (selectionEndpointsAreVisible(m_viewportTopProjectionRow, m_rows, start, end)) {
+        m_snapshot.startRow = start.projectionRow - m_viewportTopProjectionRow;
         m_snapshot.startColumn = start.column;
-        m_snapshot.endRow = end.projectionRow - visibleRowOffset;
+        m_snapshot.endRow = end.projectionRow - m_viewportTopProjectionRow;
         m_snapshot.endColumn = end.column;
     } else {
         m_snapshot.startRow = -1;
@@ -561,8 +512,8 @@ void QTermSelectionModel::completeResize(const QTermBuffer &buffer, int columns,
 
 void QTermSelectionModel::refreshSelectionText(const QTermBuffer &buffer)
 {
-    if (m_snapshot.hasSelection && m_snapshot.startRow >= 0 && m_snapshot.endRow >= 0) {
-        prepareForResize(buffer);
+    if (m_snapshot.hasSelection && !m_selectionAnchors.has_value() && m_snapshot.startRow >= 0 && m_snapshot.endRow >= 0) {
+        captureAnchorsFromSnapshot(buffer);
     }
 
     updateSelectedText(buffer);
@@ -576,6 +527,7 @@ void QTermSelectionModel::clearSelection()
 
 void QTermSelectionModel::setSelectionRange(int startRow, int startColumn, int endRow, int endColumn)
 {
+    m_selectionAnchors.reset();
     const NormalizedSelectionRange range = normalizeSelectionRange(m_rows,
                                                                   m_columns,
                                                                   startRow,
@@ -597,7 +549,8 @@ void QTermSelectionModel::selectWordAt(const QTermBuffer &buffer, int row, int c
     }
 
     const int boundedRow = qBound(0, row, buffer.rows() - 1);
-    const QVector<LogicalColumnRef> logicalColumns = collectLogicalLineColumns(buffer, boundedRow);
+    const int projectionRow = m_viewportTopProjectionRow + boundedRow;
+    const QVector<LogicalColumnRef> logicalColumns = collectProjectionLogicalLineColumns(buffer, projectionRow);
     if (logicalColumns.isEmpty()) {
         clearSelection();
         return;
@@ -606,7 +559,7 @@ void QTermSelectionModel::selectWordAt(const QTermBuffer &buffer, int row, int c
     int logicalIndex = -1;
     for (int index = 0; index < logicalColumns.size(); ++index) {
         const LogicalColumnRef &logicalColumn = logicalColumns.at(index);
-        if (logicalColumn.row == boundedRow && logicalColumn.column == qMax(0, column)) {
+        if (logicalColumn.projectionRow == projectionRow && logicalColumn.column == qMax(0, column)) {
             logicalIndex = index;
             break;
         }
@@ -616,7 +569,7 @@ void QTermSelectionModel::selectWordAt(const QTermBuffer &buffer, int row, int c
         const int fallbackColumn = qMax(0, column);
         for (int index = logicalColumns.size() - 1; index >= 0; --index) {
             const LogicalColumnRef &logicalColumn = logicalColumns.at(index);
-            if (logicalColumn.row == boundedRow && logicalColumn.column <= fallbackColumn) {
+            if (logicalColumn.projectionRow == projectionRow && logicalColumn.column <= fallbackColumn) {
                 logicalIndex = index;
                 break;
             }
@@ -670,8 +623,12 @@ void QTermSelectionModel::selectWordAt(const QTermBuffer &buffer, int row, int c
 
     const LogicalColumnRef &selectionStart = logicalColumns.at(selectionStartIndex);
     const LogicalColumnRef &selectionEnd = logicalColumns.at(selectionEndIndex);
-    const int exclusiveEndColumn = graphemeEndColumn(buffer.lineAt(selectionEnd.row).columnTexts(), selectionEnd.column);
-    setSelectionRange(selectionStart.row, selectionStart.column, selectionEnd.row, exclusiveEndColumn);
+    const int exclusiveEndColumn = graphemeEndColumn(buffer.projectionLineAt(selectionEnd.projectionRow).columnTexts(), selectionEnd.column);
+    setSelectionFromProjectionEndpoints(buffer,
+                                        selectionStart.projectionRow,
+                                        selectionStart.column,
+                                        selectionEnd.projectionRow,
+                                        exclusiveEndColumn);
 }
 
 void QTermSelectionModel::selectLogicalLineAt(const QTermBuffer &buffer, int row)
@@ -682,19 +639,60 @@ void QTermSelectionModel::selectLogicalLineAt(const QTermBuffer &buffer, int row
     }
 
     const int boundedRow = qBound(0, row, buffer.rows() - 1);
-    const LogicalRowSpan rowSpan = logicalLineRowSpan(buffer, boundedRow);
-    const int endColumn = lastRelevantColumn(buffer.lineAt(rowSpan.endRow).columnTexts());
+    const ProjectionRowSpan rowSpan = projectionLogicalLineRowSpan(buffer, m_viewportTopProjectionRow + boundedRow);
+    const int endColumn = lastRelevantColumn(buffer.projectionLineAt(rowSpan.endProjectionRow).columnTexts());
     if (endColumn <= 0) {
         clearSelection();
         return;
     }
 
-    setSelectionRange(rowSpan.startRow, 0, rowSpan.endRow, endColumn);
+    setSelectionFromProjectionEndpoints(buffer,
+                                        rowSpan.startProjectionRow,
+                                        0,
+                                        rowSpan.endProjectionRow,
+                                        endColumn);
 }
 
 const QTermSelectionSnapshot &QTermSelectionModel::snapshot() const noexcept
 {
     return m_snapshot;
+}
+
+void QTermSelectionModel::captureAnchorsFromSnapshot(const QTermBuffer &buffer)
+{
+    if (!m_snapshot.hasSelection || m_snapshot.startRow < 0 || m_snapshot.endRow < 0) {
+        return;
+    }
+
+    const QVector<ProjectionRowSpan> spans = collectProjectionLogicalLineSpans(buffer);
+    if (spans.isEmpty()) {
+        return;
+    }
+
+    m_selectionAnchors = LogicalSelectionAnchors{
+        captureLogicalAnchor(buffer, spans, m_viewportTopProjectionRow + m_snapshot.startRow, m_snapshot.startColumn),
+        captureLogicalAnchor(buffer, spans, m_viewportTopProjectionRow + m_snapshot.endRow, m_snapshot.endColumn)
+    };
+}
+
+void QTermSelectionModel::setSelectionFromProjectionEndpoints(const QTermBuffer &buffer,
+                                                              int startProjectionRow,
+                                                              int startColumn,
+                                                              int endProjectionRow,
+                                                              int endColumn)
+{
+    const QVector<ProjectionRowSpan> spans = collectProjectionLogicalLineSpans(buffer);
+    if (spans.isEmpty()) {
+        clearSelection();
+        return;
+    }
+
+    m_snapshot.hasSelection = true;
+    m_selectionAnchors = LogicalSelectionAnchors{
+        captureLogicalAnchor(buffer, spans, startProjectionRow, startColumn),
+        captureLogicalAnchor(buffer, spans, endProjectionRow, endColumn)
+    };
+    updateSelectedText(buffer);
 }
 
 void QTermSelectionModel::updateSelectedText(const QTermBuffer &buffer)
@@ -711,9 +709,12 @@ void QTermSelectionModel::updateSelectedText(const QTermBuffer &buffer)
             return;
         }
 
-        const QTermSelectionSnapshot visibleSnapshot = m_snapshot;
-        m_snapshot.selectedText = selectionTextFromBuffer(buffer, visibleSnapshot);
-        return;
+        captureAnchorsFromSnapshot(buffer);
+        if (!m_selectionAnchors.has_value()) {
+            const QTermSelectionSnapshot visibleSnapshot = m_snapshot;
+            m_snapshot.selectedText = selectionTextFromBuffer(buffer, visibleSnapshot);
+            return;
+        }
     }
 
     const QVector<ProjectionRowSpan> spans = collectProjectionLogicalLineSpans(buffer);
@@ -724,11 +725,10 @@ void QTermSelectionModel::updateSelectedText(const QTermBuffer &buffer)
 
     const ProjectionEndpoint start = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->start);
     const ProjectionEndpoint end = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->end);
-    if (selectionEndpointsAreVisible(buffer, start, end)) {
-        const int visibleRowOffset = buffer.visibleRowOffset();
-        m_snapshot.startRow = start.projectionRow - visibleRowOffset;
+    if (selectionEndpointsAreVisible(m_viewportTopProjectionRow, m_rows, start, end)) {
+        m_snapshot.startRow = start.projectionRow - m_viewportTopProjectionRow;
         m_snapshot.startColumn = start.column;
-        m_snapshot.endRow = end.projectionRow - visibleRowOffset;
+        m_snapshot.endRow = end.projectionRow - m_viewportTopProjectionRow;
         m_snapshot.endColumn = end.column;
     } else {
         m_snapshot.startRow = -1;

@@ -1,11 +1,13 @@
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QFileInfo>
 #include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
 #include <QVariant>
 #include <qqml.h>
 
 #include <QTerm/QTermLocalPtyBackend.h>
+#include <QTerm/QTermQuickItem.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
 
@@ -40,6 +42,7 @@ int main(int argc, char *argv[])
         "QTerm", 1, 0, "QTermTerminal", "QTermTerminal is provided by the application.");
     qmlRegisterUncreatableType<QTerm::QTermSurfaceModel>(
         "QTerm", 1, 0, "QTermSurfaceModel", "QTermSurfaceModel is provided by QTermTerminal.");
+    qmlRegisterType<QTerm::QTermQuickItem>("QTerm", 1, 0, "QTermQuickItem");
 
     QTerm::QTermTerminal terminal;
     QTerm::QTermSession session;
@@ -47,11 +50,15 @@ int main(int argc, char *argv[])
     DemoClipboardBridge clipboardBridge;
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
-    environment.insert(QStringLiteral("PS1"), QString::fromUtf8("\x1b]0;QTerm Local Shell\x07qterm$ "));
-    environment.insert(QStringLiteral("ENV"), QStringLiteral("/dev/null"));
+    const QString shellProgram = environment.value(QStringLiteral("SHELL"), QStringLiteral("/bin/zsh"));
+    const QString shellName = QFileInfo(shellProgram).fileName();
 
-    backend.setProgram(QStringLiteral("/bin/sh"));
-    backend.setArguments({QStringLiteral("-i")});
+    backend.setProgram(shellProgram);
+    if (shellName == QStringLiteral("bash") || shellName == QStringLiteral("zsh")) {
+        backend.setArguments({QStringLiteral("-il")});
+    } else {
+        backend.setArguments({QStringLiteral("-i")});
+    }
     backend.setProcessEnvironment(environment);
 
     session.setBackend(&backend);

@@ -219,7 +219,6 @@ void QTermTextParser::handleEscapeFinal(QChar final, QTermInputExecutor &executo
         executor.restoreCursor();
         break;
     default:
-        handleGroundTextUnit(QString(final), executor);
         break;
     }
 }

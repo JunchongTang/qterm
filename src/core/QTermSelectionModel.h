@@ -35,6 +35,7 @@ public:
     };
 
     void setTerminalSize(int columns, int rows);
+    void setViewport(int topProjectionRow);
     void prepareForResize(const QTermBuffer &buffer);
     void completeResize(const QTermBuffer &buffer, int columns, int rows);
     void refreshSelectionText(const QTermBuffer &buffer);
@@ -47,10 +48,17 @@ public:
     const QTermSelectionSnapshot &snapshot() const noexcept;
 
 private:
+    void captureAnchorsFromSnapshot(const QTermBuffer &buffer);
+    void setSelectionFromProjectionEndpoints(const QTermBuffer &buffer,
+                                            int startProjectionRow,
+                                            int startColumn,
+                                            int endProjectionRow,
+                                            int endColumn);
     void updateSelectedText(const QTermBuffer &buffer);
 
     int m_rows = 24;
     int m_columns = 80;
+    int m_viewportTopProjectionRow = 0;
     std::optional<LogicalSelectionAnchors> m_selectionAnchors;
     QTermSelectionSnapshot m_snapshot;
 };

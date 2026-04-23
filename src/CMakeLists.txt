@@ -1,5 +1,6 @@
 qt_add_library(qterm STATIC
     ../include/QTerm/QTermLocalPtyBackend.h
+    ../include/QTerm/QTermQuickItem.h
     ../include/QTerm/QTermSurfaceModel.h
     ../include/QTerm/QTermSession.h
     ../include/QTerm/QTermSessionBackend.h
@@ -25,6 +26,7 @@ qt_add_library(qterm STATIC
     core/QTermTextParser.cpp
     core/QTermSurfaceModel.cpp
     core/QTermTerminal.cpp
+    quick/QTermQuickItem.cpp
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp
@@ -46,6 +48,7 @@ target_link_libraries(qterm
     PUBLIC
         Qt6::Core
         Qt6::Gui
+    Qt6::Quick
 )
 
 target_compile_features(qterm PUBLIC cxx_std_17)
