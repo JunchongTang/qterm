@@ -7,7 +7,7 @@
 #include <qqml.h>
 
 #include <QTerm/QTermLocalPtyBackend.h>
-#include <QTerm/QTermQuickItem.h>
+#include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
 
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
         "QTerm", 1, 0, "QTermTerminal", "QTermTerminal is provided by the application.");
     qmlRegisterUncreatableType<QTerm::QTermSurfaceModel>(
         "QTerm", 1, 0, "QTermSurfaceModel", "QTermSurfaceModel is provided by QTermTerminal.");
-    qmlRegisterType<QTerm::QTermQuickItem>("QTerm", 1, 0, "QTermQuickItem");
+    qmlRegisterType<QTerm::QTermQuickPaintedItem>("QTerm", 1, 0, "QTermQuickPaintedItem");
 
     QTerm::QTermTerminal terminal;
     QTerm::QTermSession session;

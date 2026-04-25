@@ -1,7 +1,7 @@
 // Manual visual verification of the resize-regression fix using a REAL PTY.
 //
 // This program starts an actual zsh process via QTermLocalPtyBackend, displays
-// it in a QTermQuickItem, then automatically cycles between narrow and wide
+// it in a QTermQuickPaintedItem, then automatically cycles between narrow and wide
 // widths so zsh receives real SIGWINCH signals and redraws its own prompt.
 //
 // Watch the terminal window and the console output.
@@ -28,7 +28,7 @@
 #include <QTimer>
 
 #include <QTerm/QTermLocalPtyBackend.h>
-#include <QTerm/QTermQuickItem.h>
+#include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
 
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
     const int kWideHeight = 400;
     window.resize(kWideWidth, kWideHeight);
 
-    QTerm::QTermQuickItem item(window.contentItem());
+    QTerm::QTermQuickPaintedItem item(window.contentItem());
     item.setFontFamily(u"Courier New"_s);
     item.setFontPixelSize(14);
     item.setForegroundColor(QColor(0xdc, 0xe7, 0xf3));
@@ -235,7 +235,7 @@ int main(int argc, char **argv)
 
         case Narrow:
             // 逐步缩窄窗口到 kNarrowWidth，模拟用户拖拽窗口边缘。
-            // QTermQuickItem::geometryChange 会同步调用 syncTerminalSize()，
+            // QTermQuickPaintedItem::geometryChange 会同步调用 syncTerminalSize()，
             // QTermLocalPtyBackend 的 debounce timer 到期后发 TIOCSWINSZ，
             // zsh 收到 SIGWINCH 并用 ESC[1G 重绘 prompt（折成多行）。
             qDebug().noquote()

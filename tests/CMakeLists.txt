@@ -11,7 +11,7 @@ qt_add_executable(qterm_local_pty_tests
 )
 
 qt_add_executable(qterm_quick_item_tests
-    quick/QTermQuickItemTest.cpp
+    quick/QTermQuickPaintedItemTest.cpp
 )
 
 target_include_directories(qterm_core_tests

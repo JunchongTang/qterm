@@ -108,7 +108,7 @@
 目标：
 
 * 增加 QTermSurfaceModel。
-* 增加 QTermQuickItem 与增量渲染路径。
+* 增加 QTermQuickPaintedItem 与增量渲染路径。
 * 支持选区可视化、光标渲染和基础剪贴板能力。
 
 已完成：
@@ -119,7 +119,7 @@
 
 未完成：
 
-* QTermQuickItem 尚未实现。
+* QTermQuickPaintedItem 尚未实现。
 * 目前前端仍是 demo 级实现，尚未进入真正的 QSG 增量渲染与脏行更新模型。
 
 退出标准：
@@ -233,5 +233,5 @@
 ## 当前下一步
 
 1. 继续收敛 Phase 3，把 reflow 从“第一版可用”推进到“复杂场景稳定”，重点补 combining text、复杂 prompt、反复窄宽循环的 golden tests。
-2. 继续收敛 Phase 4，把当前 demo 级前端推进到真正的 QTermQuickItem 与增量渲染路径。
+2. 继续收敛 Phase 4，把当前 demo 级前端推进到真正的 QTermQuickPaintedItem 与增量渲染路径。
 3. 继续推进 Phase 6，优先补 mouse tracking 与 OSC 8 hyperlink，逐步验证更复杂的交互式 CLI 工作负载。

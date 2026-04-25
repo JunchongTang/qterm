@@ -18,7 +18,7 @@
 ## 问题分析1（来自GPT4.1）
 Search complete: 终端 resize 丢行问题的底层分析
 
-Searched codebase for "QTermQuickItem geometryChange scheduleTerminalSizeSync syncTerminalSize setTerminalSize", no results
+Searched codebase for "QTermQuickPaintedItem geometryChange scheduleTerminalSizeSync syncTerminalSize setTerminalSize", no results
 
 Searched codebase for "resize buffer history lines lost window narrow wide", no results
 
@@ -28,7 +28,7 @@ Searched for text `syncTerminalSize`, 3 results
 
 Searched for text `setTerminalSize`, 52 results
 
-Searched for files matching `**/QTermQuickItem*`, 4 matches
+Searched for files matching `**/QTermQuickPaintedItem*`, 4 matches
 
 Searched for files matching `**/qterm*`, 44 matches
 
@@ -40,15 +40,15 @@ Read [](file:///home/user/workspace/1-projects/qterm/src/core/QTermSelectionMode
 
 Read [](file:///home/user/workspace/1-projects/qterm/src/core/QTermCore.cpp#90-90), lines 90 to 143
 
-Read [](file:///home/user/workspace/1-projects/qterm/src/quick/QTermQuickItem.cpp#150-150), lines 150 to 220
+Read [](file:///home/user/workspace/1-projects/qterm/src/quick/QTermQuickPaintedItem.cpp#150-150), lines 150 to 220
 
-Read [](file:///home/user/workspace/1-projects/qterm/src/quick/QTermQuickItem.cpp#400-400), lines 400 to 529
+Read [](file:///home/user/workspace/1-projects/qterm/src/quick/QTermQuickPaintedItem.cpp#400-400), lines 400 to 529
 
 Read [](file:///home/user/workspace/1-projects/qterm/src/core/QTermTerminal.cpp#120-120), lines 120 to 190
 
 根据你的代码和搜索结果，resize 的核心链路如下：
 
-1. QTermQuickItem::geometryChange 检测到窗口尺寸变化，调用 scheduleTerminalSizeSync，最后会触发 syncTerminalSize。
+1. QTermQuickPaintedItem::geometryChange 检测到窗口尺寸变化，调用 scheduleTerminalSizeSync，最后会触发 syncTerminalSize。
 2. syncTerminalSize 计算新的终端行列数，调用 m_terminal->setTerminalSize。
 3. QTermTerminal::setTerminalSize 调用 m_core->setTerminalSize。
 4. QTermCore::setTerminalSize 调用 m_primaryScreen.resize/buffer.resize。
@@ -91,11 +91,11 @@ QTermBuffer 只保存了“物理行”而没有完整保存“逻辑行”或�
 
 ## 问题分析2（来自Gemini 2.5 Pro）
 
-Optimizing tool selection...好的，我已经看过了你提供的代码入口 `QTermQuickItem::geometryChange`。
+Optimizing tool selection...好的，我已经看过了你提供的代码入口 `QTermQuickPaintedItem::geometryChange`。
 
 正如我之前分析的，这个 bug 的核心在于窗口尺寸变化时，终端缓冲区未能正确处理内容的“重排”(reflow)，导致数据丢失。
 
-`QTermQuickItem::geometryChange` 是 UI 层面的入口，它在窗口大小改变时被调用，然后通过 `scheduleTerminalSizeSync()` -> `syncTerminalSize()` -> `m_terminal->setTerminalSize(columns, rows)` 将新的尺寸（行数和列数）传递给核心逻辑。
+`QTermQuickPaintedItem::geometryChange` 是 UI 层面的入口，它在窗口大小改变时被调用，然后通过 `scheduleTerminalSizeSync()` -> `syncTerminalSize()` -> `m_terminal->setTerminalSize(columns, rows)` 将新的尺寸（行数和列数）传递给核心逻辑。
 
 真正的“重排”逻辑发生在 `QTermCore` 和 `QTermBuffer` 中。`setTerminalSize` 会触发 `QTermCore::resize()`，进而调用 `QTermBuffer::resize()`。
 
@@ -123,7 +123,7 @@ Replacing 23 lines with 27 lines in [](file:///home/user/workspace/1-projects/qt
 
 好的，我已经看过你在 `qtermquickitem.cpp` 中提供的代码入口。
 
-`QTermQuickItem::geometryChange` 会在窗口尺寸变化时触发 `scheduleTerminalSizeSync`，最终调用 `m_terminal->setTerminalSize(columns, rows)`。这确认了问题的根源在终端核心对尺寸变化的响应逻辑中。
+`QTermQuickPaintedItem::geometryChange` 会在窗口尺寸变化时触发 `scheduleTerminalSizeSync`，最终调用 `m_terminal->setTerminalSize(columns, rows)`。这确认了问题的根源在终端核心对尺寸变化的响应逻辑中。
 
 正如我之前分析的，当窗口变窄时，长于新宽度的行会被“折行”（soft-wrapped）。当窗口再次变宽时，这些被折行的内容应该能“反折行”以恢复原始状态。Bug 的出现意味着这个“反折行”的过程出了问题，导致部分行内容丢失。
 
@@ -149,7 +149,7 @@ Replacing 23 lines with 27 lines in [](file:///home/user/workspace/1-projects/qt
 ````
 好的，我来分析并解决这个问题。
 
-你提供的入口 `QTermQuickItem::geometryChange` 是正确的。当窗口大小改变时，它会触发 `scheduleTerminalSizeSync()`，最终调用 `m_terminal->setTerminalSize(columns, rows)` 来通知后端终端尺寸发生了变化。
+你提供的入口 `QTermQuickPaintedItem::geometryChange` 是正确的。当窗口大小改变时，它会触发 `scheduleTerminalSizeSync()`，最终调用 `m_terminal->setTerminalSize(columns, rows)` 来通知后端终端尺寸发生了变化。
 
 问题的核心在于 `QTerm` 的核心缓冲区（`QTermBuffer`）如何处理尺寸变化，特别是如何处理因宽度变窄而产生的“自动换行”（reflow）。当窗口再次变宽时，这些被自动换行的行应该能被正确地“反向重排”（un-reflow）以恢复原始状态。如果这个过程处理不当，就会导致行数据丢失。
 

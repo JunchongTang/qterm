@@ -84,7 +84,7 @@ Planned public objects:
 * QTermTerminal: High-level facade for terminal core plus session attachment.
 * QTermSession: Transport-facing session binding.
 * QTermSurfaceModel: Read-only presentation model for UI consumers.
-* QTermQuickItem: Qt Quick frontend.
+* QTermQuickPaintedItem: Qt Quick frontend.
 * QTermProfile: User-facing options such as font-independent terminal defaults, scrollback limit, keyboard behavior, and feature flags.
 
 Responsibilities:
@@ -242,7 +242,7 @@ This layer implements the actual UI.
 
 Primary target:
 
-* QTermQuickItem
+* QTermQuickPaintedItem
 
 Secondary future target:
 
@@ -271,11 +271,11 @@ Incoming data flow:
 4. QTermEscapeSequenceParser emits terminal operations.
 5. QTermInputExecutor mutates QTermCore and dirty trackers.
 6. QTermSurfaceModel refreshes changed projections.
-7. QTermQuickItem redraws affected regions only.
+7. QTermQuickPaintedItem redraws affected regions only.
 
 Outgoing data flow:
 
-1. User input reaches QTermQuickItem.
+1. User input reaches QTermQuickPaintedItem.
 2. Input mapping converts Qt key, text, mouse, wheel, and paste events into terminal byte sequences.
 3. QTermSession writes encoded bytes to the active backend.
 
