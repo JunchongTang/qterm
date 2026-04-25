@@ -9,6 +9,8 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QQmlContext>
+#include <QQmlEngine>
 #include <QTimer>
 #include <QWheelEvent>
 #include <QVariantList>
@@ -159,6 +161,7 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     setAcceptHoverEvents(false);
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
+        updateCursorDelegateGeometry();
     });
 
     m_resizeDebounceTimer->setSingleShot(true);
@@ -337,6 +340,7 @@ void QTermQuickItem::setCursorOpacity(qreal cursorOpacity)
 
     m_cursorOpacity = boundedOpacity;
     update();
+    updateCursorDelegateGeometry();
     emit cursorOpacityChanged();
 }
 
@@ -435,16 +439,31 @@ void QTermQuickItem::paint(QPainter *painter)
     }
 
     if (surfaceModel->cursorVisible() && hasActiveFocus() && m_cursorOpacity > 0.0) {
-        QColor cursor = m_cursorColor;
-        cursor.setAlphaF(qBound(0.0, m_cursorOpacity * 0.72, 1.0));
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(cursor);
-        painter->drawRoundedRect(QRectF(surfaceModel->cursorColumn() * m_cellWidth,
-                                        surfaceModel->cursorRow() * m_cellHeight,
-                                        qMax<qreal>(2.0, m_cellWidth),
-                                        m_cellHeight),
-                                 1.0,
-                                 1.0);
+        // delegate item 存在时跳过此处绘制，由 QQuickItem 子项自行渲染
+        if (!m_cursorDelegateItem) {
+            QColor cursor = m_cursorColor;
+            cursor.setAlphaF(qBound(0.0, m_cursorOpacity * 0.72, 1.0));
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(cursor);
+            const qreal cx = surfaceModel->cursorColumn() * m_cellWidth;
+            const qreal cy = surfaceModel->cursorRow() * m_cellHeight;
+            switch (m_cursorStyle) {
+            case Underline:
+                painter->drawRect(QRectF(cx, cy + m_cellHeight - 2.0,
+                                         qMax<qreal>(2.0, m_cellWidth), 2.0));
+                break;
+            case Bar:
+                painter->drawRect(QRectF(cx, cy, 2.0, m_cellHeight));
+                break;
+            case Block:
+            default:
+                painter->drawRoundedRect(QRectF(cx, cy,
+                                                 qMax<qreal>(2.0, m_cellWidth),
+                                                 m_cellHeight),
+                                          1.0, 1.0);
+                break;
+            }
+        }
     }
 }
 
@@ -692,6 +711,7 @@ void QTermQuickItem::reconnectSurfaceModel()
     });
     m_surfaceCursorConnection = connect(surfaceModel, &QTermSurfaceModel::cursorChanged, this, [this]() {
         update();
+        updateCursorDelegateGeometry();
     });
     m_surfaceSelectionConnection = connect(surfaceModel, &QTermSurfaceModel::selectionChanged, this, [this]() {
         update();
@@ -753,6 +773,111 @@ void QTermQuickItem::syncTerminalSize()
     const int columns = qMax(kMinimumColumns, static_cast<int>(std::floor(width() / qMax<qreal>(1.0, m_cellWidth))));
     const int rows = qMax(kMinimumRows, static_cast<int>(std::floor(height() / qMax<qreal>(1.0, m_cellHeight))));
     m_terminal->setTerminalSize(columns, rows);
+}
+
+// ── componentComplete ─────────────────────────────────────────────────────
+
+void QTermQuickItem::componentComplete()
+{
+    QQuickPaintedItem::componentComplete();
+    // 组件完成后 QML context 已就绪，可以实例化 delegate
+    if (m_cursorDelegate && !m_cursorDelegateItem)
+        recreateCursorDelegateItem();
+}
+
+// ── CursorStyle ────────────────────────────────────────────────────────────
+
+QTermQuickItem::CursorStyle QTermQuickItem::cursorStyle() const noexcept
+{
+    return m_cursorStyle;
+}
+
+void QTermQuickItem::setCursorStyle(CursorStyle style)
+{
+    if (m_cursorStyle == style)
+        return;
+    m_cursorStyle = style;
+    update();
+    emit cursorStyleChanged();
+}
+
+// ── CursorDelegate ────────────────────────────────────────────────────────
+
+QQmlComponent *QTermQuickItem::cursorDelegate() const noexcept
+{
+    return m_cursorDelegate;
+}
+
+void QTermQuickItem::setCursorDelegate(QQmlComponent *delegate)
+{
+    if (m_cursorDelegate == delegate)
+        return;
+
+    m_cursorDelegate = delegate;
+
+    // 销毁旧 item
+    if (m_cursorDelegateItem) {
+        m_cursorDelegateItem->setParentItem(nullptr);
+        m_cursorDelegateItem->deleteLater();
+        m_cursorDelegateItem = nullptr;
+    }
+
+    // 组件完成后才有 context；未完成则等 componentComplete() 创建
+    if (m_cursorDelegate && isComponentComplete())
+        recreateCursorDelegateItem();
+
+    update();
+    emit cursorDelegateChanged();
+}
+
+void QTermQuickItem::recreateCursorDelegateItem()
+{
+    if (m_cursorDelegateItem) {
+        m_cursorDelegateItem->setParentItem(nullptr);
+        m_cursorDelegateItem->deleteLater();
+        m_cursorDelegateItem = nullptr;
+    }
+
+    if (!m_cursorDelegate)
+        return;
+
+    QQmlContext *ctx = QQmlEngine::contextForObject(this);
+    if (!ctx)
+        return;
+
+    QObject *obj = m_cursorDelegate->beginCreate(ctx);
+    m_cursorDelegateItem = qobject_cast<QQuickItem *>(obj);
+    if (!m_cursorDelegateItem) {
+        delete obj;
+        return;
+    }
+
+    m_cursorDelegateItem->setParentItem(this);
+    m_cursorDelegate->completeCreate();
+    updateCursorDelegateGeometry();
+}
+
+void QTermQuickItem::updateCursorDelegateGeometry()
+{
+    if (!m_cursorDelegateItem)
+        return;
+
+    if (!m_terminal) {
+        m_cursorDelegateItem->setVisible(false);
+        return;
+    }
+
+    QTermSurfaceModel *sm = m_terminal->surfaceModel();
+    const bool visible = sm && sm->cursorVisible() && hasActiveFocus() && m_cursorOpacity > 0.0;
+    m_cursorDelegateItem->setVisible(visible);
+
+    if (visible) {
+        m_cursorDelegateItem->setX(sm->cursorColumn() * m_cellWidth);
+        m_cursorDelegateItem->setY(sm->cursorRow() * m_cellHeight);
+        m_cursorDelegateItem->setWidth(m_cellWidth);
+        m_cursorDelegateItem->setHeight(m_cellHeight);
+        m_cursorDelegateItem->setOpacity(m_cursorOpacity);
+    }
 }
 
 } // namespace QTerm
