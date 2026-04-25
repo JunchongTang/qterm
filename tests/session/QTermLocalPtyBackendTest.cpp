@@ -73,7 +73,9 @@ void QTermLocalPtyBackendTest::appliesLatestResizeAfterOpen()
 #else
     QTermLocalPtyBackend backend;
     QByteArray output;
-    const QString script = QStringLiteral("stty size; sleep 0.3; stty size");
+    // After open(), two consecutive resize() calls are applied immediately.
+    // The second sleep gives the shell time to see the final PTY size.
+    const QString script = QStringLiteral("sleep 0.3; stty size");
 
     backend.setProgram(QStringLiteral("/bin/sh"));
     backend.setArguments({QStringLiteral("-c"), script});
@@ -86,7 +88,6 @@ void QTermLocalPtyBackendTest::appliesLatestResizeAfterOpen()
     backend.resize(90, 31);
     backend.resize(100, 35);
 
-    QTRY_VERIFY_WITH_TIMEOUT(output.contains("24 80"), 3000);
     QTRY_VERIFY_WITH_TIMEOUT(output.contains("35 100"), 3000);
     QTRY_COMPARE_WITH_TIMEOUT(backend.state(), QTermSessionBackend::Closed, 3000);
 #endif

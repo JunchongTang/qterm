@@ -169,6 +169,9 @@ void QTermTextParser::handleCsiFinal(bool privateMode, QChar final, QTermInputEx
     case 'D':
         executor.cursorBackward(parameterAt(parameters, 0, 1));
         break;
+    case 'G':
+        executor.cursorHorizontalAbsolute(parameterAt(parameters, 0, 1) - 1);
+        break;
     case 'H':
     case 'f':
         executor.cursorPosition(parameterAt(parameters, 0, 1) - 1, parameterAt(parameters, 1, 1) - 1);

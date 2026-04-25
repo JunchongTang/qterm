@@ -418,7 +418,7 @@ void QTermQuickItem::geometryChange(const QRectF &newGeometry, const QRectF &old
 {
     QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
     if (newGeometry.size() != oldGeometry.size()) {
-        scheduleTerminalSizeSync();
+        syncTerminalSize();
     }
 }
 
@@ -512,6 +512,8 @@ void QTermQuickItem::scheduleTerminalSizeSync()
         return;
     }
 
+    // Used only for font changes (not geometry changes) to avoid redundant
+    // reflows when the font metrics haven't actually settled yet.
     m_resizeDebounceTimer->start();
 }
 

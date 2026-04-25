@@ -151,6 +151,7 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
     reflowedLines.reserve(logicalLines.size() + rows);
     QTermCursorState reflowedCursor;
     bool cursorResolved = false;
+    int cursorLogicalLineStartRow = 0;
 
     for (const LogicalLineProjection &logicalLine : logicalLines) {
         const int logicalStartRow = reflowedLines.size();
@@ -184,6 +185,7 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
             reflowedCursor.row = qMin(logicalStartRow + logicalCursorRow, lastLogicalRow);
             reflowedCursor.column = logicalCursorColumn;
             cursorResolved = true;
+            cursorLogicalLineStartRow = logicalStartRow;
         }
     }
 
@@ -194,9 +196,30 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
         reflowedCursor = QTermCursorState();
     }
 
-    const int historyCount = qMax(0, reflowedLines.size() - rows);
+    // Keep the cursor's entire logical line in the visible region when possible,
+    // so that when the shell redisplays the prompt after a resize (via CR +
+    // overwrite), all predecessor wrap rows are in m_visibleLines and can be
+    // severed cleanly by carriageReturn(). Without this, the logical line may
+    // straddle the history/visible boundary, causing CR-triggered overwrites to
+    // leave orphaned wrap fragments in history.
+    const int defaultHistoryCount = qMax(0, reflowedLines.size() - rows);
+    // The cursor's logical line occupies reflowedLines[cursorLogicalLineStartRow..cursorRow].
+    // Only reduce historyCount if the entire logical line fits in visible rows.
+    const int cursorLinePhysicalRows = cursorResolved
+        ? (reflowedCursor.row - cursorLogicalLineStartRow + 1)
+        : 0;
+    const int historyCount = (cursorResolved && cursorLinePhysicalRows <= rows)
+        ? qMin(defaultHistoryCount, cursorLogicalLineStartRow)
+        : defaultHistoryCount;
     m_historyLines = reflowedLines.first(historyCount);
     m_visibleLines = reflowedLines.mid(historyCount);
+
+    // Trim any rows beyond `rows` that may appear when historyCount was reduced.
+    // This can only happen when the logical line fits entirely in visible, so
+    // trimming only removes empty tail rows appended after the content.
+    if (m_visibleLines.size() > rows) {
+        m_visibleLines.resize(rows);
+    }
 
     while (m_visibleLines.size() < rows) {
         appendEmptyVisibleLine();
@@ -250,6 +273,40 @@ void QTermBuffer::clearVisibleTo(int row, int column)
         m_visibleLines[index].clear();
     }
     m_visibleLines[row].clearToColumn(column);
+}
+
+int QTermBuffer::severPredecessorWrapChain(int visibleRow)
+{
+    // Walk backwards through the projection (history + visible) from the row
+    // immediately preceding visibleRow. For each physical row that is part of
+    // the same wrap chain (wrappedToNextLine == true on its predecessor),
+    // clear the row's content and sever its wrap flag. Returns the visible row
+    // index where the chain started (the first cleared row), so the caller can
+    // reposition the cursor there to avoid leaving orphaned blank rows.
+    //
+    // QTermBuffer::resize guarantees that the cursor's logical line is kept
+    // entirely in the visible region when it fits, so we only need to look at
+    // visible rows here; the walk still starts at visibleRow - 1 and goes to 0.
+    int chainStartVisibleRow = visibleRow;
+    int projectionRow = m_historyLines.size() + visibleRow - 1;
+    while (projectionRow >= 0) {
+        if (projectionRow < m_historyLines.size()) {
+            QTermLine &line = m_historyLines[projectionRow];
+            if (!line.wrappedToNextLine()) {
+                break;
+            }
+            line.clear();  // clears content and sets wrappedToNextLine = false
+        } else {
+            QTermLine &line = m_visibleLines[projectionRow - m_historyLines.size()];
+            if (!line.wrappedToNextLine()) {
+                break;
+            }
+            line.clear();  // clears content and sets wrappedToNextLine = false
+            chainStartVisibleRow = projectionRow - m_historyLines.size();
+        }
+        --projectionRow;
+    }
+    return chainStartVisibleRow;
 }
 
 void QTermBuffer::scrollUp()

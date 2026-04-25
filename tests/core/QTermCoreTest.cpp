@@ -57,6 +57,10 @@ private slots:
     void preservesWideWrappedBoundarySemanticsAcrossReflow();
     void preservesComplexPromptAcrossRepeatedResizeCycles();
     void preservesTreeListingAcrossRepeatedResizeCycles();
+    void preservesMultiplePromptLinesAcrossExtremeResizeCycles();
+    void preservesContentAcrossRepeatedNarrowWithRedraw();
+    void preservesContentAcrossOscillatingResize();
+    void preservesContentWhenResizeInterleavesMidRedraw();
     void clearsState();
 };
 
@@ -663,6 +667,58 @@ void QTermCoreTest::preservesTreeListingAcrossRepeatedResizeCycles()
     QCOMPARE(core.debugPlainText(), projectedTranscript);
 }
 
+void QTermCoreTest::preservesMultiplePromptLinesAcrossExtremeResizeCycles()
+{
+    // Reproduces the resize-then-shell-redraw corruption:
+    // 1. Write N prompt lines (simulating N Enter presses).
+    // 2. Resize narrower → buffer reflows, wrappedToNextLine flags set.
+    // 3. Shell receives SIGWINCH and redraws the current prompt using ESC[K
+    //    (erase to end of line) at the cursor position. This ESC[K clears
+    //    wrappedToNextLine on the cursor's physical row, which was set during
+    //    reflow. Subsequent resize wider loses content that was "below" that
+    //    broken wrap chain.
+    QTermCore core;
+    core.setTerminalSize(40, 8);
+
+    // Write 4 prompt lines followed by CRLF, simulating 4 Enter presses.
+    const QString prompt = u"user@host:~/projects/qterm $"_s;  // 28 chars, fits in 40 cols
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    // 5th prompt (current, cursor at end, no trailing newline)
+    transcript += prompt;
+    core.writePlainText(transcript);
+
+    // Verify initial state: 5 prompt lines, cursor at end of last.
+    const QString expected = (QStringList(5, prompt)).join(u'\n');
+    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.cursorState().row, 4);
+    QCOMPARE(core.cursorState().column, prompt.size());
+
+    // --- Simulate narrow resize: window dragged to 10 columns ---
+    core.setTerminalSize(10, 8);
+    // Content reflows: each 28-char prompt wraps into 3 physical rows of 10.
+    // Total 5*3=15 physical rows; with rows=8, 7 pushed to history.
+    // wrappedToNextLine flags are set correctly by reflow.
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // --- Shell receives SIGWINCH and redraws prompt at cursor position ---
+    // Real zsh does: move cursor to start of prompt line, ESC[K, reprint prompt.
+    // We simulate the ESC[K (erase to end of line) at current cursor position,
+    // followed by rewriting the prompt text. This is what breaks wrap flags.
+    core.writePlainText(u"\r\x1b[K"_s + prompt);  // CR + EL + prompt reprint
+
+    // Content must still be correct at this point (just prompt redrawn).
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // --- Widen back: window dragged back to 40 columns ---
+    core.setTerminalSize(40, 8);
+
+    // All 5 prompt lines must survive.
+    QCOMPARE(core.debugPlainText(), expected);
+}
+
 void QTermCoreTest::supports256ColorSgrAttributes()
 {
     QTermCore core;
@@ -732,8 +788,139 @@ void QTermCoreTest::emitsOutboundDataForKeyAndPaste()
     QCOMPARE(spy.at(1).at(0).toByteArray(), QByteArray("\x1b[200~hi\x1b[201~"));
 }
 
-void QTermCoreTest::clearsState()
+void QTermCoreTest::preservesContentAcrossRepeatedNarrowWithRedraw()
 {
+    // Simulates: user drags window narrower in stages, shell redraws at each stage.
+    // Tests that multiple narrow+redraw cycles don't corrupt the scrollback.
+    QTermCore core;
+    core.setTerminalSize(40, 8);
+
+    const QString prompt = u"user@host:~/projects/qterm $"_s;  // 28 chars
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    transcript += prompt;
+    core.writePlainText(transcript);
+
+    const QString expected = QStringList(5, prompt).join(u'\n');
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Cycle 1: narrow to 20, shell redraws
+    core.setTerminalSize(20, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+    core.writePlainText(u"\r\x1b[K"_s + prompt);
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Cycle 2: narrow to 15, shell redraws
+    core.setTerminalSize(15, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+    core.writePlainText(u"\r\x1b[K"_s + prompt);
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Cycle 3: narrow to 10, shell redraws
+    core.setTerminalSize(10, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+    core.writePlainText(u"\r\x1b[K"_s + prompt);
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Widen back all the way
+    core.setTerminalSize(40, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+}
+
+void QTermCoreTest::preservesContentAcrossOscillatingResize()
+{
+    // Simulates: user drags window back and forth (narrow→wide→narrow→wide)
+    // with shell redraws at each stable size.
+    QTermCore core;
+    core.setTerminalSize(40, 8);
+
+    const QString prompt = u"user@host:~/projects/qterm $"_s;  // 28 chars
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    transcript += prompt;
+    core.writePlainText(transcript);
+
+    const QString expected = QStringList(5, prompt).join(u'\n');
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Oscillate multiple times: narrow with redraw, wide with redraw
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        core.setTerminalSize(20, 8);
+        core.writePlainText(u"\r\x1b[K"_s + prompt);
+        QCOMPARE(core.debugPlainText(), expected);
+
+        core.setTerminalSize(40, 8);
+        // Shell redraws after widening: prompt fits in 1 row, no predecessor chain
+        core.writePlainText(u"\r\x1b[K"_s + prompt);
+        QCOMPARE(core.debugPlainText(), expected);
+    }
+}
+
+void QTermCoreTest::preservesContentWhenResizeInterleavesMidRedraw()
+{
+    // Reproduces the race between rapid user dragging and asynchronous shell redraws.
+    //
+    // Sequence:
+    //   1. Write 5 prompts at wide width.
+    //   2. User drags narrow (resize A). Shell gets SIGWINCH and starts sending
+    //      \r (carriageReturn). This positions the cursor at the LAST physical row
+    //      of the wrapped prompt at width A.
+    //   3. BEFORE the rest of the shell's output (\x1b[K + prompt) arrives, the
+    //      user continues dragging to width B. The buffer is reflowed again.
+    //      After this reflow the cursor may end up at a NON-LAST physical row
+    //      (because cursorDisplayOffset / B doesn't land on the last row).
+    //   4. \x1b[K arrives. clearToEnd() sets wrappedToNextLine=false on the
+    //      now-middle row, severing the prompt's wrap chain in the buffer.
+    //   5. Shell finishes writing the new prompt.
+    //   6. User drags back to the original wide width.
+    //   7. All 5 prompts must still be present.
+    QTermCore core;
+    core.setTerminalSize(40, 8);
+
+    const QString prompt = u"user@host:~/projects/qterm $"_s;  // 28 chars
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    transcript += prompt;
+    core.writePlainText(transcript);
+
+    const QString expected = QStringList(5, prompt).join(u'\n');
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Step 2: user drags to 10 cols. Each 28-char prompt -> 3 rows.
+    // Cursor ends up at last physical row (row index 2 of 3), col 8.
+    core.setTerminalSize(10, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Step 3: shell sends \r (carriageReturn at 10 cols).
+    // Cursor moves to col 0 of that last physical row.
+    core.writePlainText(u"\r"_s);
+    // cursorDisplayOffset for the 28-char logical line = 2*10 = 20
+
+    // Step 4: user drags further to 7 cols before \x1b[K arrives.
+    // At 7 cols, 28 chars -> 4 rows. logicalCursorRow = 20/7 = 2 (NOT the last row, 3).
+    // So the cursor lands at row 2 of 4, column 6.
+    core.setTerminalSize(7, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Step 5: \x1b[K + prompt arrive at 7 cols.
+    // \x1b[K clears from cursor col (6) to end of row 2 AND sets wrappedToNextLine=false,
+    // severing row 2 from row 3. Without a fix this leaves row 3 as a spurious
+    // logical line and the rewrite only covers rows up to cursor+1.
+    core.writePlainText(u"\x1b[K"_s + prompt);
+    QCOMPARE(core.debugPlainText(), expected);
+
+    // Step 6: user drags back to 40 cols.
+    core.setTerminalSize(40, 8);
+    QCOMPARE(core.debugPlainText(), expected);
+}
+
+void QTermCoreTest::clearsState(){
     QTermCore core;
     core.writePlainText("bootstrap"_L1);
 

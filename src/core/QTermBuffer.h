@@ -26,6 +26,7 @@ public:
     void clearVisible();
     void clearVisibleFrom(int row, int column);
     void clearVisibleTo(int row, int column);
+    int severPredecessorWrapChain(int visibleRow);
     void scrollUp();
     void insertLines(int row, int count, int scrollTop, int scrollBottom);
     void deleteLines(int row, int count, int scrollTop, int scrollBottom);
