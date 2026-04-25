@@ -23,6 +23,7 @@ struct QTermScreenState
         buffer.clear();
         cursorState = QTermCursorState();
         wrapPending = false;
+        breakPredecessorWrapOnWrite = false;
         currentAttributes = QTermCellAttributes();
         savedCursorState.reset();
         scrollTop = 0;
@@ -47,6 +48,7 @@ struct QTermScreenState
     QTermBuffer buffer;
     QTermCursorState cursorState;
     bool wrapPending = false;
+    bool breakPredecessorWrapOnWrite = false;
     QTermCellAttributes currentAttributes;
     std::optional<QTermSavedCursorState> savedCursorState;
     int scrollTop = 0;

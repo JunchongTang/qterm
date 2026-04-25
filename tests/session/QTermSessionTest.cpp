@@ -87,6 +87,10 @@ private slots:
     void terminalKeepsSelectedTextWhenResizePushesSelectionIntoHistory();
     void surfaceModelProjectsSelectionVisibility();
     void terminalSelectsFromScrolledViewport();
+    void terminalPreservesAllPromptLinesAcrossRepeatedWidthOscillation();
+    void terminalPreservesAllPromptLinesWhenResizeDebouncedBeforeRedraw();
+    void terminalPreservesZshStyledPromptAcrossWidthOscillation();
+    void terminalPreservesPromptLinesWhenShellUsesAbsoluteColumnMove();
 };
 
 void QTermSessionTest::forwardsBackendOperations()
@@ -625,6 +629,262 @@ void QTermSessionTest::terminalSelectsFromScrolledViewport()
     QVERIFY(terminal.surfaceModel()->selectionVisible());
     QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
     QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
+}
+
+void QTermSessionTest::terminalPreservesAllPromptLinesAcrossRepeatedWidthOscillation()
+{
+    // Reproduces the real-world bug reported by the user:
+    //
+    //   "I press Enter 5 times, then drag the window width from wide (~1120px)
+    //    to narrow (~50px) and back, repeated 3-5 times. Eventually some
+    //    prompt lines disappear — 5 lines become 2."
+    //
+    // This test drives QTermTerminal (the same path as QTermQuickItem) and
+    // simulates the full interaction:
+    //   1. Feed 5 prompt lines as if printed by a real shell session.
+    //   2. Repeatedly oscillate the terminal width (wide→narrow→wide).
+    //   3. After each width change, feed the shell's SIGWINCH redraw output
+    //      (\r + ESC[K + prompt reprint) the same way the PTY backend delivers
+    //      it via dataReceived → feedText.
+    //   4. Assert that all 5 prompt lines are still visible / in the buffer
+    //      after every resize+redraw cycle.
+    //
+    // The prompt text is deliberately long (fills most of a wide terminal) so
+    // that it wraps when the terminal is narrowed, triggering the reflow path
+    // that previously caused data loss.
+
+    QTermTerminal terminal;
+
+    // Wide terminal — matches a typical desktop window width.
+    terminal.setTerminalSize(80, 24);
+
+    // A prompt typical of zsh with a path component, without ANSI codes to
+    // keep assertions simple.  Length = 51 chars, fits in 80 cols (no wrap),
+    // but wraps into 2 rows when width is ≤ 50 cols.
+    const QString prompt = u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm"_s;
+
+    // Feed 4 completed prompt lines (Enter pressed 4 times) + the 5th active prompt.
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    transcript += prompt;  // 5th prompt — cursor sits at its end.
+    terminal.feedText(transcript);
+
+    // Helper: collect the full buffer text (history + visible) from the model.
+    // plainText() on QTermSurfaceModel reflects debugPlainText() of the core,
+    // which includes both history and visible lines.
+    auto bufferText = [&]() {
+        return terminal.surfaceModel()->plainText();
+    };
+
+    const QString expected = QStringList(5, prompt).join(u'\n');
+    QCOMPARE(bufferText(), expected);
+
+    // Simulate the user dragging the window width 5 times, each time:
+    //   (a) Narrow the terminal  → reflow wraps the long prompt.
+    //   (b) Shell receives SIGWINCH and sends \r + ESC[K + prompt.
+    //   (c) Widen the terminal   → reflow should restore the original layout.
+    //   (d) Shell receives SIGWINCH again and redraws at wide width.
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        // (a) Narrow — prompt (51 chars) wraps into 2 physical rows.
+        terminal.setTerminalSize(40, 24);
+        QCOMPARE(bufferText(), expected);
+
+        // (b) Shell redraws at narrow width: CR moves to physical row start,
+        //     ESC[K erases to end of line, then the prompt is reprinted.
+        //     This is exactly what zsh sends after SIGWINCH.
+        terminal.feedText(u"\r\x1b[K"_s + prompt);
+        QCOMPARE(bufferText(), expected);
+
+        // (c) Widen back.
+        terminal.setTerminalSize(80, 24);
+        QCOMPARE(bufferText(), expected);
+
+        // (d) Shell redraws at wide width.
+        terminal.feedText(u"\r\x1b[K"_s + prompt);
+        QCOMPARE(bufferText(), expected);
+    }
+}
+
+void QTermSessionTest::terminalPreservesAllPromptLinesWhenResizeDebouncedBeforeRedraw()
+{
+    // Reproduces the real-world bug more precisely:
+    //
+    // When QTermQuickItem calls setTerminalSize synchronously on every geometry
+    // change (no debounce), the buffer is reflowed many times during a single
+    // drag gesture. The PTY backend debounces TIOCSWINSZ, so the shell only
+    // gets ONE SIGWINCH at the end. The shell then redraws at the *final* width,
+    // but the buffer has been reflowed through many intermediate widths first.
+    //
+    // This test simulates: rapid narrowing through multiple intermediate sizes
+    // (as the user drags the window edge pixel by pixel), followed by a single
+    // shell redraw at the final narrow width, then widening back.
+    // The bug manifests as prompt lines disappearing after the widen.
+
+    QTermTerminal terminal;
+    terminal.setTerminalSize(80, 24);
+
+    // Prompt length = 51 chars — wraps at widths <= 50.
+    const QString prompt = u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm"_s;
+
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    transcript += prompt;
+    terminal.feedText(transcript);
+
+    const QString expected = QStringList(5, prompt).join(u'\n');
+    QCOMPARE(terminal.surfaceModel()->plainText(), expected);
+
+    auto bufferText = [&]() { return terminal.surfaceModel()->plainText(); };
+
+    // --- Simulate 3 full drag cycles ---
+    // Each cycle: many intermediate resize steps (pixel-by-pixel drag),
+    // ONE shell SIGWINCH redraw at the final size, then drag back.
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        // Pixel-by-pixel narrowing: each step is a setTerminalSize call
+        // as QTermQuickItem fires on every geometryChange.
+        // We simulate this with a few representative intermediate widths
+        // (the real drag would have tens of steps, one per pixel column).
+        for (int w = 75; w >= 35; w -= 5) {
+            terminal.setTerminalSize(w, 24);
+            // No QCOMPARE here — the intermediate states may have wrapping,
+            // but the content must still be correct.
+        }
+        // Final narrow width for this cycle.
+        terminal.setTerminalSize(30, 24);
+
+        // Shell receives SIGWINCH and redraws at width 30.
+        // This is the debounced TIOCSWINSZ — the shell didn't see the
+        // intermediate sizes at all.
+        terminal.feedText(u"\r\x1b[K"_s + prompt);
+        QCOMPARE(bufferText(), expected);
+
+        // Now widen back (pixel-by-pixel again).
+        for (int w = 35; w <= 75; w += 5) {
+            terminal.setTerminalSize(w, 24);
+        }
+        terminal.setTerminalSize(80, 24);
+        QCOMPARE(bufferText(), expected);
+
+        // Shell redraws at wide width.
+        terminal.feedText(u"\r\x1b[K"_s + prompt);
+        QCOMPARE(bufferText(), expected);
+    }
+}
+
+void QTermSessionTest::terminalPreservesZshStyledPromptAcrossWidthOscillation()
+{
+    // Reproduces the reported bug using the actual prompt format from the
+    // bug report, including ANSI color codes exactly as a real zsh would emit.
+    //
+    // Real zsh prompt (the one in BUGS.md):
+    //   "➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo"
+    //
+    // After SIGWINCH, zsh sends a redraw sequence like:
+    //   \r + ESC[K + (prompt with color codes)
+    //
+    // The plain-text length of the prompt is 80 chars (fills an 80-col terminal
+    // exactly), so at any width < 80 it wraps.
+
+    QTermTerminal terminal;
+    terminal.setTerminalSize(120, 24);
+
+    // Actual zsh prompt from the bug report with typical ANSI color codes.
+    // Color codes: \x1b[1;32m (bold green), \x1b[1;34m (bold blue), \x1b[0m (reset).
+    // Plain-text visible length = 80 chars.
+    const QString coloredPrompt =
+        u"\x1b[1;32m➜ \x1b[0m \x1b[1;34mtangjc@MBP\x1b[0m "
+        u"/Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo"_s;
+    // Plain text equivalent (what appears on screen, ANSI codes stripped for assertion).
+    const QString plainPrompt =
+        u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo"_s;
+
+    // Simulate 5 Enter presses: 4 completed lines + 1 active prompt.
+    for (int i = 0; i < 4; ++i) {
+        terminal.feedText(coloredPrompt + u"\r\n"_s);
+    }
+    terminal.feedText(coloredPrompt);
+
+    const QString expected = QStringList(5, plainPrompt).join(u'\n');
+    QCOMPARE(terminal.surfaceModel()->plainText(), expected);
+
+    auto bufferText = [&]() { return terminal.surfaceModel()->plainText(); };
+
+    // Repeat the user's drag gesture 5 times (matching "3-5 times" in bug report).
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        // Simulate pixel-by-pixel drag from 120 → ~50 cols.
+        // The buffer reflows at every step (QTermQuickItem is synchronous now).
+        for (int w = 110; w >= 50; w -= 10) {
+            terminal.setTerminalSize(w, 24);
+        }
+
+        // Shell receives SIGWINCH at the final narrow width and redraws.
+        terminal.feedText(u"\r\x1b[K"_s + coloredPrompt);
+        QCOMPARE(bufferText(), expected);
+
+        // Drag back to wide.
+        for (int w = 60; w <= 110; w += 10) {
+            terminal.setTerminalSize(w, 24);
+        }
+        terminal.setTerminalSize(120, 24);
+        QCOMPARE(bufferText(), expected);
+
+        // Shell redraws at wide width.
+        terminal.feedText(u"\r\x1b[K"_s + coloredPrompt);
+        QCOMPARE(bufferText(), expected);
+    }
+}
+
+void QTermSessionTest::terminalPreservesPromptLinesWhenShellUsesAbsoluteColumnMove()
+{
+    // Some shells (and zsh in certain configurations) use CSI G (CHA, move to
+    // absolute column) instead of CR (\r) when redrawing the prompt after SIGWINCH.
+    // ESC[1G is equivalent to \r (move to column 1) but goes through a different
+    // code path. Our breakPredecessorWrapOnWrite mechanism is only triggered by
+    // carriageReturn(), so if the shell sends ESC[1G instead, the predecessor wrap
+    // chain is NOT severed, leaving orphaned wrap fragments that cause line loss.
+    //
+    // This test documents that ESC[1G + ESC[K + prompt must work identically to
+    // \r + ESC[K + prompt.
+
+    QTermTerminal terminal;
+    terminal.setTerminalSize(80, 24);
+
+    const QString prompt = u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm"_s;  // 51 chars
+
+    QString transcript;
+    for (int i = 0; i < 4; ++i) {
+        transcript += prompt + u"\r\n"_s;
+    }
+    transcript += prompt;
+    terminal.feedText(transcript);
+
+    const QString expected = QStringList(5, prompt).join(u'\n');
+    QCOMPARE(terminal.surfaceModel()->plainText(), expected);
+
+    auto bufferText = [&]() { return terminal.surfaceModel()->plainText(); };
+
+    // Shell uses ESC[1G (absolute column 1) instead of CR.
+    // ESC[1G = move cursor to column 1 of current row.
+    // This is CSI 1 G (CHA), which is NOT implemented → ignored.
+    // Without CHA support, breakPredecessorWrapOnWrite is never set,
+    // so the predecessor wrap chain is never severed.
+    terminal.setTerminalSize(40, 24);
+    QCOMPARE(bufferText(), expected);
+
+    // Shell redraws using ESC[1G (absolute column move) instead of \r.
+    terminal.feedText(u"\x1b[1G\x1b[K"_s + prompt);
+
+    // This QCOMPARE is expected to FAIL with the current implementation
+    // because CSI G is not handled — the cursor does not move to column 1
+    // and breakPredecessorWrapOnWrite is not set.
+    QCOMPARE(bufferText(), expected);
+
+    terminal.setTerminalSize(80, 24);
+    QCOMPARE(bufferText(), expected);
 }
 
 } // namespace QTerm

@@ -188,6 +188,28 @@ void QTermInputExecutor::print(const QString &text)
         wrapToNextLine();
     }
 
+    // If a carriageReturn() preceded this write without an intervening lineFeed,
+    // sever any predecessor wrap chain before committing the character. This
+    // handles shell prompt redraw after resize: the shell issues CR then
+    // overwrites the current physical row with new content. Without severing,
+    // the predecessor row's wrappedToNextLine flag causes reflow to merge its
+    // content with the newly written text, corrupting logical line boundaries.
+    if (currentScreen().breakPredecessorWrapOnWrite) {
+        currentScreen().breakPredecessorWrapOnWrite = false;
+        // Sever and clear the entire predecessor wrap chain in the visible region,
+        // then reposition the cursor to where the chain started. This handles the
+        // shell prompt-redraw pattern after a resize: the shell issues CR to move
+        // to the physical row start and then overwrites with new content. Because
+        // reflow may have split the logical line into multiple physical rows, the
+        // earlier rows (now orphaned reflow fragments) must be cleared so they
+        // don't appear as stale content or blank lines in the next reflow.
+        const int chainStart = currentScreen().buffer.severPredecessorWrapChain(
+            currentScreen().cursorState.row);
+        if (chainStart < currentScreen().cursorState.row) {
+            setCursorState(QTermCursorState{chainStart, 0});
+        }
+    }
+
     currentScreen().buffer.lineAt(currentScreen().cursorState.row).setCharacter(
         currentScreen().cursorState.column,
         text,
@@ -206,6 +228,7 @@ void QTermInputExecutor::print(const QString &text)
 void QTermInputExecutor::lineFeed()
 {
     currentScreen().wrapPending = false;
+    currentScreen().breakPredecessorWrapOnWrite = false;
     currentScreen().buffer.lineAt(currentScreen().cursorState.row).setWrappedToNextLine(false);
     advanceToNextRow();
 }
@@ -214,6 +237,10 @@ void QTermInputExecutor::carriageReturn()
 {
     currentScreen().wrapPending = false;
     currentScreen().buffer.lineAt(currentScreen().cursorState.row).setWrappedToNextLine(false);
+    // Flag that the next character write should sever any predecessor wrap chain.
+    // This is needed when a shell redraws the prompt after resize by issuing
+    // CR followed by new content on the same physical row.
+    currentScreen().breakPredecessorWrapOnWrite = true;
     setCursorState(QTermCursorState{currentScreen().cursorState.row, 0});
 }
 
@@ -265,6 +292,20 @@ void QTermInputExecutor::cursorBackward(int count)
 {
     currentScreen().wrapPending = false;
     setCursorState(QTermCursorState{currentScreen().cursorState.row, qMax(0, currentScreen().cursorState.column - qMax(1, count))});
+}
+
+void QTermInputExecutor::cursorHorizontalAbsolute(int column)
+{
+    currentScreen().wrapPending = false;
+    const int targetColumn = qBound(0, column, currentScreen().buffer.columns() - 1);
+    // Moving to column 0 is semantically equivalent to CR: any subsequent write
+    // should sever the predecessor wrap chain so that shell prompt redraws
+    // (which use ESC[1G instead of \r) work correctly after a resize.
+    if (targetColumn == 0) {
+        currentScreen().buffer.lineAt(currentScreen().cursorState.row).setWrappedToNextLine(false);
+        currentScreen().breakPredecessorWrapOnWrite = true;
+    }
+    setCursorState(QTermCursorState{currentScreen().cursorState.row, targetColumn});
 }
 
 void QTermInputExecutor::cursorPosition(int row, int column)

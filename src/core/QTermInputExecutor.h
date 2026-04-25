@@ -37,6 +37,7 @@ public:
     void cursorDown(int count);
     void cursorForward(int count);
     void cursorBackward(int count);
+    void cursorHorizontalAbsolute(int column);
     void cursorPosition(int row, int column);
     void eraseInLine(int mode);
     void eraseInDisplay(int mode);

@@ -276,6 +276,12 @@ void QTermLocalPtyBackend::resize(int columns, int rows)
         return;
     }
 
+    // Debounce TIOCSWINSZ: store the latest size and apply it after the user
+    // stops dragging. This prevents the shell from receiving a SIGWINCH on
+    // every pixel of a drag, which would flood it with SIGWINCH signals and
+    // cause it to send stale redraws that arrive out-of-sync with the buffer.
+    // The buffer itself is reflowed synchronously (in QTermCore) so the visual
+    // update is immediate; only the PTY notification is deferred.
     m_resizeDebounceTimer->start();
 #else
     Q_UNUSED(columns);
