@@ -3,6 +3,7 @@
 
 #include <QColor>
 #include <QPointer>
+#include <QQmlComponent>
 #include <QQuickPaintedItem>
 #include <QString>
 #include <QTimer>
@@ -24,8 +25,18 @@ class QTermQuickItem : public QQuickPaintedItem
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
+    Q_PROPERTY(QTerm::QTermQuickItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
+    Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
 
 public:
+    // 光标内建形状枚举。设置后使用对应的默认渲染；设置 cursorDelegate 可完全自定义。
+    enum CursorStyle {
+        Block,      // 填充块（默认）
+        Underline,  // 单元格底部下划线
+        Bar         // 左侧竖线（I-beam）
+    };
+    Q_ENUM(CursorStyle)
+
     explicit QTermQuickItem(QQuickItem *parent = nullptr);
 
     QTermTerminal *terminal() const noexcept;
@@ -55,10 +66,17 @@ public:
     qreal cursorOpacity() const noexcept;
     void setCursorOpacity(qreal cursorOpacity);
 
+    CursorStyle cursorStyle() const noexcept;
+    void setCursorStyle(CursorStyle style);
+
+    QQmlComponent *cursorDelegate() const noexcept;
+    void setCursorDelegate(QQmlComponent *delegate);
+
     Q_INVOKABLE int rowAtPosition(qreal y) const;
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
     void paint(QPainter *painter) override;
+    void componentComplete() override;
 
     // IME support
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
@@ -69,6 +87,8 @@ signals:
     void metricsChanged();
     void paletteChanged();
     void cursorOpacityChanged();
+    void cursorStyleChanged();
+    void cursorDelegateChanged();
     void wheelScrolled(int scrollOffset);
     // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
     void copyRequested(const QString &text);
@@ -93,6 +113,10 @@ private:
     // 根据当前拖拽坐标更新选区（供拖拽和 auto-scroll 共用）
     void updateSelectionFromDrag(qreal x, qreal y);
 
+    // 创建 / 更新 delegate item 的位置、尺寸、透明度
+    void recreateCursorDelegateItem();
+    void updateCursorDelegateGeometry();
+
     QPointer<QTermTerminal> m_terminal;
     QMetaObject::Connection m_surfaceSizeConnection;
     QMetaObject::Connection m_surfaceCursorConnection;
@@ -109,6 +133,11 @@ private:
     QColor m_selectionColor = QColor(QStringLiteral("#214f76"));
     QColor m_cursorColor = QColor(QStringLiteral("#d7fbe0"));
     qreal m_cursorOpacity = 1.0;
+    CursorStyle m_cursorStyle = Block;
+
+    // ── 光标 delegate ─────────────────────────────────────────────────────
+    QQmlComponent *m_cursorDelegate = nullptr;
+    QQuickItem *m_cursorDelegateItem = nullptr;
 
     // ── 鼠标 / 选区内部状态 ───────────────────────────────────────────────
     QTimer *m_selectionAutoScrollTimer = nullptr;
