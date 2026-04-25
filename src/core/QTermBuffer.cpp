@@ -196,20 +196,17 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
         reflowedCursor = QTermCursorState();
     }
 
-    // Keep the cursor's entire logical line in the visible region when possible,
-    // so that when the shell redisplays the prompt after a resize (via CR +
-    // overwrite), all predecessor wrap rows are in m_visibleLines and can be
-    // severed cleanly by carriageReturn(). Without this, the logical line may
-    // straddle the history/visible boundary, causing CR-triggered overwrites to
-    // leave orphaned wrap fragments in history.
+    // Push the cursor's logical line predecessors into history so that the
+    // cursor's logical line sits at the bottom of the visible region.
+    // After a SIGWINCH the shell uses ESC[nA + ESC[J to redraw the prompt;
+    // ESC[J only erases the visible region, so rows already in scrollback
+    // (history) are unaffected and their content is preserved across resize.
     const int defaultHistoryCount = qMax(0, reflowedLines.size() - rows);
-    // The cursor's logical line occupies reflowedLines[cursorLogicalLineStartRow..cursorRow].
-    // Only reduce historyCount if the entire logical line fits in visible rows.
     const int cursorLinePhysicalRows = cursorResolved
         ? (reflowedCursor.row - cursorLogicalLineStartRow + 1)
         : 0;
     const int historyCount = (cursorResolved && cursorLinePhysicalRows <= rows)
-        ? qMin(defaultHistoryCount, cursorLogicalLineStartRow)
+        ? qMax(defaultHistoryCount, cursorLogicalLineStartRow)
         : defaultHistoryCount;
     m_historyLines = reflowedLines.first(historyCount);
     m_visibleLines = reflowedLines.mid(historyCount);

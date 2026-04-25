@@ -5,6 +5,9 @@
 
 #include <QFont>
 #include <QFontMetricsF>
+#include <QInputMethodEvent>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QTimer>
 #include <QWheelEvent>
@@ -147,17 +150,48 @@ QFont buildFont(const QString &family, int pixelSize)
 QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
     , m_resizeDebounceTimer(new QTimer(this))
+    , m_selectionAutoScrollTimer(new QTimer(this))
+    , m_clickResetTimer(new QTimer(this))
 {
     setOpaquePainting(true);
-    setAcceptedMouseButtons(Qt::NoButton);
+    setAcceptedMouseButtons(Qt::LeftButton);
+    setFlag(QQuickItem::ItemAcceptsInputMethod, true);
+    setAcceptHoverEvents(false);
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
     });
+
     m_resizeDebounceTimer->setSingleShot(true);
     m_resizeDebounceTimer->setInterval(kResizeDebounceIntervalMs);
     connect(m_resizeDebounceTimer, &QTimer::timeout, this, [this]() {
         syncTerminalSize();
     });
+
+    // 点击连击重置：360ms 内无新点击则归零
+    m_clickResetTimer->setSingleShot(true);
+    m_clickResetTimer->setInterval(360);
+    connect(m_clickResetTimer, &QTimer::timeout, this, [this]() {
+        m_clickStreak = 0;
+        m_lastClickRow = -1;
+        m_lastClickColumn = -1;
+    });
+
+    // 选区超出边界时自动滚动，35ms 一次
+    m_selectionAutoScrollTimer->setSingleShot(false);
+    m_selectionAutoScrollTimer->setInterval(35);
+    connect(m_selectionAutoScrollTimer, &QTimer::timeout, this, [this]() {
+        if (!m_terminal || m_autoScrollDirection == 0) {
+            m_selectionAutoScrollTimer->stop();
+            return;
+        }
+        const qreal overflow = m_autoScrollDirection > 0
+            ? qMax<qreal>(0.0, -m_dragY)
+            : qMax<qreal>(0.0, m_dragY - height());
+        const int rowsPerTick = qMax(1, static_cast<int>(std::ceil(overflow / qMax<qreal>(1.0, m_cellHeight))));
+        m_terminal->scrollByLines(m_autoScrollDirection * rowsPerTick);
+        updateSelectionFromDrag(m_dragX, m_dragY);
+    });
+
     updateMetrics();
 }
 
@@ -447,6 +481,199 @@ void QTermQuickItem::wheelEvent(QWheelEvent *event)
     m_terminal->scrollByLines(deltaRows);
     emit wheelScrolled(m_terminal->scrollOffset());
     event->accept();
+}
+
+// ── 键盘事件 ──────────────────────────────────────────────────────────────
+
+void QTermQuickItem::keyPressEvent(QKeyEvent *event)
+{
+    if (!m_terminal) {
+        QQuickPaintedItem::keyPressEvent(event);
+        return;
+    }
+
+    // Cmd+C / Ctrl+C 优先检查选区复制
+    if (event->matches(QKeySequence::Copy)) {
+        QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
+        const QString text = surfaceModel ? surfaceModel->selectedText() : QString();
+        emit copyRequested(text);
+        event->accept();
+        return;
+    }
+
+    // 有任何可见按键时回到底部
+    if (m_terminal->scrollOffset() > 0)
+        m_terminal->scrollToBottom();
+
+    m_terminal->sendKey(event->key(), event->text());
+    event->accept();
+}
+
+// ── IME / CJK 输入 ────────────────────────────────────────────────────────
+
+QVariant QTermQuickItem::inputMethodQuery(Qt::InputMethodQuery query) const
+{
+    switch (query) {
+    case Qt::ImEnabled:
+        return true;
+    case Qt::ImCursorRectangle: {
+        if (!m_terminal) return QVariant();
+        QTermSurfaceModel *sm = m_terminal->surfaceModel();
+        if (!sm) return QVariant();
+        return QRectF(sm->cursorColumn() * m_cellWidth,
+                      sm->cursorRow() * m_cellHeight,
+                      m_cellWidth,
+                      m_cellHeight);
+    }
+    default:
+        return QQuickPaintedItem::inputMethodQuery(query);
+    }
+}
+
+void QTermQuickItem::inputMethodEvent(QInputMethodEvent *event)
+{
+    if (!m_terminal) {
+        QQuickPaintedItem::inputMethodEvent(event);
+        return;
+    }
+
+    // commit string: IME 确认输入，发送给终端（等同于粘贴）
+    const QString commit = event->commitString();
+    if (!commit.isEmpty()) {
+        if (m_terminal->scrollOffset() > 0)
+            m_terminal->scrollToBottom();
+        m_terminal->sendPaste(commit);
+    }
+
+    // preedit（输入法预输入）由 Qt 平台插件在候选框中显示，无需我们额外处理
+    event->accept();
+}
+
+// ── 鼠标事件 ──────────────────────────────────────────────────────────────
+
+void QTermQuickItem::mousePressEvent(QMouseEvent *event)
+{
+    if (!m_terminal || event->button() != Qt::LeftButton) {
+        QQuickPaintedItem::mousePressEvent(event);
+        return;
+    }
+
+    forceActiveFocus(Qt::MouseFocusReason);
+
+    const int row = rowAtPosition(event->position().y());
+    const int col = columnAtPosition(event->position().x());
+
+    // 连击检测
+    if (m_clickResetTimer->isActive() && m_lastClickRow == row && m_lastClickColumn == col)
+        m_clickStreak += 1;
+    else
+        m_clickStreak = 1;
+
+    m_lastClickRow = row;
+    m_lastClickColumn = col;
+    m_clickResetTimer->start();
+
+    if (m_clickStreak >= 3) {
+        // 三击：选整逻辑行
+        m_selectionAnchorRow = -1;
+        m_selectionAnchorColumn = -1;
+        m_suppressSelectionRelease = true;
+        m_autoScrollDirection = 0;
+        m_selectionAutoScrollTimer->stop();
+        m_terminal->selectLogicalLineAt(row);
+        event->accept();
+        return;
+    }
+
+    m_selectionAnchorRow = row;
+    m_selectionAnchorColumn = col;
+    m_dragX = event->position().x();
+    m_dragY = event->position().y();
+    m_suppressSelectionRelease = false;
+    m_autoScrollDirection = 0;
+    m_selectionAutoScrollTimer->stop();
+    m_terminal->clearSelection();
+    event->accept();
+}
+
+void QTermQuickItem::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (!m_terminal || event->button() != Qt::LeftButton) {
+        QQuickPaintedItem::mouseDoubleClickEvent(event);
+        return;
+    }
+
+    forceActiveFocus(Qt::MouseFocusReason);
+
+    // 双击：选词
+    m_selectionAnchorRow = -1;
+    m_selectionAnchorColumn = -1;
+    m_autoScrollDirection = 0;
+    m_selectionAutoScrollTimer->stop();
+    m_terminal->selectWordAt(rowAtPosition(event->position().y()),
+                             columnAtPosition(event->position().x()));
+    event->accept();
+}
+
+void QTermQuickItem::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!(event->buttons() & Qt::LeftButton) || m_suppressSelectionRelease
+        || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0) {
+        QQuickPaintedItem::mouseMoveEvent(event);
+        return;
+    }
+
+    m_dragX = event->position().x();
+    m_dragY = event->position().y();
+    updateSelectionFromDrag(m_dragX, m_dragY);
+
+    // 判断是否需要自动滚动
+    if (m_dragY < 0)
+        m_autoScrollDirection = 1;   // 超出上边界 → 向上滚
+    else if (m_dragY > height())
+        m_autoScrollDirection = -1;  // 超出下边界 → 向下滚
+    else
+        m_autoScrollDirection = 0;
+
+    if (m_autoScrollDirection != 0 && !m_selectionAutoScrollTimer->isActive())
+        m_selectionAutoScrollTimer->start();
+    else if (m_autoScrollDirection == 0)
+        m_selectionAutoScrollTimer->stop();
+
+    event->accept();
+}
+
+void QTermQuickItem::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton) {
+        QQuickPaintedItem::mouseReleaseEvent(event);
+        return;
+    }
+
+    m_autoScrollDirection = 0;
+    m_selectionAutoScrollTimer->stop();
+
+    if (m_suppressSelectionRelease) {
+        m_suppressSelectionRelease = false;
+        event->accept();
+        return;
+    }
+
+    updateSelectionFromDrag(event->position().x(), event->position().y());
+    m_selectionAnchorRow = -1;
+    m_selectionAnchorColumn = -1;
+    event->accept();
+}
+
+void QTermQuickItem::updateSelectionFromDrag(qreal x, qreal y)
+{
+    if (!m_terminal || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0)
+        return;
+
+    const int row = rowAtPosition(y);
+    const int col = qMin(m_terminal->columns(),
+                         columnAtPosition(x) + 1);
+    m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn, row, col);
 }
 
 void QTermQuickItem::reconnectSurfaceModel()

@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <QQuickPaintedItem>
 #include <QString>
+#include <QTimer>
 
 #include <QTerm/QTermTerminal.h>
 
@@ -59,6 +60,9 @@ public:
 
     void paint(QPainter *painter) override;
 
+    // IME support
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+
 signals:
     void terminalChanged();
     void fontChanged();
@@ -66,9 +70,17 @@ signals:
     void paletteChanged();
     void cursorOpacityChanged();
     void wheelScrolled(int scrollOffset);
+    // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
+    void copyRequested(const QString &text);
 
 protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
@@ -77,6 +89,9 @@ private:
     void updateMetrics();
     void scheduleTerminalSizeSync();
     void syncTerminalSize();
+
+    // 根据当前拖拽坐标更新选区（供拖拽和 auto-scroll 共用）
+    void updateSelectionFromDrag(qreal x, qreal y);
 
     QPointer<QTermTerminal> m_terminal;
     QMetaObject::Connection m_surfaceSizeConnection;
@@ -94,6 +109,22 @@ private:
     QColor m_selectionColor = QColor(QStringLiteral("#214f76"));
     QColor m_cursorColor = QColor(QStringLiteral("#d7fbe0"));
     qreal m_cursorOpacity = 1.0;
+
+    // ── 鼠标 / 选区内部状态 ───────────────────────────────────────────────
+    QTimer *m_selectionAutoScrollTimer = nullptr;
+    QTimer *m_clickResetTimer = nullptr;
+
+    int m_clickStreak = 0;
+    int m_lastClickRow = -1;
+    int m_lastClickColumn = -1;
+
+    int m_selectionAnchorRow = -1;
+    int m_selectionAnchorColumn = -1;
+    bool m_suppressSelectionRelease = false;
+
+    qreal m_dragX = 0.0;
+    qreal m_dragY = 0.0;
+    int m_autoScrollDirection = 0; // +1 = 向上, -1 = 向下
 };
 
 } // namespace QTerm
