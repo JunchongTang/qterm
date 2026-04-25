@@ -643,7 +643,7 @@ void QTermSessionTest::terminalPreservesAllPromptLinesAcrossRepeatedWidthOscilla
     //    to narrow (~50px) and back, repeated 3-5 times. Eventually some
     //    prompt lines disappear — 5 lines become 2."
     //
-    // This test drives QTermTerminal (the same path as QTermQuickItem) and
+    // This test drives QTermTerminal (the same path as QTermQuickPaintedItem) and
     // simulates the full interaction:
     //   1. Feed 5 prompt lines as if printed by a real shell session.
     //   2. Repeatedly oscillate the terminal width (wide→narrow→wide).
@@ -715,7 +715,7 @@ void QTermSessionTest::terminalPreservesAllPromptLinesWhenResizeDebouncedBeforeR
 {
     // Reproduces the real-world bug more precisely:
     //
-    // When QTermQuickItem calls setTerminalSize synchronously on every geometry
+    // When QTermQuickPaintedItem calls setTerminalSize synchronously on every geometry
     // change (no debounce), the buffer is reflowed many times during a single
     // drag gesture. The PTY backend debounces TIOCSWINSZ, so the shell only
     // gets ONE SIGWINCH at the end. The shell then redraws at the *final* width,
@@ -749,7 +749,7 @@ void QTermSessionTest::terminalPreservesAllPromptLinesWhenResizeDebouncedBeforeR
     // ONE shell SIGWINCH redraw at the final size, then drag back.
     for (int cycle = 0; cycle < 3; ++cycle) {
         // Pixel-by-pixel narrowing: each step is a setTerminalSize call
-        // as QTermQuickItem fires on every geometryChange.
+        // as QTermQuickPaintedItem fires on every geometryChange.
         // We simulate this with a few representative intermediate widths
         // (the real drag would have tens of steps, one per pixel column).
         for (int w = 75; w >= 35; w -= 5) {
@@ -820,7 +820,7 @@ void QTermSessionTest::terminalPreservesZshStyledPromptAcrossWidthOscillation()
     // Repeat the user's drag gesture 5 times (matching "3-5 times" in bug report).
     for (int cycle = 0; cycle < 5; ++cycle) {
         // Simulate pixel-by-pixel drag from 120 → ~50 cols.
-        // The buffer reflows at every step (QTermQuickItem is synchronous now).
+        // The buffer reflows at every step (QTermQuickPaintedItem is synchronous now).
         for (int w = 110; w >= 50; w -= 10) {
             terminal.setTerminalSize(w, 24);
         }

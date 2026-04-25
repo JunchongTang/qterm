@@ -38,44 +38,6 @@ ApplicationWindow {
     color: "#f5f5f7"
     title: root.terminal.title.length > 0 ? root.terminal.title : "QTerm"
 
-    function scrollBarThumbSize() {
-        const totalRows = root.terminal.surfaceModel.rows + root.terminal.maxScrollOffset
-        if (totalRows <= 0)
-            return 1.0
-
-        return Math.max(0.08, Math.min(1.0, root.terminal.surfaceModel.rows / totalRows))
-    }
-
-    function scrollBarPosition() {
-        if (root.terminal.maxScrollOffset <= 0)
-            return 0.0
-
-        const trackSpan = Math.max(0.0, 1.0 - root.scrollBarThumbSize())
-        if (trackSpan <= 0.0)
-            return 0.0
-
-        return trackSpan * ((root.terminal.maxScrollOffset - root.terminal.scrollOffset) / root.terminal.maxScrollOffset)
-    }
-
-    function scrollToOffset(targetOffset) {
-        const boundedOffset = Math.max(0, Math.min(root.terminal.maxScrollOffset, Math.round(targetOffset)))
-        const deltaRows = boundedOffset - root.terminal.scrollOffset
-        if (deltaRows !== 0)
-            root.terminal.scrollByLines(deltaRows)
-    }
-
-    function scrollOffsetFromBarPosition(position, size) {
-        if (root.terminal.maxScrollOffset <= 0)
-            return 0
-
-        const trackSpan = Math.max(0.0, 1.0 - size)
-        if (trackSpan <= 0.0)
-            return 0
-
-        const normalized = Math.max(0.0, Math.min(1.0, position / trackSpan))
-        return root.terminal.maxScrollOffset * (1.0 - normalized)
-    }
-
     function sessionStateLabel(state) {
         switch (state) {
         case 0:
@@ -223,7 +185,7 @@ ApplicationWindow {
                 opacity: root.bellFlashOpacity
             }
 
-            QTermQuickItem {
+            QTermQuickPaintedItem {
                 id: terminalView
 
                 anchors.fill: parent
@@ -257,13 +219,13 @@ ApplicationWindow {
                 orientation: Qt.Vertical
                 policy: root.terminal.maxScrollOffset > 0 ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                 active: hovered || pressed || root.terminal.maxScrollOffset > 0
-                size: root.scrollBarThumbSize()
-                position: root.scrollBarPosition()
+                size: terminalView.scrollSize
+                position: terminalView.scrollPosition
                 hoverEnabled: true
 
                 onPositionChanged: {
                     if (pressed)
-                        root.scrollToOffset(root.scrollOffsetFromBarPosition(position, size))
+                        terminalView.scrollPosition = position
                 }
 
                 contentItem: Rectangle {

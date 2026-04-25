@@ -1,6 +1,6 @@
 qt_add_library(qterm STATIC
     ../include/QTerm/QTermLocalPtyBackend.h
-    ../include/QTerm/QTermQuickItem.h
+    ../include/QTerm/QTermQuickPaintedItem.h
     ../include/QTerm/QTermSurfaceModel.h
     ../include/QTerm/QTermSession.h
     ../include/QTerm/QTermSessionBackend.h
@@ -26,7 +26,7 @@ qt_add_library(qterm STATIC
     core/QTermTextParser.cpp
     core/QTermSurfaceModel.cpp
     core/QTermTerminal.cpp
-    quick/QTermQuickItem.cpp
+    quick/QTermQuickPaintedItem.cpp
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp

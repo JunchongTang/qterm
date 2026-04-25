@@ -12,7 +12,7 @@
 
 namespace QTerm {
 
-class QTermQuickItem : public QQuickPaintedItem
+class QTermQuickPaintedItem : public QQuickPaintedItem
 {
     Q_OBJECT
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
@@ -25,8 +25,11 @@ class QTermQuickItem : public QQuickPaintedItem
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
-    Q_PROPERTY(QTerm::QTermQuickItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
+    Q_PROPERTY(QTerm::QTermQuickPaintedItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
+    // 标准化滚动属性，直接对接 QML ScrollBar 的 position / size
+    Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
+    Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
 
 public:
     // 光标内建形状枚举。设置后使用对应的默认渲染；设置 cursorDelegate 可完全自定义。
@@ -37,7 +40,7 @@ public:
     };
     Q_ENUM(CursorStyle)
 
-    explicit QTermQuickItem(QQuickItem *parent = nullptr);
+    explicit QTermQuickPaintedItem(QQuickItem *parent = nullptr);
 
     QTermTerminal *terminal() const noexcept;
     void setTerminal(QTermTerminal *terminal);
@@ -72,6 +75,11 @@ public:
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
 
+    // ScrollBar 对接：position/size 均为标准化 [0..1]，position=0 对应顶部
+    qreal scrollPosition() const noexcept;
+    void setScrollPosition(qreal position);
+    qreal scrollSize() const noexcept;
+
     Q_INVOKABLE int rowAtPosition(qreal y) const;
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
@@ -89,6 +97,7 @@ signals:
     void cursorOpacityChanged();
     void cursorStyleChanged();
     void cursorDelegateChanged();
+    void scrollChanged();
     void wheelScrolled(int scrollOffset);
     // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
     void copyRequested(const QString &text);
@@ -116,6 +125,9 @@ private:
     // 创建 / 更新 delegate item 的位置、尺寸、透明度
     void recreateCursorDelegateItem();
     void updateCursorDelegateGeometry();
+
+    // terminal viewport 信号连接（scroll 属性用）
+    QMetaObject::Connection m_viewportConnection;
 
     QPointer<QTermTerminal> m_terminal;
     QMetaObject::Connection m_surfaceSizeConnection;

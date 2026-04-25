@@ -1,4 +1,4 @@
-#include <QTerm/QTermQuickItem.h>
+#include <QTerm/QTermQuickPaintedItem.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
@@ -149,7 +149,7 @@ QFont buildFont(const QString &family, int pixelSize)
 
 } // namespace
 
-QTermQuickItem::QTermQuickItem(QQuickItem *parent)
+QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
     , m_resizeDebounceTimer(new QTimer(this))
     , m_selectionAutoScrollTimer(new QTimer(this))
@@ -198,31 +198,37 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     updateMetrics();
 }
 
-QTermTerminal *QTermQuickItem::terminal() const noexcept
+QTermTerminal *QTermQuickPaintedItem::terminal() const noexcept
 {
     return m_terminal;
 }
 
-void QTermQuickItem::setTerminal(QTermTerminal *terminal)
+void QTermQuickPaintedItem::setTerminal(QTermTerminal *terminal)
 {
     if (m_terminal == terminal) {
         return;
     }
 
     disconnectSurfaceModel();
+    QObject::disconnect(m_viewportConnection);
     m_terminal = terminal;
     reconnectSurfaceModel();
+    if (m_terminal) {
+        m_viewportConnection = connect(m_terminal, &QTermTerminal::viewportChanged,
+                                       this, [this]() { emit scrollChanged(); });
+    }
     scheduleTerminalSizeSync();
     update();
     emit terminalChanged();
+    emit scrollChanged();
 }
 
-QString QTermQuickItem::fontFamily() const
+QString QTermQuickPaintedItem::fontFamily() const
 {
     return m_fontFamily;
 }
 
-void QTermQuickItem::setFontFamily(const QString &fontFamily)
+void QTermQuickPaintedItem::setFontFamily(const QString &fontFamily)
 {
     if (m_fontFamily == fontFamily) {
         return;
@@ -234,12 +240,12 @@ void QTermQuickItem::setFontFamily(const QString &fontFamily)
     emit fontChanged();
 }
 
-int QTermQuickItem::fontPixelSize() const noexcept
+int QTermQuickPaintedItem::fontPixelSize() const noexcept
 {
     return m_fontPixelSize;
 }
 
-void QTermQuickItem::setFontPixelSize(int fontPixelSize)
+void QTermQuickPaintedItem::setFontPixelSize(int fontPixelSize)
 {
     const int boundedPixelSize = qMax(1, fontPixelSize);
     if (m_fontPixelSize == boundedPixelSize) {
@@ -252,22 +258,22 @@ void QTermQuickItem::setFontPixelSize(int fontPixelSize)
     emit fontChanged();
 }
 
-qreal QTermQuickItem::cellWidth() const noexcept
+qreal QTermQuickPaintedItem::cellWidth() const noexcept
 {
     return m_cellWidth;
 }
 
-qreal QTermQuickItem::cellHeight() const noexcept
+qreal QTermQuickPaintedItem::cellHeight() const noexcept
 {
     return m_cellHeight;
 }
 
-QColor QTermQuickItem::foregroundColor() const
+QColor QTermQuickPaintedItem::foregroundColor() const
 {
     return m_foregroundColor;
 }
 
-void QTermQuickItem::setForegroundColor(const QColor &foregroundColor)
+void QTermQuickPaintedItem::setForegroundColor(const QColor &foregroundColor)
 {
     if (m_foregroundColor == foregroundColor) {
         return;
@@ -278,12 +284,12 @@ void QTermQuickItem::setForegroundColor(const QColor &foregroundColor)
     emit paletteChanged();
 }
 
-QColor QTermQuickItem::backgroundColor() const
+QColor QTermQuickPaintedItem::backgroundColor() const
 {
     return m_backgroundColor;
 }
 
-void QTermQuickItem::setBackgroundColor(const QColor &backgroundColor)
+void QTermQuickPaintedItem::setBackgroundColor(const QColor &backgroundColor)
 {
     if (m_backgroundColor == backgroundColor) {
         return;
@@ -294,12 +300,12 @@ void QTermQuickItem::setBackgroundColor(const QColor &backgroundColor)
     emit paletteChanged();
 }
 
-QColor QTermQuickItem::selectionColor() const
+QColor QTermQuickPaintedItem::selectionColor() const
 {
     return m_selectionColor;
 }
 
-void QTermQuickItem::setSelectionColor(const QColor &selectionColor)
+void QTermQuickPaintedItem::setSelectionColor(const QColor &selectionColor)
 {
     if (m_selectionColor == selectionColor) {
         return;
@@ -310,12 +316,12 @@ void QTermQuickItem::setSelectionColor(const QColor &selectionColor)
     emit paletteChanged();
 }
 
-QColor QTermQuickItem::cursorColor() const
+QColor QTermQuickPaintedItem::cursorColor() const
 {
     return m_cursorColor;
 }
 
-void QTermQuickItem::setCursorColor(const QColor &cursorColor)
+void QTermQuickPaintedItem::setCursorColor(const QColor &cursorColor)
 {
     if (m_cursorColor == cursorColor) {
         return;
@@ -326,12 +332,12 @@ void QTermQuickItem::setCursorColor(const QColor &cursorColor)
     emit paletteChanged();
 }
 
-qreal QTermQuickItem::cursorOpacity() const noexcept
+qreal QTermQuickPaintedItem::cursorOpacity() const noexcept
 {
     return m_cursorOpacity;
 }
 
-void QTermQuickItem::setCursorOpacity(qreal cursorOpacity)
+void QTermQuickPaintedItem::setCursorOpacity(qreal cursorOpacity)
 {
     const qreal boundedOpacity = qBound(0.0, cursorOpacity, 1.0);
     if (qFuzzyCompare(m_cursorOpacity, boundedOpacity)) {
@@ -344,7 +350,7 @@ void QTermQuickItem::setCursorOpacity(qreal cursorOpacity)
     emit cursorOpacityChanged();
 }
 
-int QTermQuickItem::rowAtPosition(qreal y) const
+int QTermQuickPaintedItem::rowAtPosition(qreal y) const
 {
     const int rowCount = m_terminal ? m_terminal->rows() : 0;
     if (rowCount <= 0) {
@@ -355,7 +361,7 @@ int QTermQuickItem::rowAtPosition(qreal y) const
     return qBound(0, row, rowCount - 1);
 }
 
-int QTermQuickItem::columnAtPosition(qreal x) const
+int QTermQuickPaintedItem::columnAtPosition(qreal x) const
 {
     const int columnCount = m_terminal ? m_terminal->columns() : 0;
     if (columnCount <= 0) {
@@ -366,7 +372,7 @@ int QTermQuickItem::columnAtPosition(qreal x) const
     return qBound(0, column, columnCount);
 }
 
-void QTermQuickItem::paint(QPainter *painter)
+void QTermQuickPaintedItem::paint(QPainter *painter)
 {
     painter->fillRect(boundingRect(), m_backgroundColor);
 
@@ -467,7 +473,7 @@ void QTermQuickItem::paint(QPainter *painter)
     }
 }
 
-void QTermQuickItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry)
+void QTermQuickPaintedItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry)
 {
     QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
     if (newGeometry.size() != oldGeometry.size()) {
@@ -475,7 +481,7 @@ void QTermQuickItem::geometryChange(const QRectF &newGeometry, const QRectF &old
     }
 }
 
-void QTermQuickItem::wheelEvent(QWheelEvent *event)
+void QTermQuickPaintedItem::wheelEvent(QWheelEvent *event)
 {
     if (!m_terminal) {
         QQuickPaintedItem::wheelEvent(event);
@@ -499,12 +505,13 @@ void QTermQuickItem::wheelEvent(QWheelEvent *event)
 
     m_terminal->scrollByLines(deltaRows);
     emit wheelScrolled(m_terminal->scrollOffset());
+    emit scrollChanged();
     event->accept();
 }
 
 // ── 键盘事件 ──────────────────────────────────────────────────────────────
 
-void QTermQuickItem::keyPressEvent(QKeyEvent *event)
+void QTermQuickPaintedItem::keyPressEvent(QKeyEvent *event)
 {
     if (!m_terminal) {
         QQuickPaintedItem::keyPressEvent(event);
@@ -530,7 +537,7 @@ void QTermQuickItem::keyPressEvent(QKeyEvent *event)
 
 // ── IME / CJK 输入 ────────────────────────────────────────────────────────
 
-QVariant QTermQuickItem::inputMethodQuery(Qt::InputMethodQuery query) const
+QVariant QTermQuickPaintedItem::inputMethodQuery(Qt::InputMethodQuery query) const
 {
     switch (query) {
     case Qt::ImEnabled:
@@ -549,7 +556,7 @@ QVariant QTermQuickItem::inputMethodQuery(Qt::InputMethodQuery query) const
     }
 }
 
-void QTermQuickItem::inputMethodEvent(QInputMethodEvent *event)
+void QTermQuickPaintedItem::inputMethodEvent(QInputMethodEvent *event)
 {
     if (!m_terminal) {
         QQuickPaintedItem::inputMethodEvent(event);
@@ -570,7 +577,7 @@ void QTermQuickItem::inputMethodEvent(QInputMethodEvent *event)
 
 // ── 鼠标事件 ──────────────────────────────────────────────────────────────
 
-void QTermQuickItem::mousePressEvent(QMouseEvent *event)
+void QTermQuickPaintedItem::mousePressEvent(QMouseEvent *event)
 {
     if (!m_terminal || event->button() != Qt::LeftButton) {
         QQuickPaintedItem::mousePressEvent(event);
@@ -615,7 +622,7 @@ void QTermQuickItem::mousePressEvent(QMouseEvent *event)
     event->accept();
 }
 
-void QTermQuickItem::mouseDoubleClickEvent(QMouseEvent *event)
+void QTermQuickPaintedItem::mouseDoubleClickEvent(QMouseEvent *event)
 {
     if (!m_terminal || event->button() != Qt::LeftButton) {
         QQuickPaintedItem::mouseDoubleClickEvent(event);
@@ -634,7 +641,7 @@ void QTermQuickItem::mouseDoubleClickEvent(QMouseEvent *event)
     event->accept();
 }
 
-void QTermQuickItem::mouseMoveEvent(QMouseEvent *event)
+void QTermQuickPaintedItem::mouseMoveEvent(QMouseEvent *event)
 {
     if (!(event->buttons() & Qt::LeftButton) || m_suppressSelectionRelease
         || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0) {
@@ -662,7 +669,7 @@ void QTermQuickItem::mouseMoveEvent(QMouseEvent *event)
     event->accept();
 }
 
-void QTermQuickItem::mouseReleaseEvent(QMouseEvent *event)
+void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton) {
         QQuickPaintedItem::mouseReleaseEvent(event);
@@ -684,7 +691,7 @@ void QTermQuickItem::mouseReleaseEvent(QMouseEvent *event)
     event->accept();
 }
 
-void QTermQuickItem::updateSelectionFromDrag(qreal x, qreal y)
+void QTermQuickPaintedItem::updateSelectionFromDrag(qreal x, qreal y)
 {
     if (!m_terminal || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0)
         return;
@@ -695,7 +702,7 @@ void QTermQuickItem::updateSelectionFromDrag(qreal x, qreal y)
     m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn, row, col);
 }
 
-void QTermQuickItem::reconnectSurfaceModel()
+void QTermQuickPaintedItem::reconnectSurfaceModel()
 {
     if (!m_terminal) {
         return;
@@ -725,7 +732,7 @@ void QTermQuickItem::reconnectSurfaceModel()
     });
 }
 
-void QTermQuickItem::disconnectSurfaceModel()
+void QTermQuickPaintedItem::disconnectSurfaceModel()
 {
     QObject::disconnect(m_surfaceSizeConnection);
     QObject::disconnect(m_surfaceCursorConnection);
@@ -734,7 +741,7 @@ void QTermQuickItem::disconnectSurfaceModel()
     QObject::disconnect(m_surfaceDestroyedConnection);
 }
 
-void QTermQuickItem::updateMetrics()
+void QTermQuickPaintedItem::updateMetrics()
 {
     const QFontMetricsF metrics(buildFont(m_fontFamily, m_fontPixelSize));
     const qreal previousCellWidth = m_cellWidth;
@@ -749,7 +756,7 @@ void QTermQuickItem::updateMetrics()
     }
 }
 
-void QTermQuickItem::scheduleTerminalSizeSync()
+void QTermQuickPaintedItem::scheduleTerminalSizeSync()
 {
     if (!m_terminal) {
         return;
@@ -764,7 +771,7 @@ void QTermQuickItem::scheduleTerminalSizeSync()
     m_resizeDebounceTimer->start();
 }
 
-void QTermQuickItem::syncTerminalSize()
+void QTermQuickPaintedItem::syncTerminalSize()
 {
     if (!m_terminal || width() <= 0.0 || height() <= 0.0) {
         return;
@@ -775,9 +782,41 @@ void QTermQuickItem::syncTerminalSize()
     m_terminal->setTerminalSize(columns, rows);
 }
 
+// ── Scroll position / size ────────────────────────────────────────────────
+
+qreal QTermQuickPaintedItem::scrollSize() const noexcept
+{
+    if (!m_terminal) return 1.0;
+    const int rows = m_terminal->rows();
+    const int total = rows + m_terminal->maxScrollOffset();
+    if (total <= 0) return 1.0;
+    return qMax(0.08, qMin(1.0, static_cast<qreal>(rows) / total));
+}
+
+qreal QTermQuickPaintedItem::scrollPosition() const noexcept
+{
+    if (!m_terminal || m_terminal->maxScrollOffset() <= 0) return 0.0;
+    const qreal trackSpan = 1.0 - scrollSize();
+    if (trackSpan <= 0.0) return 0.0;
+    // scrollOffset=0 → 底部 → position=trackSpan；scrollOffset=max → 顶部 → position=0
+    return trackSpan * (1.0 - static_cast<qreal>(m_terminal->scrollOffset())
+                                   / m_terminal->maxScrollOffset());
+}
+
+void QTermQuickPaintedItem::setScrollPosition(qreal position)
+{
+    if (!m_terminal || m_terminal->maxScrollOffset() <= 0) return;
+    const qreal trackSpan = 1.0 - scrollSize();
+    if (trackSpan <= 0.0) return;
+    const qreal normalized = qBound(0.0, position / trackSpan, 1.0);
+    const int targetOffset = qRound(m_terminal->maxScrollOffset() * (1.0 - normalized));
+    const int delta = targetOffset - m_terminal->scrollOffset();
+    if (delta != 0) m_terminal->scrollByLines(delta);
+}
+
 // ── componentComplete ─────────────────────────────────────────────────────
 
-void QTermQuickItem::componentComplete()
+void QTermQuickPaintedItem::componentComplete()
 {
     QQuickPaintedItem::componentComplete();
     // 组件完成后 QML context 已就绪，可以实例化 delegate
@@ -787,12 +826,12 @@ void QTermQuickItem::componentComplete()
 
 // ── CursorStyle ────────────────────────────────────────────────────────────
 
-QTermQuickItem::CursorStyle QTermQuickItem::cursorStyle() const noexcept
+QTermQuickPaintedItem::CursorStyle QTermQuickPaintedItem::cursorStyle() const noexcept
 {
     return m_cursorStyle;
 }
 
-void QTermQuickItem::setCursorStyle(CursorStyle style)
+void QTermQuickPaintedItem::setCursorStyle(CursorStyle style)
 {
     if (m_cursorStyle == style)
         return;
@@ -803,12 +842,12 @@ void QTermQuickItem::setCursorStyle(CursorStyle style)
 
 // ── CursorDelegate ────────────────────────────────────────────────────────
 
-QQmlComponent *QTermQuickItem::cursorDelegate() const noexcept
+QQmlComponent *QTermQuickPaintedItem::cursorDelegate() const noexcept
 {
     return m_cursorDelegate;
 }
 
-void QTermQuickItem::setCursorDelegate(QQmlComponent *delegate)
+void QTermQuickPaintedItem::setCursorDelegate(QQmlComponent *delegate)
 {
     if (m_cursorDelegate == delegate)
         return;
@@ -830,7 +869,7 @@ void QTermQuickItem::setCursorDelegate(QQmlComponent *delegate)
     emit cursorDelegateChanged();
 }
 
-void QTermQuickItem::recreateCursorDelegateItem()
+void QTermQuickPaintedItem::recreateCursorDelegateItem()
 {
     if (m_cursorDelegateItem) {
         m_cursorDelegateItem->setParentItem(nullptr);
@@ -857,7 +896,7 @@ void QTermQuickItem::recreateCursorDelegateItem()
     updateCursorDelegateGeometry();
 }
 
-void QTermQuickItem::updateCursorDelegateGeometry()
+void QTermQuickPaintedItem::updateCursorDelegateGeometry()
 {
     if (!m_cursorDelegateItem)
         return;

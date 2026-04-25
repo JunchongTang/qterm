@@ -1,6 +1,6 @@
 #include <QtTest>
 
-#include <QTerm/QTermQuickItem.h>
+#include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermTerminal.h>
 
 #include <cmath>
@@ -11,16 +11,16 @@ namespace QTerm {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: compute expected columns/rows from pixel size and cell metrics.
-// Mirrors QTermQuickItem::syncTerminalSize() exactly.
+// Mirrors QTermQuickPaintedItem::syncTerminalSize() exactly.
 // ─────────────────────────────────────────────────────────────────────────────
-static int expectedColumns(const QTermQuickItem &item, qreal pixelWidth)
+static int expectedColumns(const QTermQuickPaintedItem &item, qreal pixelWidth)
 {
     constexpr int kMinimumColumns = 20;
     return qMax(kMinimumColumns,
                 static_cast<int>(std::floor(pixelWidth / qMax<qreal>(1.0, item.cellWidth()))));
 }
 
-static int expectedRows(const QTermQuickItem &item, qreal pixelHeight)
+static int expectedRows(const QTermQuickPaintedItem &item, qreal pixelHeight)
 {
     constexpr int kMinimumRows = 8;
     return qMax(kMinimumRows,
@@ -30,7 +30,7 @@ static int expectedRows(const QTermQuickItem &item, qreal pixelHeight)
 // ─────────────────────────────────────────────────────────────────────────────
 // Test suite
 // ─────────────────────────────────────────────────────────────────────────────
-class QTermQuickItemTest : public QObject
+class QTermQuickPaintedItemTest : public QObject
 {
     Q_OBJECT
 
@@ -40,19 +40,19 @@ private slots:
     void clampsSizeToMinimumColumnsAndRows();
 
     // The core resize-regression bug: prompt lines must survive repeated
-    // width oscillation driven through QTermQuickItem geometry changes.
+    // width oscillation driven through QTermQuickPaintedItem geometry changes.
     void preservesPromptLinesAcrossWidthOscillation();
     void preservesPromptLinesWhenShellUsesAbsoluteColumnMoveViaQuickItem();
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QTermQuickItem::geometryChange must call syncTerminalSize() synchronously
+// QTermQuickPaintedItem::geometryChange must call syncTerminalSize() synchronously
 // (no debounce) so the terminal column count reflects the new width immediately.
 // ─────────────────────────────────────────────────────────────────────────────
-void QTermQuickItemTest::syncsSizeImmediatelyOnGeometryChange()
+void QTermQuickPaintedItemTest::syncsSizeImmediatelyOnGeometryChange()
 {
     QTermTerminal terminal;
-    QTermQuickItem item;
+    QTermQuickPaintedItem item;
 
     item.setFontFamily(u"Courier New"_s);
     item.setFontPixelSize(14);
@@ -78,10 +78,10 @@ void QTermQuickItemTest::syncsSizeImmediatelyOnGeometryChange()
 // Pixel widths that produce fewer than kMinimumColumns columns must still yield
 // at least kMinimumColumns.
 // ─────────────────────────────────────────────────────────────────────────────
-void QTermQuickItemTest::clampsSizeToMinimumColumnsAndRows()
+void QTermQuickPaintedItemTest::clampsSizeToMinimumColumnsAndRows()
 {
     QTermTerminal terminal;
-    QTermQuickItem item;
+    QTermQuickPaintedItem item;
 
     item.setFontFamily(u"Courier New"_s);
     item.setFontPixelSize(14);
@@ -94,18 +94,18 @@ void QTermQuickItemTest::clampsSizeToMinimumColumnsAndRows()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reproduces the user-reported bug end-to-end through QTermQuickItem:
+// Reproduces the user-reported bug end-to-end through QTermQuickPaintedItem:
 //
 //   "I press Enter 5 times, then drag the window width from ~1120 px to ~50 px
 //    and back, repeated 3-5 times. Eventually some prompt lines disappear."
 //
-// Driving geometry changes through QTermQuickItem means the resize path is
+// Driving geometry changes through QTermQuickPaintedItem means the resize path is
 // exactly the same as the real application.
 // ─────────────────────────────────────────────────────────────────────────────
-void QTermQuickItemTest::preservesPromptLinesAcrossWidthOscillation()
+void QTermQuickPaintedItemTest::preservesPromptLinesAcrossWidthOscillation()
 {
     QTermTerminal terminal;
-    QTermQuickItem item;
+    QTermQuickPaintedItem item;
 
     // Font pixel size chosen so that the ~80-char prompt fits at wide width
     // but wraps at narrow width.  cellWidth ≈ 8-9 px @ 14 px.
@@ -134,7 +134,7 @@ void QTermQuickItemTest::preservesPromptLinesAcrossWidthOscillation()
 
     // ── Simulate the user dragging the window 5 times ──────────────────────
     // Each "drag" is represented as a sequence of width changes exactly as
-    // QTermQuickItem fires them from geometryChange — one call per pixel column.
+    // QTermQuickPaintedItem fires them from geometryChange — one call per pixel column.
     // We step by 10 px to keep the test fast.
     for (int cycle = 0; cycle < 5; ++cycle) {
         // Drag narrow (1120 → 50 px step by step).
@@ -160,10 +160,10 @@ void QTermQuickItemTest::preservesPromptLinesAcrossWidthOscillation()
 // Same as above but the shell uses CSI G (ESC[1G, absolute column move) instead
 // of CR for its redraw — the bug that was actually causing data loss in practice.
 // ─────────────────────────────────────────────────────────────────────────────
-void QTermQuickItemTest::preservesPromptLinesWhenShellUsesAbsoluteColumnMoveViaQuickItem()
+void QTermQuickPaintedItemTest::preservesPromptLinesWhenShellUsesAbsoluteColumnMoveViaQuickItem()
 {
     QTermTerminal terminal;
-    QTermQuickItem item;
+    QTermQuickPaintedItem item;
 
     item.setFontFamily(u"Courier New"_s);
     item.setFontPixelSize(14);
@@ -205,6 +205,6 @@ void QTermQuickItemTest::preservesPromptLinesWhenShellUsesAbsoluteColumnMoveViaQ
 
 } // namespace QTerm
 
-QTEST_MAIN(QTerm::QTermQuickItemTest)
+QTEST_MAIN(QTerm::QTermQuickPaintedItemTest)
 
-#include "QTermQuickItemTest.moc"
+#include "QTermQuickPaintedItemTest.moc"
