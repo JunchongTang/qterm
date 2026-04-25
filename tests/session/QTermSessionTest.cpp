@@ -567,13 +567,17 @@ void QTermSessionTest::terminalKeepsSelectedTextWhenResizePushesSelectionIntoHis
 
     terminal.setTerminalSize(10, 2);
 
+    // With the qMax history policy, "alpha beta" is pushed to scrollback
+    // during both narrow and wide reflows (qMax keeps the cursor's logical
+    // line at visible bottom). The selection text is preserved; to see it
+    // the user scrolls up into scrollback history.
     QVERIFY(terminal.surfaceModel()->hasSelection());
-    QVERIFY(terminal.surfaceModel()->selectionVisible());
+    QVERIFY(!terminal.surfaceModel()->selectionVisible());
     QCOMPARE(terminal.surfaceModel()->selectedText(), "alpha"_L1);
-    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), 0);
+    QCOMPARE(terminal.surfaceModel()->selectionStartRow(), -1);
     QCOMPARE(terminal.surfaceModel()->selectionStartColumn(), 0);
-    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), 0);
-    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 5);
+    QCOMPARE(terminal.surfaceModel()->selectionEndRow(), -1);
+    QCOMPARE(terminal.surfaceModel()->selectionEndColumn(), 0);
 }
 
 void QTermSessionTest::surfaceModelProjectsSelectionVisibility()

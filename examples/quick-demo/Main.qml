@@ -14,15 +14,6 @@ ApplicationWindow {
     property real cursorBlinkOpacity: 1.0
     property string terminalFontFamily: "Menlo"
     property int terminalFontPixelSize: 18
-    property int selectionAnchorRow: -1
-    property int selectionAnchorColumn: -1
-    property real selectionDragX: 0
-    property real selectionDragY: 0
-    property int selectionAutoScrollDirection: 0
-    property int clickStreak: 0
-    property int lastClickRow: -1
-    property int lastClickColumn: -1
-    property bool suppressSelectionRelease: false
     property int bellCount: 0
     property int copyCount: 0
     property string lastBackendError: ""
@@ -46,56 +37,6 @@ ApplicationWindow {
     visible: true
     color: "#f5f5f7"
     title: root.terminal.title.length > 0 ? root.terminal.title : "QTerm"
-
-    function updateSelectionAt(x, y) {
-        if (root.selectionAnchorRow < 0 || root.selectionAnchorColumn < 0)
-            return
-
-        const row = terminalView.rowAtPosition(y)
-        const column = Math.min(root.terminal.surfaceModel.columns, terminalView.columnAtPosition(x) + 1)
-        root.terminal.setSelectionRange(root.selectionAnchorRow,
-                                        root.selectionAnchorColumn,
-                                        row,
-                                        column)
-    }
-
-    function updateSelectionAutoScroll(x, y, pressed) {
-        root.selectionDragX = x
-        root.selectionDragY = y
-
-        if (!pressed || root.suppressSelectionRelease || root.selectionAnchorRow < 0 || root.selectionAnchorColumn < 0) {
-            root.selectionAutoScrollDirection = 0
-            selectionAutoScrollTimer.stop()
-            return
-        }
-
-        if (y < 0) {
-            root.selectionAutoScrollDirection = 1
-        } else if (y > terminalView.height) {
-            root.selectionAutoScrollDirection = -1
-        } else {
-            root.selectionAutoScrollDirection = 0
-        }
-
-        if (root.selectionAutoScrollDirection === 0) {
-            selectionAutoScrollTimer.stop()
-            return
-        }
-
-        if (!selectionAutoScrollTimer.running)
-            selectionAutoScrollTimer.start()
-    }
-
-    function selectionAutoScrollRowsPerTick() {
-        if (root.selectionAutoScrollDirection === 0)
-            return 0
-
-        const overflow = root.selectionAutoScrollDirection > 0
-            ? Math.max(0, -root.selectionDragY)
-            : Math.max(0, root.selectionDragY - terminalView.height)
-        const rowHeight = Math.max(1, terminalView.cellHeight)
-        return root.selectionAutoScrollDirection * Math.max(1, Math.ceil(overflow / rowHeight))
-    }
 
     function scrollBarThumbSize() {
         const totalRows = root.terminal.surfaceModel.rows + root.terminal.maxScrollOffset
@@ -209,35 +150,6 @@ ApplicationWindow {
         }
     }
 
-    Timer {
-        id: clickResetTimer
-
-        interval: 360
-        repeat: false
-        onTriggered: {
-            root.clickStreak = 0
-            root.lastClickRow = -1
-            root.lastClickColumn = -1
-        }
-    }
-
-    Timer {
-        id: selectionAutoScrollTimer
-
-        interval: 35
-        repeat: true
-        onTriggered: {
-            const deltaRows = root.selectionAutoScrollRowsPerTick()
-            if (deltaRows === 0) {
-                stop()
-                return
-            }
-
-            root.terminal.scrollByLines(deltaRows)
-            root.updateSelectionAt(root.selectionDragX, root.selectionDragY)
-        }
-    }
-
     background: Rectangle {
         color: "#f5f5f7"
 
@@ -328,102 +240,10 @@ ApplicationWindow {
                         : "Returned to bottom"
                 }
 
-                Keys.onPressed: event => {
-                    if (event.matches(StandardKey.Copy)) {
-                        const selectedText = root.terminal.surfaceModel.selectedText
-                        root.clipboardBridge.copyText(selectedText)
-                        root.copyCount += 1
-                        root.statusNote = selectedText.length > 0 ? "Copied selection" : "Copy requested"
-                        event.accepted = true
-                        return
-                    }
-
-                    if (root.terminal.scrollOffset > 0)
-                        root.terminal.scrollToBottom()
-
-                    root.statusNote = event.text.length > 0 ? "Input forwarded" : "Control key forwarded"
-                    root.terminal.sendKey(event.key, event.text)
-                    event.accepted = true
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton
-                    preventStealing: true
-
-                    onPressed: mouse => {
-                        terminalView.forceActiveFocus()
-                        const row = terminalView.rowAtPosition(mouse.y)
-                        const column = terminalView.columnAtPosition(mouse.x)
-                        if (clickResetTimer.running && root.lastClickRow === row && root.lastClickColumn === column)
-                            root.clickStreak += 1
-                        else
-                            root.clickStreak = 1
-
-                        root.lastClickRow = row
-                        root.lastClickColumn = column
-                        clickResetTimer.restart()
-
-                        if (root.clickStreak >= 3) {
-                            root.selectionAnchorRow = -1
-                            root.selectionAnchorColumn = -1
-                            root.suppressSelectionRelease = true
-                            root.selectionAutoScrollDirection = 0
-                            selectionAutoScrollTimer.stop()
-                            root.terminal.selectLogicalLineAt(row)
-                            root.statusNote = root.terminal.surfaceModel.hasSelection ? "Logical line selected" : "Selection cleared"
-                            return
-                        }
-
-                        root.selectionAnchorRow = row
-                        root.selectionAnchorColumn = column
-                        root.selectionDragX = mouse.x
-                        root.selectionDragY = mouse.y
-                        root.suppressSelectionRelease = false
-                        root.selectionAutoScrollDirection = 0
-                        selectionAutoScrollTimer.stop()
-                        root.terminal.clearSelection()
-                        root.statusNote = "Selecting"
-                    }
-
-                    onDoubleClicked: mouse => {
-                        terminalView.forceActiveFocus()
-                        root.selectionAnchorRow = -1
-                        root.selectionAnchorColumn = -1
-                        root.selectionAutoScrollDirection = 0
-                        selectionAutoScrollTimer.stop()
-                        root.terminal.selectWordAt(terminalView.rowAtPosition(mouse.y), terminalView.columnAtPosition(mouse.x))
-                        root.statusNote = root.terminal.surfaceModel.hasSelection ? "Word selected" : "Selection cleared"
-                    }
-
-                    onPositionChanged: mouse => {
-                        if (pressed && !root.suppressSelectionRelease) {
-                            root.updateSelectionAt(mouse.x, mouse.y)
-                            root.updateSelectionAutoScroll(mouse.x, mouse.y, pressed)
-                        }
-                    }
-
-                    onReleased: mouse => {
-                        root.selectionAutoScrollDirection = 0
-                        selectionAutoScrollTimer.stop()
-                        if (root.suppressSelectionRelease) {
-                            root.suppressSelectionRelease = false
-                            return
-                        }
-
-                        root.updateSelectionAt(mouse.x, mouse.y)
-                        root.selectionAnchorRow = -1
-                        root.selectionAnchorColumn = -1
-                        root.statusNote = root.terminal.surfaceModel.hasSelection ? "Selection updated" : "Selection cleared"
-                    }
-
-                    onCanceled: {
-                        root.selectionAutoScrollDirection = 0
-                        selectionAutoScrollTimer.stop()
-                        root.selectionAnchorRow = -1
-                        root.selectionAnchorColumn = -1
-                        root.suppressSelectionRelease = false
-                    }
+                onCopyRequested: text => {
+                    root.clipboardBridge.copyText(text)
+                    root.copyCount += 1
+                    root.statusNote = text.length > 0 ? "Copied selection" : "Copy requested"
                 }
             }
 
