@@ -16,6 +16,7 @@
 //   3  Widen window   (zsh gets SIGWINCH)
 //   4  Wait 2 s, print buffer after zsh redraw at wide width  → next cycle
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -138,8 +139,14 @@ int main(int argc, char **argv)
     //   以上 CaptureBaseline..WaitWide 循环 kTotalCycles 次。
     const int kTotalCycles      = 5;
     const int kNarrowWidth      = 50;
-    const int kInitEnters       = 4;   // press Enter 4 times → 5 prompt lines visible
-    const int kResizeWaitMs     = 100; // ms to wait after each resize for zsh to redraw
+    const int kInitEnters       = 4;    // 发 Enter 次数，产生 kInitEnters+1 行 prompt 历史
+    const int kShellStartMs     = 1500; // 等待 zsh 启动并打印第一个 prompt 的时间
+    const int kEnterIntervalMs  = 80;   // 每次 sendKey(Enter) 之间的间隔
+    const int kAfterInitMs      = 100;  // 所有 Enter 发完后、拍基准快照前的等待
+    const int kBeforeNarrowMs   = 200;  // 拍完基准到开始缩窄前的等待（留给视觉观察）
+    const int kResizeWaitMs     = 300;  // 每次 resize 后等待 zsh 处理 SIGWINCH 并重绘的时间
+    const int kAfterNarrowMs    = 50;   // 打印缩窄后 buffer 到开始展宽前的等待
+    const int kNextCycleMs      = 50;   // 一轮结束后进入下一轮前的等待
     int       initSent          = 0;
 
     enum Phase { Startup = -1, Init, CaptureBaseline, Narrow, WaitNarrow, Widen, WaitWide };
@@ -162,8 +169,8 @@ int main(int argc, char **argv)
 
         case Startup:
             // 等待 zsh 完成启动并打印第一个 prompt
-            qDebug().noquote() << u"Shell started — waiting 3 s for first prompt…"_s;
-            timer.setInterval(300);
+            qDebug().noquote() << u"Shell started — waiting %1 ms for first prompt…"_s.arg(kShellStartMs);
+            timer.setInterval(kShellStartMs);
             phase = Init;
             break;
 
@@ -175,13 +182,13 @@ int main(int argc, char **argv)
                     << u"  → sendKey(Enter) %1/%2"_s.arg(initSent + 1).arg(kInitEnters);
                 terminal.sendKey(Qt::Key_Return, u"\r"_s);
                 ++initSent;
-                timer.setInterval(80);
+                timer.setInterval(kEnterIntervalMs);
             } else {
                 // Enter 全部发完，打印当前 buffer 确认已有 5 行 prompt
                 qDebug().noquote()
                     << u"Init done — buffer:"_s;
                 printBuffer(u"  "_s);
-                timer.setInterval(100);
+                timer.setInterval(kAfterInitMs);
                 phase = CaptureBaseline;
             }
             break;
@@ -193,7 +200,7 @@ int main(int argc, char **argv)
             qDebug().noquote()
                 << QString(u"──── Cycle %1 / %2 ────"_s).arg(cycle + 1).arg(kTotalCycles);
             printBuffer(u"Baseline (wide)"_s);
-            timer.setInterval(1000);
+            timer.setInterval(kBeforeNarrowMs);
             phase = Narrow;
             break;
 
@@ -215,7 +222,7 @@ int main(int argc, char **argv)
         case WaitNarrow:
             // 等待 kResizeWaitMs ms 后打印缩窄后的 buffer，供人工观察折行情况。
             printBuffer(u"After narrow redraw"_s);
-            timer.setInterval(100);
+            timer.setInterval(kAfterNarrowMs);
             phase = Widen;
             break;
 
@@ -253,9 +260,10 @@ int main(int argc, char **argv)
                             ? u"PASS ✓  Prompt intact across all resize cycles"_s
                             : u"FAIL ✗  %1 cycle(s) had prompt mismatch"_s.arg(failCount));
                 timer.stop();
+                QCoreApplication::quit();
             } else {
                 // 重新拍基准快照，进入下一轮
-                timer.setInterval(100);
+                timer.setInterval(kNextCycleMs);
                 phase = CaptureBaseline;
             }
             break;
