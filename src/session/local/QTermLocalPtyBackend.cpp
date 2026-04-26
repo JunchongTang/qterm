@@ -271,22 +271,15 @@ void QTermLocalPtyBackend::resize(int columns, int rows)
     m_columns = qMax(1, columns);
     m_rows = qMax(1, rows);
 
-#if defined(Q_OS_UNIX)
-    if (m_masterFd < 0) {
-        return;
-    }
-
-    // Debounce TIOCSWINSZ: store the latest size and apply it after the user
-    // stops dragging. This prevents the shell from receiving a SIGWINCH on
-    // every pixel of a drag, which would flood it with SIGWINCH signals and
-    // cause it to send stale redraws that arrive out-of-sync with the buffer.
-    // The buffer itself is reflowed synchronously (in QTermCore) so the visual
-    // update is immediate; only the PTY notification is deferred.
-    m_resizeDebounceTimer->start();
-#else
-    Q_UNUSED(columns);
-    Q_UNUSED(rows);
-#endif
+    // Apply TIOCSWINSZ immediately so the shell always sees the correct size.
+    // Debouncing is handled upstream (QTermQuickPaintedItem::geometryChange)
+    // which coalesces rapid drag-resize events before calling session.resize(),
+    // so SIGWINCH is only delivered once the user stops dragging.
+    // Having a second debounce here would mean TIOCSWINSZ fires 60 ms after the
+    // window first shows, which is long enough for the user to start a
+    // full-screen app like top(1) that queries TIOCGWINSZ at startup and ends
+    // up with the stale 80x24 initial PTY size.
+    applyPendingResize();
 }
 
 void QTermLocalPtyBackend::applyPendingResize()

@@ -27,7 +27,7 @@ namespace {
 constexpr int kMinimumColumns = 20;
 constexpr int kMinimumRows = 8;
 constexpr int kWheelScrollRowsPerStep = 3;
-constexpr int kResizeDebounceIntervalMs = 60;
+constexpr int kResizeDebounceIntervalMs = 30;
 
 QColor colorFromRgb(int rgb)
 {
@@ -479,7 +479,19 @@ void QTermQuickPaintedItem::geometryChange(const QRectF &newGeometry, const QRec
 {
     QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
     if (newGeometry.size() != oldGeometry.size()) {
-        syncTerminalSize();
+        // First time the item gets a real size (e.g. window just showed):
+        // sync immediately so the PTY receives TIOCSWINSZ before the user
+        // can interact with the shell. This prevents full-screen apps like
+        // top(1) from starting with the stale 80x24 default PTY size.
+        //
+        // Subsequent geometry changes (window drag): coalesce via debounce to
+        // avoid sending a SIGWINCH on every pixel, which would flood the shell
+        // with intermediate redraws and corrupt the buffer state.
+        if (oldGeometry.isEmpty()) {
+            syncTerminalSize();
+        } else {
+            scheduleTerminalSizeSync();
+        }
     }
 }
 
