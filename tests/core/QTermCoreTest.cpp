@@ -66,6 +66,9 @@ private slots:
     void supportsScrollDownRegion();
     void supportsEraseCharacters();
     void supportsLinePositionAbsolute();
+    void reportsDeviceStatusReport();
+    void reportsPrimaryDeviceAttributes();
+    void reportsSecondaryDeviceAttributes();
     void clearsState();
     void togglesMouseModeX10();
     void togglesMouseModeSGR();
@@ -1068,6 +1071,50 @@ void QTermCoreTest::supportsLinePositionAbsolute()
     // Clamp to last row when parameter exceeds terminal height.
     core.writePlainText("\x1b[99d"_L1);
     QCOMPARE(core.cursorState().row, 4);
+}
+
+void QTermCoreTest::reportsDeviceStatusReport()
+{
+    // CSI 6n must emit ESC[row;colR via outboundData.
+    QTermCore core;
+    core.setTerminalSize(10, 5);
+    core.writePlainText("\x1b[3;4H"_L1);  // cursor to row 3, col 4 (1-based)
+
+    QByteArray captured;
+    QObject::connect(&core, &QTermCore::outboundData, [&captured](const QByteArray &data) {
+        captured += data;
+    });
+
+    core.writePlainText("\x1b[6n"_L1);
+    QCOMPARE(captured, QByteArray("\x1b[3;4R"));
+}
+
+void QTermCoreTest::reportsPrimaryDeviceAttributes()
+{
+    // CSI c must emit ESC[?1;0c via outboundData.
+    QTermCore core;
+
+    QByteArray captured;
+    QObject::connect(&core, &QTermCore::outboundData, [&captured](const QByteArray &data) {
+        captured += data;
+    });
+
+    core.writePlainText("\x1b[c"_L1);
+    QCOMPARE(captured, QByteArray("\x1b[?1;0c"));
+}
+
+void QTermCoreTest::reportsSecondaryDeviceAttributes()
+{
+    // CSI >c must emit ESC[>0;0;0c via outboundData.
+    QTermCore core;
+
+    QByteArray captured;
+    QObject::connect(&core, &QTermCore::outboundData, [&captured](const QByteArray &data) {
+        captured += data;
+    });
+
+    core.writePlainText("\x1b[>c"_L1);
+    QCOMPARE(captured, QByteArray("\x1b[>0;0;0c"));
 }
 
 } // namespace QTerm

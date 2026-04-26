@@ -27,6 +27,7 @@ public:
     bool isAlternateScreenActive() const noexcept;
     void setBellHandler(const std::function<void()> &handler);
     void setWindowTitleHandler(const std::function<void(const QString &)> &handler);
+    void setOutboundHandler(const std::function<void(const QByteArray &)> &handler);
 
     void print(const QString &text);
     void lineFeed();
@@ -56,6 +57,9 @@ public:
     void bell();
     void setPrivateModes(const QVector<int> &parameters, bool enabled);
     void setWindowTitle(const QString &title);
+    void deviceStatusReport();
+    void deviceAttributes();
+    void secondaryDeviceAttributes();
 
 private:
     QTermScreenState &currentScreen() noexcept;
@@ -72,6 +76,7 @@ private:
     QTermModeState &m_modeState;
     std::function<void()> m_bellHandler;
     std::function<void(const QString &)> m_windowTitleHandler;
+    std::function<void(const QByteArray &)> m_outboundHandler;
 };
 
 } // namespace QTerm
