@@ -107,6 +107,10 @@ private slots:
     void supportsDecScusr();
     // OSC 7 current working directory
     void supportsOsc7CurrentDirectory();
+    // OSC 52 clipboard write
+    void supportsOsc52ClipboardWrite();
+    // OSC 133 shell integration
+    void supportsOsc133ShellIntegration();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -1742,6 +1746,60 @@ void QTerm::QTermCoreTest::supportsOsc7CurrentDirectory()
     // ST terminator (ESC \) also works
     core.writePlainText(u"\x1b]7;file:///tmp\x1b\\"_s);
     QCOMPARE(core.currentDirectory(), u"file:///tmp"_s);
+}
+
+void QTerm::QTermCoreTest::supportsOsc52ClipboardWrite()
+{
+    QTermCore core;
+    QStringList received;
+    QObject::connect(&core, &QTermCore::clipboardWriteRequested,
+                     [&received](const QString &text) { received.append(text); });
+
+    // Base64 for "Hello"
+    core.writePlainText(u"\x1b]52;c;SGVsbG8=\x07"_s);
+    QCOMPARE(received, QStringList{u"Hello"_s});
+
+    // Read request ("?") must be silently ignored
+    received.clear();
+    core.writePlainText(u"\x1b]52;c;?\x07"_s);
+    QVERIFY(received.isEmpty());
+
+    // ST terminator variant
+    // Base64 for "World"
+    core.writePlainText(u"\x1b]52;c;V29ybGQ=\x1b\\"_s);
+    QCOMPARE(received, QStringList{u"World"_s});
+}
+
+void QTerm::QTermCoreTest::supportsOsc133ShellIntegration()
+{
+    QTermCore core;
+    QCOMPARE(core.shellZone(), 0);
+    QCOMPARE(core.lastExitCode(), -1);
+
+    // A: prompt start
+    core.writePlainText(u"\x1b]133;A\x07"_s);
+    QCOMPARE(core.shellZone(), 1);
+
+    // B: command input start
+    core.writePlainText(u"\x1b]133;B\x07"_s);
+    QCOMPARE(core.shellZone(), 2);
+
+    // C: output start
+    core.writePlainText(u"\x1b]133;C\x07"_s);
+    QCOMPARE(core.shellZone(), 3);
+
+    // D without exit code: success (exit 0)
+    core.writePlainText(u"\x1b]133;D\x07"_s);
+    QCOMPARE(core.shellZone(), 0);
+    QCOMPARE(core.lastExitCode(), 0);
+
+    // Full cycle: A B C D;exitcode
+    core.writePlainText(u"\x1b]133;A\x07"_s);
+    core.writePlainText(u"\x1b]133;B\x07"_s);
+    core.writePlainText(u"\x1b]133;C\x07"_s);
+    core.writePlainText(u"\x1b]133;D;127\x07"_s);
+    QCOMPARE(core.shellZone(), 0);
+    QCOMPARE(core.lastExitCode(), 127);
 }
 
 QTEST_MAIN(QTerm::QTermCoreTest)

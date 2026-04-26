@@ -23,6 +23,10 @@ public:
     int columns() const noexcept;
     QString title() const;
     QString currentDirectory() const;
+    // OSC 133: current shell zone (0=Unknown, 1=Prompt, 2=CommandInput, 3=Output)
+    int shellZone() const noexcept;
+    // OSC 133: exit code of the last command (-1 = not yet known)
+    int lastExitCode() const noexcept;
     QString debugPlainText() const;
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
@@ -46,6 +50,8 @@ signals:
     void sizeChanged();
     void titleChanged(const QString &title);
     void currentDirectoryChanged(const QString &url);
+    void shellZoneChanged();
+    void clipboardWriteRequested(const QString &text);
     void debugPlainTextChanged();
     void cursorStateChanged();
     void modeStateChanged();
@@ -60,6 +66,8 @@ private:
     QTermTextParser m_textParser;
     QString m_title;
     QString m_currentDirectory;
+    int m_shellZone = 0;    // ShellZone::Unknown
+    int m_lastExitCode = -1;
     // OSC 8 hyperlink registry: id -> URL (id 0 is reserved for "no link")
     QHash<int, QString> m_hyperlinkUrls;
     int m_nextHyperlinkId = 1;
