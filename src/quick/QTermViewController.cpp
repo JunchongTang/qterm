@@ -564,8 +564,21 @@ void QTermViewController::updateSelectionFromDrag(qreal x, qreal y)
     if (!m_terminal || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0)
         return;
     const int row = rowAtPosition(y);
-    const int col = qMin(m_terminal->columns(), columnAtPosition(x) + 1);
-    m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn, row, col);
+    const int col = columnAtPosition(x);
+    // Selection uses half-open intervals [start, end). To include the character under
+    // the cursor at both the anchor and the drag end, adjust based on drag direction:
+    // dragging forward → anchor is left edge, drag end is right edge (+1)
+    // dragging backward → anchor is right edge (+1), drag end is left edge
+    const bool dragForward = row > m_selectionAnchorRow ||
+        (row == m_selectionAnchorRow && col >= m_selectionAnchorColumn);
+    if (dragForward) {
+        m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn,
+                                      row, qMin(m_terminal->columns(), col + 1));
+    } else {
+        m_terminal->setSelectionRange(m_selectionAnchorRow,
+                                      qMin(m_terminal->columns(), m_selectionAnchorColumn + 1),
+                                      row, col);
+    }
 }
 
 } // namespace QTerm
