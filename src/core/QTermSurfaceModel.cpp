@@ -127,7 +127,10 @@ QVariantList QTermSurfaceModel::visibleLineRuns() const
 
 QString QTermSurfaceModel::plainText() const
 {
-    return m_plainText;
+    if (!m_selectionController) {
+        return {};
+    }
+    return m_selectionController->debugPlainText();
 }
 
 void QTermSurfaceModel::setSize(int columns, int rows)
@@ -234,16 +237,6 @@ void QTermSurfaceModel::setVisibleLineRuns(const QVariantList &visibleLineRuns)
 
     m_visibleLineRuns = visibleLineRuns;
     emit visibleLineRunsChanged();
-}
-
-void QTermSurfaceModel::setPlainText(const QString &plainText)
-{
-    if (m_plainText == plainText) {
-        return;
-    }
-
-    m_plainText = plainText;
-    emit plainTextChanged();
 }
 
 } // namespace QTerm

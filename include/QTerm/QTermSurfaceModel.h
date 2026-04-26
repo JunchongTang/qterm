@@ -49,7 +49,7 @@ public:
     QString selectedText() const;
     QStringList visibleLines() const;
     QVariantList visibleLineRuns() const;
-    QString plainText() const;
+    QString plainText() const;  // on-demand; delegates to terminal debugPlainText()
 
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
@@ -72,7 +72,6 @@ private:
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
     void setVisibleLines(const QStringList &visibleLines);
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
-    void setPlainText(const QString &plainText);
 
     int m_rows = 24;
     int m_columns = 80;
@@ -89,7 +88,6 @@ private:
     QString m_selectedText;
     QStringList m_visibleLines;
     QVariantList m_visibleLineRuns;
-    QString m_plainText;
 };
 
 } // namespace QTerm
