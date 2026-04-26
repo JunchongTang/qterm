@@ -189,7 +189,6 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
         for (const QVariant &rv : lineRuns) {
             const QVariantMap run = rv.toMap();
             const int columns = qtermRunColumns(run);
-            const QRectF runRect(x, y, columns * cellW, cellH);
 
             QFont runFont = req.baseFont;
             runFont.setBold(run.value(QStringLiteral("bold")).toBool());
@@ -208,10 +207,11 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             }
             fg.setAlphaF(run.value(QStringLiteral("dim")).toBool() ? 0.65 : 1.0);
             painter->setPen(fg);
-            painter->drawText(runRect.adjusted(0.0, textTopOffset, 0.0, 0.0),
-                              Qt::AlignLeft | Qt::AlignTop,
-                              run.value(QStringLiteral("text")).toString());
-            x += runRect.width();
+            painter->drawText(
+                QRectF(x, y + textTopOffset, columns * cellW, cellH),
+                Qt::AlignLeft | Qt::AlignTop | Qt::TextDontClip,
+                run.value(QStringLiteral("text")).toString());
+            x += columns * cellW;
         }
     }
 

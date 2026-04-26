@@ -72,9 +72,6 @@ QTermTerminal *QTermQuickPaintedItem::terminal() const noexcept
 
 void QTermQuickPaintedItem::setTerminal(QTermTerminal *terminal)
 {
-    // Geometry is already stored in controller; pass current size so
-    // syncTerminalSize() runs correctly right after setTerminal.
-    m_controller->notifyGeometryChanged(width(), height());
     m_controller->setTerminal(terminal);
     update();
 }
