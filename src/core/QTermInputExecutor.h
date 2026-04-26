@@ -46,6 +46,10 @@ public:
     void deleteCharacters(int count);
     void insertLines(int count);
     void deleteLines(int count);
+    void scrollUpRegion(int count);
+    void scrollDownRegion(int count);
+    void eraseCharacters(int count);
+    void linePositionAbsolute(int row);
     void setScrollRegion(int top, int bottom);
     void saveCursor();
     void restoreCursor();

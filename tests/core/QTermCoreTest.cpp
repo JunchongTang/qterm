@@ -62,6 +62,10 @@ private slots:
     void preservesContentAcrossRepeatedNarrowWithRedraw();
     void preservesContentAcrossOscillatingResize();
     void preservesContentWhenResizeInterleavesMidRedraw();
+    void supportsScrollUpRegion();
+    void supportsScrollDownRegion();
+    void supportsEraseCharacters();
+    void supportsLinePositionAbsolute();
     void clearsState();
     void togglesMouseModeX10();
     void togglesMouseModeSGR();
@@ -997,6 +1001,73 @@ void QTermCoreTest::encodesMouseEventSGR()
     // y = 10 + 1 = 11
     const QByteArray expected = QByteArray("\x1b[6;6;11M");
     QCOMPARE(encoded, expected);
+}
+
+void QTermCoreTest::supportsScrollUpRegion()
+{
+    // CSI S scrolls the scroll region up: deletes n lines at the top of the
+    // region and inserts blank lines at the bottom. Cursor stays put.
+    QTermCore core;
+    core.setTerminalSize(5, 4);
+    // Fill four rows.
+    core.writePlainText("aaa\r\nbbb\r\nccc\r\nddd"_L1);
+    // Set scroll region rows 1-3 (0-based), position cursor somewhere inside.
+    core.writePlainText("\x1b[2;4r"_L1);  // rows 2-4 (1-based)
+    core.writePlainText("\x1b[3;1H"_L1);  // cursor row 3, col 1
+    // Scroll region up by 1: row 2 ('bbb') disappears, blank inserted at row 4.
+    core.writePlainText("\x1b[S"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "aaa"_L1);  // outside region, untouched
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "ccc"_L1);  // former row 3
+    QCOMPARE(core.buffer().lineAt(2).plainText(), "ddd"_L1);  // former row 4
+    QCOMPARE(core.buffer().lineAt(3).plainText(), QString());  // new blank
+    // Cursor must not have moved (stays at row 2 after region shift).
+    QCOMPARE(core.cursorState().row, 2);
+}
+
+void QTermCoreTest::supportsScrollDownRegion()
+{
+    // CSI T scrolls the scroll region down: inserts n blank lines at the top
+    // of the region, pushing existing lines down. Cursor stays put.
+    QTermCore core;
+    core.setTerminalSize(5, 4);
+    core.writePlainText("aaa\r\nbbb\r\nccc\r\nddd"_L1);
+    core.writePlainText("\x1b[2;4r"_L1);  // scroll region rows 2-4 (1-based)
+    core.writePlainText("\x1b[2;1H"_L1);  // cursor row 2, col 1
+    // Scroll region down by 1: blank inserted at row 2, 'ddd' pushed out.
+    core.writePlainText("\x1b[T"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "aaa"_L1);  // outside, untouched
+    QCOMPARE(core.buffer().lineAt(1).plainText(), QString());  // new blank
+    QCOMPARE(core.buffer().lineAt(2).plainText(), "bbb"_L1);  // former row 2
+    QCOMPARE(core.buffer().lineAt(3).plainText(), "ccc"_L1);  // former row 3
+    QCOMPARE(core.cursorState().row, 1);
+}
+
+void QTermCoreTest::supportsEraseCharacters()
+{
+    // CSI X erases n characters at the cursor position without shifting content
+    // or moving the cursor.
+    QTermCore core;
+    core.setTerminalSize(10, 3);
+    core.writePlainText("abcdefgh"_L1);
+    core.writePlainText("\x1b[1;3H"_L1);  // cursor to row 1, col 3 (0-based: row 0, col 2)
+    core.writePlainText("\x1b[3X"_L1);    // erase 3 chars: positions 2,3,4 become blank
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "ab   fgh"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 2);  // cursor did not move
+}
+
+void QTermCoreTest::supportsLinePositionAbsolute()
+{
+    // CSI d moves the cursor to an absolute row while keeping the current column.
+    QTermCore core;
+    core.setTerminalSize(10, 5);
+    core.writePlainText("\x1b[1;5H"_L1);  // cursor to row 1, col 5 (0-based: 0,4)
+    core.writePlainText("\x1b[4d"_L1);    // move to row 4 (1-based), keep col
+    QCOMPARE(core.cursorState().row, 3);
+    QCOMPARE(core.cursorState().column, 4);
+    // Clamp to last row when parameter exceeds terminal height.
+    core.writePlainText("\x1b[99d"_L1);
+    QCOMPARE(core.cursorState().row, 4);
 }
 
 } // namespace QTerm
