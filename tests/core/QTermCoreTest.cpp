@@ -1,6 +1,7 @@
 #include <QtTest>
 
 #include "core/QTermCore.h"
+#include "core/QTermInputEncoder.h"
 
 using namespace Qt::StringLiterals;
 
@@ -62,6 +63,10 @@ private slots:
     void preservesContentAcrossOscillatingResize();
     void preservesContentWhenResizeInterleavesMidRedraw();
     void clearsState();
+    void togglesMouseModeX10();
+    void togglesMouseModeSGR();
+    void encodesMouseEventX10();
+    void encodesMouseEventSGR();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -929,6 +934,69 @@ void QTermCoreTest::clearsState(){
     QCOMPARE(core.debugPlainText(), QString());
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 0);
+}
+
+void QTermCoreTest::togglesMouseModeX10()
+{
+    QTermCore core;
+    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+
+    // 启用 X10 鼠标模式：ESC[?1000h
+    core.writePlainText("\x1b[?1000h"_L1);
+    QCOMPARE(core.modeState().mouseMode, MouseMode::X10);
+
+    // 禁用鼠标模式：ESC[?1000l
+    core.writePlainText("\x1b[?1000l"_L1);
+    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+}
+
+void QTermCoreTest::togglesMouseModeSGR()
+{
+    QTermCore core;
+    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+
+    // 启用 SGR 鼠标模式：ESC[?1006h
+    core.writePlainText("\x1b[?1006h"_L1);
+    QCOMPARE(core.modeState().mouseMode, MouseMode::SGR);
+
+    // 禁用鼠标模式：ESC[?1006l
+    core.writePlainText("\x1b[?1006l"_L1);
+    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+}
+
+void QTermCoreTest::encodesMouseEventX10()
+{
+    QTermCore core;
+    core.writePlainText("\x1b[?1000h"_L1);  // 启用 X10 模式
+
+    // 编码鼠标按下事件：左键按下在 (5, 10)
+    const QByteArray encoded = QTermInputEncoder::encodeMouse(
+        10, 5, Qt::LeftButton, Qt::NoModifier, true, core.modeState());
+    
+    // X10 格式：ESC[M<button><x><y>
+    // button = 0 + 0x20 = 0x20 (' ')
+    // x = 5 + 33 = 38 = 0x26 ('&')
+    // y = 10 + 33 = 43 = 0x2B ('+')
+    const QByteArray expected = QByteArray("\x1b[M ") + QByteArray(reinterpret_cast<const char *>("\x26"), 1) +
+                                QByteArray(reinterpret_cast<const char *>("\x2B"), 1);
+    QCOMPARE(encoded, expected);
+}
+
+void QTermCoreTest::encodesMouseEventSGR()
+{
+    QTermCore core;
+    core.writePlainText("\x1b[?1006h"_L1);  // 启用 SGR 模式
+
+    // 编码鼠标按下事件：右键按下在 (5, 10)，带 Shift 修饰符
+    const QByteArray encoded = QTermInputEncoder::encodeMouse(
+        10, 5, Qt::RightButton, Qt::ShiftModifier, true, core.modeState());
+    
+    // SGR 格式：ESC[<button>;<x>;<y>M
+    // button = 2 (右键) + 4 (Shift) = 6
+    // x = 5 + 1 = 6
+    // y = 10 + 1 = 11
+    const QByteArray expected = QByteArray("\x1b[6;6;11M");
+    QCOMPARE(encoded, expected);
 }
 
 } // namespace QTerm

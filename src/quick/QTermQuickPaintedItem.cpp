@@ -3,6 +3,8 @@
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
 
+#include "../core/QTermInputEncoder.h"
+
 #include <QFont>
 #include <QFontMetricsF>
 #include <QInputMethodEvent>
@@ -488,8 +490,29 @@ void QTermQuickPaintedItem::wheelEvent(QWheelEvent *event)
         return;
     }
 
-    int deltaRows = 0;
+    // 检查鼠标协议模式
+    const auto &modeState = m_terminal->modeState();
     const QPoint angleDelta = event->angleDelta();
+    
+    if (modeState.mouseMode != MouseMode::Disabled && angleDelta.y() != 0) {
+        // 鼠标协议启用：直接编码并转发滚轮事件
+        // 虚拟按钮码：64=向上，65=向下
+        const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
+        const QByteArray wheelSequence = QTermInputEncoder::encodeMouse(
+            rowAtPosition(event->position().y()),
+            columnAtPosition(event->position().x()),
+            static_cast<Qt::MouseButton>(wheelButton),  // 临时转换虚拟码
+            event->modifiers(), true, modeState);
+        
+        if (!wheelSequence.isEmpty()) {
+            m_terminal->feedText(QString::fromLatin1(wheelSequence));
+        }
+        event->accept();
+        return;
+    }
+
+    // 鼠标协议禁用或纵向滚轮无效：进行页面滚动
+    int deltaRows = 0;
     if (angleDelta.y() != 0) {
         const int stepCount = qMax(1, qAbs(angleDelta.y()) / 120);
         deltaRows = (angleDelta.y() > 0 ? 1 : -1) * stepCount * kWheelScrollRowsPerStep;
@@ -586,6 +609,18 @@ void QTermQuickPaintedItem::mousePressEvent(QMouseEvent *event)
 
     forceActiveFocus(Qt::MouseFocusReason);
 
+    // 检查鼠标协议模式
+    const auto &modeState = m_terminal->modeState();
+    if (modeState.mouseMode != MouseMode::Disabled) {
+        // 鼠标协议启用：转发鼠标事件
+        m_terminal->sendMouse(rowAtPosition(event->position().y()),
+                             columnAtPosition(event->position().x()),
+                             event->button(), event->modifiers(), true);
+        event->accept();
+        return;
+    }
+
+    // 鼠标协议禁用：进行文本选择
     const int row = rowAtPosition(event->position().y());
     const int col = columnAtPosition(event->position().x());
 
@@ -643,6 +678,25 @@ void QTermQuickPaintedItem::mouseDoubleClickEvent(QMouseEvent *event)
 
 void QTermQuickPaintedItem::mouseMoveEvent(QMouseEvent *event)
 {
+    if (!m_terminal) {
+        QQuickPaintedItem::mouseMoveEvent(event);
+        return;
+    }
+
+    // 检查鼠标协议模式
+    const auto &modeState = m_terminal->modeState();
+    if (modeState.mouseMode == MouseMode::AnyEvent ||
+        (modeState.mouseMode == MouseMode::Button && (event->buttons() & Qt::LeftButton))) {
+        // 鼠标协议启用且支持移动报告：转发鼠标移动事件
+        // 对于 Button 模式，只有按钮按下时才报告移动
+        m_terminal->sendMouse(rowAtPosition(event->position().y()),
+                             columnAtPosition(event->position().x()),
+                             Qt::NoButton, event->modifiers(), false);
+        event->accept();
+        return;
+    }
+
+    // 鼠标协议禁用或不支持移动：进行文本选择
     if (!(event->buttons() & Qt::LeftButton) || m_suppressSelectionRelease
         || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0) {
         QQuickPaintedItem::mouseMoveEvent(event);
@@ -676,6 +730,23 @@ void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
 
+    if (!m_terminal) {
+        QQuickPaintedItem::mouseReleaseEvent(event);
+        return;
+    }
+
+    // 检查鼠标协议模式
+    const auto &modeState = m_terminal->modeState();
+    if (modeState.mouseMode != MouseMode::Disabled) {
+        // 鼠标协议启用：转发鼠标释放事件
+        m_terminal->sendMouse(rowAtPosition(event->position().y()),
+                             columnAtPosition(event->position().x()),
+                             event->button(), event->modifiers(), false);
+        event->accept();
+        return;
+    }
+
+    // 鼠标协议禁用：完成文本选择
     m_autoScrollDirection = 0;
     m_selectionAutoScrollTimer->stop();
 

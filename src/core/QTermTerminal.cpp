@@ -2,6 +2,7 @@
 
 #include "QTermCore.h"
 #include "QTermSelectionModel.h"
+#include "QTermInputEncoder.h"
 
 #include <memory>
 #include <QString>
@@ -120,6 +121,11 @@ QTermSurfaceModel *QTermTerminal::surfaceModel() noexcept
     return &m_surfaceModel;
 }
 
+const QTermModeState &QTermTerminal::modeState() const noexcept
+{
+    return m_core->modeState();
+}
+
 void QTermTerminal::clear()
 {
     m_core->clear();
@@ -230,6 +236,18 @@ void QTermTerminal::sendKey(int key, const QString &text)
 void QTermTerminal::sendPaste(const QString &text)
 {
     m_core->sendPaste(text);
+}
+
+void QTermTerminal::sendMouse(int row, int column, int button, int modifiers, bool isPress)
+{
+    const Qt::MouseButton qtButton = static_cast<Qt::MouseButton>(button);
+    const Qt::KeyboardModifiers qtModifiers = static_cast<Qt::KeyboardModifiers>(modifiers);
+    const QByteArray mouseSequence = QTermInputEncoder::encodeMouse(
+        row, column, qtButton, qtModifiers, isPress, m_core->modeState());
+    
+    if (!mouseSequence.isEmpty()) {
+        feedText(QString::fromLatin1(mouseSequence));
+    }
 }
 
 void QTermTerminal::setSession(QTermSession *session)
