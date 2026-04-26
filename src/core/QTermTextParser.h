@@ -19,6 +19,7 @@ private:
         Escape,
         EscapeIntermediate,
         Csi,
+        CsiIntermediate, // after an intermediate byte (0x20–0x2F) inside CSI
         Osc,
         OscEscape,
     };
@@ -27,11 +28,13 @@ private:
     static QVector<int> parseCsiParameters(const QString &text);
     void handleGroundTextUnit(const QString &text, QTermInputExecutor &executor);
     void handleCsiFinal(bool privateMode, bool secondaryMode, QChar final, QTermInputExecutor &executor);
+    void handleCsiIntermediateFinal(QChar intermediate, QChar final, QTermInputExecutor &executor);
     void handleEscapeFinal(QChar final, QTermInputExecutor &executor);
     void handleOscTerminator(QTermInputExecutor &executor);
 
     State m_state = State::Ground;
     QString m_csiParameters;
+    QChar m_csiIntermediate;
     QString m_oscData;
     QChar m_pendingHighSurrogate;
     QChar m_escIntermediate;

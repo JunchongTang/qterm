@@ -75,6 +75,11 @@ bool QTermSurfaceModel::cursorVisible() const noexcept
     return m_cursorVisible;
 }
 
+int QTermSurfaceModel::cursorShape() const noexcept
+{
+    return m_cursorShape;
+}
+
 bool QTermSurfaceModel::hasSelection() const noexcept
 {
     return m_hasSelection;
@@ -136,15 +141,17 @@ void QTermSurfaceModel::setSize(int columns, int rows)
     emit sizeChanged();
 }
 
-void QTermSurfaceModel::setCursor(int row, int column, bool visible)
+void QTermSurfaceModel::setCursor(int row, int column, bool visible, int shape)
 {
-    if (m_cursorRow == row && m_cursorColumn == column && m_cursorVisible == visible) {
+    if (m_cursorRow == row && m_cursorColumn == column && m_cursorVisible == visible
+            && m_cursorShape == shape) {
         return;
     }
 
     m_cursorRow = row;
     m_cursorColumn = column;
     m_cursorVisible = visible;
+    m_cursorShape = shape;
     emit cursorChanged();
 }
 

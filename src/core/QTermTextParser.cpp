@@ -57,6 +57,10 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
         case State::Csi:
             if (character.isDigit() || character == u';' || character == u'?' || character == u'>') {
                 m_csiParameters.append(character);
+            } else if (character.unicode() >= 0x20 && character.unicode() <= 0x2F) {
+                // Intermediate byte (e.g. SP for DECSCUSR)
+                m_csiIntermediate = character;
+                m_state = State::CsiIntermediate;
             } else {
                 handleCsiFinal(m_csiParameters.startsWith(u'?'),
                                m_csiParameters.startsWith(u'>'),
@@ -64,6 +68,13 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 m_csiParameters.clear();
                 m_state = State::Ground;
             }
+            break;
+        case State::CsiIntermediate:
+            // Next non-intermediate character is the final byte.
+            handleCsiIntermediateFinal(m_csiIntermediate, character, executor);
+            m_csiParameters.clear();
+            m_csiIntermediate = QChar();
+            m_state = State::Ground;
             break;
         case State::Osc:
             if (character == u'\x07') {
@@ -265,6 +276,17 @@ void QTermTextParser::handleCsiFinal(bool privateMode, bool secondaryMode, QChar
     default:
         break;
     }
+}
+
+void QTermTextParser::handleCsiIntermediateFinal(QChar intermediate, QChar final,
+                                                 QTermInputExecutor &executor)
+{
+    if (intermediate == u' ' && final == u'q') {
+        // DECSCUSR: CSI n SP q — set cursor shape
+        const QVector<int> parameters = parseCsiParameters(m_csiParameters);
+        executor.setCursorShape(parameterAt(parameters, 0, 0));
+    }
+    // All other intermediate+final combinations are silently ignored.
 }
 
 void QTermTextParser::handleEscapeFinal(QChar final, QTermInputExecutor &executor)

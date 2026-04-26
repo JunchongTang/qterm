@@ -123,6 +123,7 @@ void QTermCore::writePlainText(const QString &text)
     });
     const MouseTracking prevMouseTracking = m_modeState.mouseTracking;
     const bool prevAlternate = m_modeState.alternateScreenActive;
+    const CursorShape prevCursorShape = m_modeState.cursorShape;
 
     m_textParser.parse(text, executor);
 
@@ -130,7 +131,8 @@ void QTermCore::writePlainText(const QString &text)
     emit cursorStateChanged();
 
     if (m_modeState.mouseTracking != prevMouseTracking ||
-        m_modeState.alternateScreenActive != prevAlternate) {
+        m_modeState.alternateScreenActive != prevAlternate ||
+        m_modeState.cursorShape != prevCursorShape) {
         emit modeStateChanged();
     }
 }

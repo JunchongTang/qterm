@@ -21,7 +21,8 @@ void syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core, int vie
         cursorProjectionRow < viewportTopProjectionRow + core->rows();
     surfaceModel.setCursor(cursorInViewport ? cursorProjectionRow - viewportTopProjectionRow : 0,
                            cursorState.column,
-                           core->modeState().cursorVisible && cursorInViewport);
+                           core->modeState().cursorVisible && cursorInViewport,
+                           static_cast<int>(core->modeState().cursorShape));
 }
 
 } // namespace

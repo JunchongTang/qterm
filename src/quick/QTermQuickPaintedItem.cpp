@@ -310,7 +310,11 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.selection     = m_selectionColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
-    req.cursorStyle   = static_cast<int>(m_cursorStyle); // Block=0, Underline=1, Bar=2
+    // Cursor shape comes from the terminal's surface model (DECSCUSR) when available,
+    // falling back to the QML-set cursorStyle property.
+    req.cursorStyle   = surfaceModel
+        ? surfaceModel->cursorShape()
+        : static_cast<int>(m_cursorStyle);
     req.showCursor    = !m_cursorDelegateItem && hasActiveFocus();
     req.hyperlinkTint = m_theme.hyperlinkTint();
     req.palette16     = m_theme.palette16();

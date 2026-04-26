@@ -18,6 +18,7 @@ class QTermSurfaceModel final : public QObject
     Q_PROPERTY(int cursorRow READ cursorRow NOTIFY cursorChanged)
     Q_PROPERTY(int cursorColumn READ cursorColumn NOTIFY cursorChanged)
     Q_PROPERTY(bool cursorVisible READ cursorVisible NOTIFY cursorChanged)
+    Q_PROPERTY(int cursorShape READ cursorShape NOTIFY cursorChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(bool selectionVisible READ selectionVisible NOTIFY selectionChanged)
     Q_PROPERTY(int selectionStartRow READ selectionStartRow NOTIFY selectionChanged)
@@ -37,6 +38,8 @@ public:
     int cursorRow() const noexcept;
     int cursorColumn() const noexcept;
     bool cursorVisible() const noexcept;
+    // Cursor shape: 0 = Block, 1 = Underline, 2 = Bar (matches CursorShape enum)
+    int cursorShape() const noexcept;
     bool hasSelection() const noexcept;
     bool selectionVisible() const noexcept;
     int selectionStartRow() const noexcept;
@@ -49,7 +52,7 @@ public:
     QString plainText() const;
 
     void setSize(int columns, int rows);
-    void setCursor(int row, int column, bool visible);
+    void setCursor(int row, int column, bool visible, int shape = 0);
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
     void setSelectionController(QTermTerminal *terminal);
@@ -73,6 +76,7 @@ private:
     int m_cursorRow = 0;
     int m_cursorColumn = 0;
     bool m_cursorVisible = true;
+    int m_cursorShape = 0; // 0=Block, 1=Underline, 2=Bar
     bool m_hasSelection = false;
     int m_selectionStartRow = 0;
     int m_selectionStartColumn = 0;

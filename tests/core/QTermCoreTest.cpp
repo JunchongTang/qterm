@@ -103,6 +103,8 @@ private slots:
     // Combining text — multi-cycle and scrollback
     void reflowsCombiningTextMultipleCycles();
     void reflowsCombiningTextInScrollback();
+    // DECSCUSR cursor shape
+    void supportsDecScusr();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -1696,6 +1698,31 @@ void QTermCoreTest::reflowsCombiningTextInScrollback()
 }
 
 } // namespace QTerm
+
+void QTerm::QTermCoreTest::supportsDecScusr()
+{
+    using QTerm::CursorShape;
+    QTermCore core;
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+
+    core.writePlainText(u"\x1b[5 q"_s); // blinking bar
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Bar);
+
+    core.writePlainText(u"\x1b[3 q"_s); // blinking underline
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Underline);
+
+    core.writePlainText(u"\x1b[1 q"_s); // blinking block
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+
+    core.writePlainText(u"\x1b[4 q"_s); // steady underline
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Underline);
+
+    core.writePlainText(u"\x1b[6 q"_s); // steady bar
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Bar);
+
+    core.writePlainText(u"\x1b[0 q"_s); // default → block
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+}
 
 QTEST_MAIN(QTerm::QTermCoreTest)
 
