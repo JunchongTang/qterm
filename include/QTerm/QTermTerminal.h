@@ -53,6 +53,8 @@ public:
 
     // OSC 8: resolve a hyperlink id (from a style run) to its URL
     Q_INVOKABLE QString hyperlinkUrl(int id) const;
+    // Returns the full buffer content as plain text; intended for tests and debugging.
+    QString debugPlainText() const;
 
     Q_INVOKABLE void clear();
     Q_INVOKABLE void feedText(const QString &text);

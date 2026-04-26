@@ -61,7 +61,6 @@ QTermTerminal::QTermTerminal(QObject *parent)
         m_selectionModel->refreshSelectionText(m_core->buffer());
         syncSurfaceSelection();
         syncSurfaceViewport();
-        m_surfaceModel.setPlainText(m_core->debugPlainText());
         syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
         if (scrollOffset() != previousScrollOffset) {
             emit viewportChanged();
@@ -84,7 +83,6 @@ QTermTerminal::QTermTerminal(QObject *parent)
     syncSurfaceViewport();
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
-    m_surfaceModel.setPlainText(m_core->debugPlainText());
     syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
 }
 
@@ -159,6 +157,11 @@ QTermSurfaceModel *QTermTerminal::surfaceModel() noexcept
 QString QTermTerminal::hyperlinkUrl(int id) const
 {
     return m_core->hyperlinkUrl(id);
+}
+
+QString QTermTerminal::debugPlainText() const
+{
+    return m_core->debugPlainText();
 }
 
 void QTermTerminal::clear()

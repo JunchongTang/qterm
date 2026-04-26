@@ -303,15 +303,19 @@ void QTermLocalPtyBackend::handleReadable()
         return;
     }
 
-    QByteArray buffer(4096, Qt::Uninitialized);
+    QByteArray chunk(65536, Qt::Uninitialized);
+    QByteArray batch;
+
     for (;;) {
-        const ssize_t bytesRead = ::read(m_masterFd, buffer.data(), static_cast<size_t>(buffer.size()));
+        const ssize_t bytesRead = ::read(m_masterFd, chunk.data(), static_cast<size_t>(chunk.size()));
         if (bytesRead > 0) {
-            emitDataReceived(buffer.first(static_cast<qsizetype>(bytesRead)));
+            batch.append(chunk.constData(), static_cast<qsizetype>(bytesRead));
             continue;
         }
 
         if (bytesRead == 0) {
+            if (!batch.isEmpty())
+                emitDataReceived(batch);
             closeMasterFd();
             pollChildExit();
             return;
@@ -322,19 +326,26 @@ void QTermLocalPtyBackend::handleReadable()
         }
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return;
+            break;
         }
 
         if (errno == EIO) {
+            if (!batch.isEmpty())
+                emitDataReceived(batch);
             closeMasterFd();
             pollChildExit();
             return;
         }
 
+        if (!batch.isEmpty())
+            emitDataReceived(batch);
         emitErrorOccurred(QStringLiteral("PTY read failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         close();
         return;
     }
+
+    if (!batch.isEmpty())
+        emitDataReceived(batch);
 #endif
 }
 
