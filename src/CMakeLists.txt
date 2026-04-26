@@ -36,12 +36,20 @@ qt_add_library(qterm STATIC
     core/QTermTerminal.cpp
     quick/QTermViewController.h
     quick/QTermViewController.cpp
+    quick/QTermQmlForeignTypes.cpp
     quick/QTermQuickPaintedItem.cpp
     quick/QTermQuickItem.cpp
     widget/QTermWidget.cpp
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp
+)
+
+qt_add_qml_module(qterm
+    URI QTerm
+    VERSION 1.0
+    # All QML types are declared via QML_ELEMENT / QML_UNCREATABLE / QML_VALUE_TYPE
+    # macros in their respective public headers — no QML_FILES needed here.
 )
 
 if(APPLE)
@@ -58,7 +66,10 @@ add_library(QTerm::qterm ALIAS qterm)
 target_include_directories(qterm
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include/QTerm>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/quick
 )
 
 target_link_libraries(qterm

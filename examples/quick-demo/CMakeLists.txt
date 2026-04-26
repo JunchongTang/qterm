@@ -19,4 +19,8 @@ target_link_libraries(qterm_quick_demo
         Qt6::Qml
         Qt6::QuickControls2
         QTerm::qterm
+        qtermplugin
 )
+
+# For static builds, ensure the QTerm QML plugin is linked into the executable.
+qt_import_qml_plugins(qterm_quick_demo)

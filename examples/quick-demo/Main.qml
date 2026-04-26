@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QTerm 1.0
+import QTerm
 
 ApplicationWindow {
     id: root

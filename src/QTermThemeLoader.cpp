@@ -47,6 +47,11 @@ QTermTheme QTermThemeLoader::themeFromJsonObject(const QJsonObject &obj,
     const QString hyperlink = obj.value(QLatin1String("hyperlinkTint")).toString();
     if (!hyperlink.isEmpty()) t.m_hyperlinkTint = QColor(hyperlink);
 
+    const QString fontFamily = obj.value(QLatin1String("fontFamily")).toString();
+    if (!fontFamily.isEmpty()) t.m_fontFamily = fontFamily;
+    const int fontPixelSize = obj.value(QLatin1String("fontPixelSize")).toInt(0);
+    if (fontPixelSize > 0) t.m_fontPixelSize = fontPixelSize;
+
     for (const auto &entry : kPaletteKeys)
         t.m_palette[entry.index] = QColor(palette.value(QLatin1String(entry.key)).toString());
 
@@ -70,6 +75,10 @@ QJsonObject QTermThemeLoader::themeToJsonObject(const QTermTheme &t)
     obj[QLatin1String("selection")]     = t.m_selection.name(QColor::HexRgb);
     obj[QLatin1String("cursor")]        = t.m_cursor.name(QColor::HexRgb);
     obj[QLatin1String("hyperlinkTint")] = t.m_hyperlinkTint.name(QColor::HexRgb);
+    if (!t.m_fontFamily.isEmpty())
+        obj[QLatin1String("fontFamily")] = t.m_fontFamily;
+    if (t.m_fontPixelSize > 0)
+        obj[QLatin1String("fontPixelSize")] = t.m_fontPixelSize;
 
     QJsonObject palette;
     for (const auto &entry : kPaletteKeys)

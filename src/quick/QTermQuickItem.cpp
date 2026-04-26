@@ -604,6 +604,10 @@ void QTermQuickItem::loadTheme(const QTermTheme &theme)
     m_backgroundColor = theme.background();
     m_selectionColor  = theme.selection();
     m_cursorColor     = theme.cursor();
+    if (!theme.fontFamily().isEmpty())
+        m_controller->setFontFamily(theme.fontFamily());
+    if (theme.fontPixelSize() > 0)
+        m_controller->setFontPixelSize(theme.fontPixelSize());
     scheduleFullDirty();
     emit paletteChanged();
 }

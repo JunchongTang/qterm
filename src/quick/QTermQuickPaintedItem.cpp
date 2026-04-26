@@ -354,6 +354,10 @@ void QTermQuickPaintedItem::setTheme(const QTermTheme &t)
     m_backgroundColor = t.background();
     m_selectionColor  = t.selection();
     m_cursorColor     = t.cursor();
+    if (!t.fontFamily().isEmpty())
+        m_controller->setFontFamily(t.fontFamily());
+    if (t.fontPixelSize() > 0)
+        m_controller->setFontPixelSize(t.fontPixelSize());
     update();
     emit themeChanged();
     emit paletteChanged();
