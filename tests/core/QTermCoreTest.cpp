@@ -85,6 +85,21 @@ private slots:
     void risResetsTerminalState();
     void cursorNextAndPreviousLine();
     void encodesCtrlLetterWhenTextIsEmpty();
+
+    // ── Reflow golden tests ───────────────────────────────────────────────
+    // Scrollback history reflow
+    void reflowsScrollbackOnNarrow();
+    void reflowsScrollbackOnWiden();
+    void reflowsLongScrollbackLogicalLine();
+    // Cross history/visible boundary
+    void reflowsLogicalLineSpanningHistoryAndVisible();
+    void reflowsMultipleLogicalLinesInScrollback();
+    // CJK / mixed content
+    void reflowsMixedAsciiAndCjkOnNarrow();
+    void reflowsMixedAsciiAndCjkOnWiden();
+    void reflowsMixedCjkPreservesLogicalContent();
+    // Cursor tracking across scrollback reflow
+    void cursorTracksLogicalPositionAfterScrollbackReflow();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -1383,6 +1398,240 @@ void QTermCoreTest::encodesCtrlLetterWhenTextIsEmpty()
     QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_Z, QString()), QByteArray("\x1a"));
     // When text IS provided, it takes precedence (normal path).
     QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_B, "b"_L1), QByteArray("b"));
+}
+
+// ── Reflow golden tests ───────────────────────────────────────────────────
+
+// ── Scrollback history reflow ─────────────────────────────────────────────
+
+void QTermCoreTest::reflowsScrollbackOnNarrow()
+{
+    // A line pushed into history via scroll must reflow (split) correctly when
+    // columns are reduced.  Uses \r\n to avoid cursor-column-preserving LF
+    // side-effects that would corrupt the visible-area content.
+    QTermCore core;
+    core.setTerminalSize(6, 3);
+
+    // Write 4 complete lines: first one overflows the 3-row visible area and
+    // scrolls into history.  Each line is terminated with \r\n so the cursor
+    // lands cleanly at column 0 before the linefeed.
+    core.writePlainText("AAAAAA\r\nBBBBBB\r\nCCCCCC\r\nXYZ"_L1);
+    // history=["AAAAAA"], visible=["BBBBBB","CCCCCC","XYZ"]
+
+    QCOMPARE(core.buffer().historyLineCount(), 1);
+
+    core.setTerminalSize(3, 3);
+
+    // Full logical content must be intact (debugPlainText separates independent
+    // logical lines with '\n' and joins wrapped physical rows directly).
+    QCOMPARE(core.buffer().debugPlainText(), "AAAAAA\nBBBBBB\nCCCCCC\nXYZ"_L1);
+
+    // The history line "AAAAAA" must split into two projection rows of 3 cols.
+    QCOMPARE(core.buffer().projectionLineAt(0).plainText(), "AAA"_L1);
+    QCOMPARE(core.buffer().projectionLineAt(1).plainText(), "AAA"_L1);
+    QVERIFY(core.buffer().projectionLineAt(0).wrappedToNextLine());
+    QVERIFY(!core.buffer().projectionLineAt(1).wrappedToNextLine());
+}
+
+void QTermCoreTest::reflowsScrollbackOnWiden()
+{
+    // Lines in scrollback that were split by a previous narrow should merge
+    // back when widened.
+    QTermCore core;
+    core.setTerminalSize(10, 2);
+
+    core.writePlainText("0123456789"_L1);
+    core.writePlainText("\n"_L1);
+    core.writePlainText("abcde"_L1);
+
+    core.setTerminalSize(5, 2);   // narrow: history line splits
+    core.setTerminalSize(10, 2);  // widen: must merge back
+
+    QCOMPARE(core.buffer().historyLineCount(), 1);
+    QCOMPARE(core.buffer().projectionLineAt(0).plainText(), "0123456789"_L1);
+    QVERIFY(!core.buffer().projectionLineAt(0).wrappedToNextLine());
+}
+
+void QTermCoreTest::reflowsLongScrollbackLogicalLine()
+{
+    // A logical line whose auto-wrap spans history (it was long enough to
+    // trigger a scroll mid-wrap) must reassemble correctly on widen.
+    //
+    // Setup: 8-col, 2-row terminal. Writing 24 chars without any CR/LF causes
+    // two auto-wraps; the second one triggers a scroll that pushes the first
+    // 8-char segment into history.
+    //   a-h  → row 0 (fills, wrap pending)
+    //   i    → wrapToNextLine: row0.wtnl=true, cursor→row1 (not last, no scroll)
+    //   i-p  → row 1 (fills, wrap pending)
+    //   q    → wrapToNextLine: row1.wtnl=true, last row → SCROLL:
+    //          history[0]="abcdefgh"(wtnl=true), visible[0]="ijklmnop"(wtnl=true)
+    //   q-x  → visible[1] = "qrstuvwx"
+    QTermCore core;
+    core.setTerminalSize(8, 2);
+
+    const QString longLine = QStringLiteral("abcdefghijklmnopqrstuvwx");
+    core.writePlainText(longLine);
+
+    // Exactly 1 history row produced by the mid-wrap scroll.
+    QCOMPARE(core.buffer().historyLineCount(), 1);
+    QVERIFY(core.buffer().projectionLineAt(0).wrappedToNextLine()); // history→visible chain intact
+
+    // Narrow to 4: each 8-col physical row splits into two 4-col rows.
+    core.setTerminalSize(4, 2);
+    QCOMPARE(core.buffer().debugPlainText(), longLine);
+
+    // Widen back to 8: the three physical rows must reassemble into one logical line.
+    core.setTerminalSize(8, 2);
+    QCOMPARE(core.buffer().debugPlainText(), longLine);
+    QCOMPARE(core.buffer().historyLineCount(), 1);
+    QCOMPARE(core.buffer().projectionLineAt(0).plainText(), "abcdefgh"_L1);
+    QVERIFY(core.buffer().projectionLineAt(0).wrappedToNextLine());
+    QCOMPARE(core.buffer().projectionLineAt(1).plainText(), "ijklmnop"_L1);
+    QVERIFY(core.buffer().projectionLineAt(1).wrappedToNextLine());
+    QCOMPARE(core.buffer().projectionLineAt(2).plainText(), "qrstuvwx"_L1);
+}
+
+// ── Cross history/visible boundary ───────────────────────────────────────
+
+void QTermCoreTest::reflowsLogicalLineSpanningHistoryAndVisible()
+{
+    // A logical line that was partially in history and partially visible
+    // (a very long line that got scrolled mid-wrap) must survive reflow.
+    QTermCore core;
+    // 4 cols, 2 rows: writing 6 chars produces 2 physical rows;
+    // the second linefeed pushes the first into history.
+    core.setTerminalSize(4, 2);
+    core.writePlainText("abcdef"_L1);  // "abcd" row0, "ef" row1 (wrapped)
+    // Push row0 into history by triggering a scroll
+    core.writePlainText("\n\n"_L1);    // two LFs: both visible rows scroll to history, new empty rows appear
+
+    const int histBefore = core.buffer().historyLineCount();
+    QVERIFY(histBefore >= 2);
+
+    // Narrow: logical line "abcdef" (across history rows) must still be intact
+    core.setTerminalSize(2, 2);
+    QVERIFY(core.buffer().debugPlainText().contains("abcdef"_L1));
+
+    // Widen back
+    core.setTerminalSize(4, 2);
+    QVERIFY(core.buffer().debugPlainText().contains("abcdef"_L1));
+}
+
+void QTermCoreTest::reflowsMultipleLogicalLinesInScrollback()
+{
+    // Multiple independent logical lines in scrollback all reflow correctly.
+    QTermCore core;
+    core.setTerminalSize(6, 3);
+
+    // Write 3 independent lines (each ends with explicit LF → not wrapped)
+    core.writePlainText("line-A\n"_L1);  // → history after next scrolls
+    core.writePlainText("line-B\n"_L1);
+    core.writePlainText("line-C\n"_L1);  // pushes earlier lines into history
+    core.writePlainText("cur"_L1);       // visible
+
+    QVERIFY(core.buffer().historyLineCount() >= 1);
+
+    const QString full = core.buffer().debugPlainText();
+
+    // Narrow to 3: each 6-char line splits into 2 rows
+    core.setTerminalSize(3, 3);
+    QCOMPARE(core.buffer().debugPlainText(), full);
+
+    // Widen back to 6: must reassemble
+    core.setTerminalSize(6, 3);
+    QCOMPARE(core.buffer().debugPlainText(), full);
+}
+
+// ── CJK / mixed content ───────────────────────────────────────────────────
+
+void QTermCoreTest::reflowsMixedAsciiAndCjkOnNarrow()
+{
+    // "AB中C" = 2 ascii + 2-col CJK + 1 ascii = 5 display cols
+    // At width 4: "AB中" = 4 cols (fits), "C" wraps → row 1
+    QTermCore core;
+    const QString text = QString::fromUtf8(u8"AB\u4e2dC");
+
+    core.setTerminalSize(6, 4);
+    core.writePlainText(text);
+    core.setTerminalSize(4, 4);
+
+    QCOMPARE(core.buffer().debugPlainText(), text);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), QString::fromUtf8(u8"AB\u4e2d"));
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "C"_L1);
+    QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
+}
+
+void QTermCoreTest::reflowsMixedAsciiAndCjkOnWiden()
+{
+    // After narrowing, widening must restore the single-row layout.
+    QTermCore core;
+    const QString text = QString::fromUtf8(u8"AB\u4e2dC");
+
+    core.setTerminalSize(6, 4);
+    core.writePlainText(text);
+    core.setTerminalSize(4, 4);
+    core.setTerminalSize(6, 4);
+
+    QCOMPARE(core.buffer().debugPlainText(), text);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), text);
+    QVERIFY(!core.buffer().lineAt(0).wrappedToNextLine());
+}
+
+void QTermCoreTest::reflowsMixedCjkPreservesLogicalContent()
+{
+    // Mixed CJK + ASCII content through multiple narrow/widen cycles must
+    // never lose or duplicate characters.
+    //
+    // Note: widths that leave exactly 1 column before a 2-wide CJK character
+    // at end-of-line cause the terminal to insert a padding space (standard
+    // terminal behaviour). This test deliberately avoids such widths (e.g.
+    // width 5 for "你好world再见") to stay focused on logical content preservation.
+    QTermCore core;
+    // "你好world再见" = 2+2+5+2+2 = 13 display cols
+    const QString text = QString::fromUtf8(u8"\u4f60\u597dworld\u518d\u89c1");
+
+    core.setTerminalSize(14, 4);
+    core.writePlainText(text);
+
+    // Use only widths where wide chars land cleanly (no 1-col remainder at EOL).
+    for (const int width : {9, 7, 9, 13}) {
+        core.setTerminalSize(width, 4);
+        QCOMPARE(core.buffer().debugPlainText(), text);
+    }
+}
+
+// ── Cursor tracking across scrollback reflow ─────────────────────────────
+
+void QTermCoreTest::cursorTracksLogicalPositionAfterScrollbackReflow()
+{
+    // When scrollback is reflowed, the visible cursor must stay anchored to
+    // the same logical line (not drift to a stale physical row index).
+    //
+    // Setup: 6-col, 3-row terminal. Four lines written with \r\n ensure the
+    // first line scrolls cleanly to history and the cursor ends up at row 2
+    // (the "ab" line).
+    QTermCore core;
+    core.setTerminalSize(6, 3);
+
+    core.writePlainText("XXXXXX\r\nYYYYYY\r\nZZZZZZ\r\nab"_L1);
+    // history=["XXXXXX"], visible=["YYYYYY","ZZZZZZ","ab"], cursor at (2,2)
+
+    QCOMPARE(core.cursorState().row, 2);
+    QCOMPARE(core.cursorState().column, 2);
+    QCOMPARE(core.buffer().historyLineCount(), 1);
+
+    core.setTerminalSize(3, 3);  // narrow: history + visible lines split
+    // The reflow algorithm pushes all rows before the cursor's logical line
+    // into history so the cursor lands at visible row 0 (first visible row).
+    // The cursor column and logical content must still be correct.
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 2);
+    QCOMPARE(core.buffer().lineAt(core.cursorState().row).plainText(), "ab"_L1);
+
+    core.setTerminalSize(6, 3);  // widen back: content reassembles
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 2);
+    QCOMPARE(core.buffer().lineAt(core.cursorState().row).plainText(), "ab"_L1);
 }
 
 } // namespace QTerm

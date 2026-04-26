@@ -179,14 +179,13 @@
 
 未完成：
 
-* OSC 8 hyperlink 尚未实现。
 * 更复杂的 shell 集成（OSC 133 提示符标记、OSC 7 工作目录）尚未验证。
 
 退出标准：
 
 * vim、less、htop 和交互式 shell 等常见 CLI 工具行为基本可接受。✅（已达到）
 * mouse tracking 在 tmux / htop 中可用。✅（已达到）
-* OSC 8 超链接可渲染与交互。
+* OSC 8 超链接可渲染与交互。✅（已达到）
 
 ## Phase 7：更多会话后端
 
