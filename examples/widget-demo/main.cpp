@@ -4,6 +4,8 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMainWindow>
+#include <QMenu>
+#include <QMenuBar>
 #include <QProcessEnvironment>
 #include <QScrollBar>
 #include <QShortcut>
@@ -14,6 +16,7 @@
 #include <QTerm/QTermLocalPtyBackend.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
+#include <QTerm/QTermThemePack.h>
 #include <QTerm/QTermWidget.h>
 
 // ── Main window ───────────────────────────────────────────────────────────────
@@ -25,6 +28,7 @@ class DemoWindow : public QMainWindow
 public:
     explicit DemoWindow(QTerm::QTermTerminal *terminal, QWidget *parent = nullptr)
         : QMainWindow(parent)
+        , m_themePack(QTerm::QTermThemePack::qtermDefault())
     {
         setWindowTitle(QStringLiteral("QTerm Widget Demo"));
         resize(900, 600);
@@ -51,8 +55,30 @@ public:
         setCentralWidget(central);
 
         // ── Status bar ──────────────────────────────────────────────────────
-        m_statusLabel = new QLabel(QStringLiteral("Ready"), this);
+        m_statusLabel = new QLabel(tr("Ready"), this);
         statusBar()->addPermanentWidget(m_statusLabel);
+
+        // ── Theme menu ──────────────────────────────────────────────────────
+        QMenu *themeMenu = menuBar()->addMenu(tr("Theme"));
+        auto *darkAction  = themeMenu->addAction(tr("Dark"));
+        auto *lightAction = themeMenu->addAction(tr("Light"));
+        darkAction->setCheckable(true);
+        lightAction->setCheckable(true);
+        darkAction->setChecked(true);
+
+        connect(darkAction, &QAction::triggered, this, [=]() {
+            m_term->setTheme(m_themePack.variant(QStringLiteral("dark")));
+            darkAction->setChecked(true);
+            lightAction->setChecked(false);
+        });
+        connect(lightAction, &QAction::triggered, this, [=]() {
+            m_term->setTheme(m_themePack.variant(QStringLiteral("light")));
+            darkAction->setChecked(false);
+            lightAction->setChecked(true);
+        });
+
+        // Apply default theme (dark).
+        m_term->setTheme(m_themePack.variant(QStringLiteral("dark")));
 
         // ── ScrollBar ↔ terminal sync ────────────────────────────────────────
         // Terminal → ScrollBar
@@ -83,7 +109,7 @@ public:
             const QString text = m_term->terminal()->surfaceModel()->selectedText();
             if (!text.isEmpty()) {
                 QApplication::clipboard()->setText(text);
-                m_statusLabel->setText(QStringLiteral("Copied"));
+                m_statusLabel->setText(tr("Copied"));
             }
         });
 
@@ -98,7 +124,7 @@ public:
         // ── Hyperlink ────────────────────────────────────────────────────────
         connect(m_term, &QTerm::QTermWidget::hyperlinkActivated,
                 this, [this](const QString &url) {
-            m_statusLabel->setText(QStringLiteral("Opening: ") + url);
+            m_statusLabel->setText(tr("Opening: ") + url);
             QDesktopServices_openUrl(url); // via Qt::openUrlExternally workaround below
         });
 
@@ -137,9 +163,10 @@ private:
     // Thin wrapper so we don't need to include QDesktopServices in the header
     static void QDesktopServices_openUrl(const QString &url);
 
-    QTerm::QTermWidget *m_term      = nullptr;
-    QScrollBar         *m_scrollBar = nullptr;
-    QLabel             *m_statusLabel = nullptr;
+    QTerm::QTermWidget *m_term = nullptr;
+    QScrollBar *m_scrollBar = nullptr;
+    QLabel *m_statusLabel = nullptr;
+    QTerm::QTermThemePack m_themePack;
 };
 
 // ── QDesktopServices shim ─────────────────────────────────────────────────────

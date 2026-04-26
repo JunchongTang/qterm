@@ -7,6 +7,8 @@ qt_add_qml_module(qterm_quick_demo
     VERSION 1.0
     QML_FILES
         Main.qml
+        TermStatusBar.qml
+        TermMenuBar.qml
 )
 
 target_link_libraries(qterm_quick_demo

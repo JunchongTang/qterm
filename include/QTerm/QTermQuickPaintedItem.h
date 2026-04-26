@@ -8,6 +8,7 @@
 #include <QString>
 
 #include <QTerm/QTermTerminal.h>
+#include <QTerm/QTermTheme.h>
 
 namespace QTerm {
 
@@ -31,6 +32,7 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     // 标准化滚动属性，直接对接 QML ScrollBar 的 position / size
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
+    Q_PROPERTY(QTerm::QTermTheme theme READ theme WRITE setTheme NOTIFY themeChanged)
 
 public:
     // 光标内建形状枚举。设置后使用对应的默认渲染；设置 cursorDelegate 可完全自定义。
@@ -90,6 +92,9 @@ public:
     // IME support
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
 
+    QTermTheme theme() const;
+    void setTheme(const QTermTheme &theme);
+
 signals:
     void terminalChanged();
     void fontChanged();
@@ -104,6 +109,7 @@ signals:
     void copyRequested(const QString &text);
     // OSC 8 超链接被激活（Cmd+单击），外部决定如何打开 URL
     void hyperlinkActivated(const QString &url);
+    void themeChanged();
 
 protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
@@ -126,6 +132,9 @@ private:
 
     // ── 共享控制器（输入处理 + 尺寸/滚动逻辑） ───────────────────────────────
     QTermViewController *m_controller = nullptr;
+
+    // ── 主题（包含调色板和超链接色） ────────────────────────────────────────
+    QTermTheme m_theme;
 
     // ── 调色板（渲染参数，controller 无需感知） ──────────────────────────────
     QColor m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));

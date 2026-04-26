@@ -5,6 +5,13 @@ qt_add_library(qterm STATIC
     ../include/QTerm/QTermSession.h
     ../include/QTerm/QTermSessionBackend.h
     ../include/QTerm/QTermTerminal.h
+    ../include/QTerm/QTermTheme.h
+    ../include/QTerm/QTermThemePack.h
+    ../include/QTerm/QTermThemeLoader.h
+    ../include/QTerm/QTermWidget.h
+    QTermTheme.cpp
+    QTermThemePack.cpp
+    QTermThemeLoader.cpp
     core/QTermBuffer.h
     core/QTermBuffer.cpp
     core/QTermCell.h
@@ -30,7 +37,6 @@ qt_add_library(qterm STATIC
     quick/QTermViewController.cpp
     quick/QTermQuickPaintedItem.cpp
     widget/QTermWidget.cpp
-    ../include/QTerm/QTermWidget.h
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp

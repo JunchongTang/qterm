@@ -174,6 +174,22 @@ QVariant QTermWidget::inputMethodQuery(Qt::InputMethodQuery query) const
     }
 }
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
+
+QTermTheme QTermWidget::theme() const { return m_theme; }
+
+void QTermWidget::setTheme(const QTermTheme &t)
+{
+    m_theme           = t;
+    m_foregroundColor = t.foreground();
+    m_backgroundColor = t.background();
+    m_selectionColor  = t.selection();
+    m_cursorColor     = t.cursor();
+    update();
+    emit themeChanged();
+    emit paletteChanged();
+}
+
 // ── sizeHint ──────────────────────────────────────────────────────────────────
 
 QSize QTermWidget::sizeHint() const
@@ -206,6 +222,8 @@ void QTermWidget::paintEvent(QPaintEvent * /*event*/)
     req.cursorOpacity = m_cursorOpacity;
     req.cursorStyle   = static_cast<int>(m_cursorStyle);
     req.showCursor    = hasFocus();
+    req.hyperlinkTint = m_theme.hyperlinkTint();
+    req.palette16     = m_theme.palette16();
 
     QPainter painter(this);
     qtermPaintTerminal(&painter, req);

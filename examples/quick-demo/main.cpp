@@ -10,6 +10,7 @@
 #include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
+#include <QTerm/QTermThemePack.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 
@@ -38,6 +39,28 @@ public:
     }
 };
 
+class DemoThemeHelper final : public QObject
+{
+    Q_OBJECT
+
+public:
+    using QObject::QObject;
+
+    Q_INVOKABLE void applyDarkTheme(QObject *item)
+    {
+        auto *t = qobject_cast<QTerm::QTermQuickPaintedItem *>(item);
+        if (t)
+            t->setTheme(QTerm::QTermThemePack::qtermDefault().variant(QStringLiteral("dark")));
+    }
+
+    Q_INVOKABLE void applyLightTheme(QObject *item)
+    {
+        auto *t = qobject_cast<QTerm::QTermQuickPaintedItem *>(item);
+        if (t)
+            t->setTheme(QTerm::QTermThemePack::qtermDefault().variant(QStringLiteral("light")));
+    }
+};
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -56,6 +79,7 @@ int main(int argc, char *argv[])
     QTerm::QTermSession session;
     QTerm::QTermLocalPtyBackend backend;
     DemoClipboardBridge clipboardBridge;
+    DemoThemeHelper themeHelper;
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
     const QString shellProgram = environment.value(QStringLiteral("SHELL"), QStringLiteral("/bin/zsh"));
@@ -76,7 +100,8 @@ int main(int argc, char *argv[])
 
     engine.setInitialProperties({
         {QStringLiteral("terminal"), QVariant::fromValue(&terminal)},
-        {QStringLiteral("clipboardBridge"), QVariant::fromValue(&clipboardBridge)}
+        {QStringLiteral("clipboardBridge"), QVariant::fromValue(&clipboardBridge)},
+        {QStringLiteral("themeHelper"), QVariant::fromValue(&themeHelper)}
     });
     engine.loadFromModule("QTermDemo", "Main");
 
