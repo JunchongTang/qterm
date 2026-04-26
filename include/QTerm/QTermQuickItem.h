@@ -4,15 +4,30 @@
 #include <QColor>
 #include <QPointer>
 #include <QQmlComponent>
-#include <QQuickPaintedItem>
+#include <QQuickItem>
 #include <QString>
-#include <QTimer>
 
 #include <QTerm/QTermTerminal.h>
+#include <QTerm/QTermTheme.h>
 
 namespace QTerm {
 
-class QTermQuickPaintedItem : public QQuickPaintedItem
+class QTermViewController;
+
+// High-performance Qt Scene Graph terminal renderer.
+// Replaces QTermQuickPaintedItem's QPainter-to-texture path with a native QSG
+// node tree: colored background geometry, QSGTextNode-per-row for text, and
+// flat-color geometry nodes for selection and cursor.
+//
+// Dirty-flag system:
+//   Full rebuild  – font/size/terminal change
+//   Content dirty – visibleLineRunsChanged  → bg fills + text nodes repopulated
+//   Selection dirty – selectionChanged      → selection geometry only
+//   Cursor dirty  – cursorChanged           → cursor geometry only
+//
+// The public API is a strict superset of QTermQuickPaintedItem so QML that
+// uses the older item can switch by changing just the type name.
+class QTermQuickItem : public QQuickItem
 {
     Q_OBJECT
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
@@ -25,22 +40,21 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
-    Q_PROPERTY(QTerm::QTermQuickPaintedItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
+    Q_PROPERTY(QTerm::QTermQuickItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
-    // 标准化滚动属性，直接对接 QML ScrollBar 的 position / size
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
 
 public:
-    // 光标内建形状枚举。设置后使用对应的默认渲染；设置 cursorDelegate 可完全自定义。
+    // Cursor built-in shapes; values deliberately match QTermQuickPaintedItem::CursorStyle.
     enum CursorStyle {
-        Block,      // 填充块（默认）
-        Underline,  // 单元格底部下划线
-        Bar         // 左侧竖线（I-beam）
+        Block,
+        Underline,
+        Bar
     };
     Q_ENUM(CursorStyle)
 
-    explicit QTermQuickPaintedItem(QQuickItem *parent = nullptr);
+    explicit QTermQuickItem(QQuickItem *parent = nullptr);
 
     QTermTerminal *terminal() const noexcept;
     void setTerminal(QTermTerminal *terminal);
@@ -75,7 +89,6 @@ public:
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
 
-    // ScrollBar 对接：position/size 均为标准化 [0..1]，position=0 对应顶部
     qreal scrollPosition() const noexcept;
     void setScrollPosition(qreal position);
     qreal scrollSize() const noexcept;
@@ -83,11 +96,11 @@ public:
     Q_INVOKABLE int rowAtPosition(qreal y) const;
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
-    void paint(QPainter *painter) override;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void componentComplete() override;
 
-    // IME support
-    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    // Theme API – same as QTermQuickPaintedItem.
+    Q_INVOKABLE void loadTheme(const QTerm::QTermTheme &theme);
 
 signals:
     void terminalChanged();
@@ -98,11 +111,12 @@ signals:
     void cursorStyleChanged();
     void cursorDelegateChanged();
     void scrollChanged();
-    void wheelScrolled(int scrollOffset);
-    // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
-    void copyRequested(const QString &text);
+    void wheelScrolled(qreal angleDelta);
+    void copyRequested();
+    void hyperlinkActivated(const QString &url);
 
 protected:
+    QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
     void keyPressEvent(QKeyEvent *event) override;
     void inputMethodEvent(QInputMethodEvent *event) override;
@@ -114,64 +128,34 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    void reconnectSurfaceModel();
-    void disconnectSurfaceModel();
-    void updateMetrics();
-    void scheduleTerminalSizeSync();
-    void syncTerminalSize();
-
-    // 根据当前拖拽坐标更新选区（供拖拽和 auto-scroll 共用）
-    void updateSelectionFromDrag(qreal x, qreal y);
-
-    // 创建 / 更新 delegate item 的位置、尺寸、透明度
+    void updateMouseAcceptance();
     void recreateCursorDelegateItem();
     void updateCursorDelegateGeometry();
+    void scheduleFullDirty();
+    void scheduleContentDirty();
+    void scheduleSelectionDirty();
+    void scheduleCursorDirty();
 
-    // 鼠标模式变化时同步 setAcceptedMouseButtons / setAcceptHoverEvents
-    void updateMouseAcceptance();
+    QTermViewController *m_controller = nullptr;
+    QTermTheme m_theme;
 
-    // terminal viewport 信号连接（scroll 属性用）
-    QMetaObject::Connection m_viewportConnection;
-    // terminal modeState 变化信号连接（鼠标协议切换用）
-    QMetaObject::Connection m_modeStateConnection;
-
-    QPointer<QTermTerminal> m_terminal;
-    QMetaObject::Connection m_surfaceSizeConnection;
-    QMetaObject::Connection m_surfaceCursorConnection;
-    QMetaObject::Connection m_surfaceSelectionConnection;
-    QMetaObject::Connection m_surfaceVisibleRunsConnection;
-    QMetaObject::Connection m_surfaceDestroyedConnection;
-    QTimer *m_resizeDebounceTimer = nullptr;
-    QString m_fontFamily = QStringLiteral("Menlo");
-    int m_fontPixelSize = 18;
-    qreal m_cellWidth = 1.0;
-    qreal m_cellHeight = 1.0;
-    QColor m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));
-    QColor m_backgroundColor = QColor(QStringLiteral("#0b1016"));
-    QColor m_selectionColor = QColor(QStringLiteral("#214f76"));
-    QColor m_cursorColor = QColor(QStringLiteral("#d7fbe0"));
-    qreal m_cursorOpacity = 1.0;
+    QColor m_foregroundColor{QStringLiteral("#dce7f3")};
+    QColor m_backgroundColor{QStringLiteral("#0a0f15")};
+    QColor m_selectionColor{0x46, 0x82, 0xc8, 0x80};
+    QColor m_cursorColor{QStringLiteral("#dce7f3")};
+    qreal m_cursorOpacity = 0.8;
     CursorStyle m_cursorStyle = Block;
 
-    // ── 光标 delegate ─────────────────────────────────────────────────────
     QQmlComponent *m_cursorDelegate = nullptr;
-    QQuickItem *m_cursorDelegateItem = nullptr;
+    QPointer<QQuickItem> m_cursorDelegateItem;
 
-    // ── 鼠标 / 选区内部状态 ───────────────────────────────────────────────
-    QTimer *m_selectionAutoScrollTimer = nullptr;
-    QTimer *m_clickResetTimer = nullptr;
-
-    int m_clickStreak = 0;
-    int m_lastClickRow = -1;
-    int m_lastClickColumn = -1;
-
-    int m_selectionAnchorRow = -1;
-    int m_selectionAnchorColumn = -1;
-    bool m_suppressSelectionRelease = false;
-
-    qreal m_dragX = 0.0;
-    qreal m_dragY = 0.0;
-    int m_autoScrollDirection = 0; // +1 = 向上, -1 = 向下
+    // Dirty flags read inside updatePaintNode (render thread; GUI thread is
+    // blocked at that point so plain bool access is safe).
+    bool m_fullDirty = true;
+    bool m_contentDirty = true;
+    bool m_selectionDirty = true;
+    bool m_cursorDirty = true;
+    bool m_hasFocus = false;
 };
 
 } // namespace QTerm

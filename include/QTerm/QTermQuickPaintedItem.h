@@ -1,5 +1,5 @@
-#ifndef QTERM_QTERMQUICKITEM_H
-#define QTERM_QTERMQUICKITEM_H
+#ifndef QTERM_QTERMQUICKPAINTEDITEM_H
+#define QTERM_QTERMQUICKPAINTEDITEM_H
 
 #include <QColor>
 #include <QPointer>
@@ -151,4 +151,4 @@ private:
 
 } // namespace QTerm
 
-#endif // QTERM_QTERMQUICKITEM_H
+#endif // QTERM_QTERMQUICKPAINTEDITEM_H

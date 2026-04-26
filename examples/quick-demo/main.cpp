@@ -8,6 +8,7 @@
 
 #include <QTerm/QTermLocalPtyBackend.h>
 #include <QTerm/QTermQuickPaintedItem.h>
+#include <QTerm/QTermQuickItem.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermThemePack.h>
@@ -48,16 +49,20 @@ public:
 
     Q_INVOKABLE void applyDarkTheme(QObject *item)
     {
-        auto *t = qobject_cast<QTerm::QTermQuickPaintedItem *>(item);
-        if (t)
-            t->setTheme(QTerm::QTermThemePack::qtermDefault().variant(QStringLiteral("dark")));
+        const auto theme = QTerm::QTermThemePack::qtermDefault().variant(QStringLiteral("dark"));
+        if (auto *t = qobject_cast<QTerm::QTermQuickPaintedItem *>(item))
+            t->setTheme(theme);
+        else if (auto *t = qobject_cast<QTerm::QTermQuickItem *>(item))
+            t->loadTheme(theme);
     }
 
     Q_INVOKABLE void applyLightTheme(QObject *item)
     {
-        auto *t = qobject_cast<QTerm::QTermQuickPaintedItem *>(item);
-        if (t)
-            t->setTheme(QTerm::QTermThemePack::qtermDefault().variant(QStringLiteral("light")));
+        const auto theme = QTerm::QTermThemePack::qtermDefault().variant(QStringLiteral("light"));
+        if (auto *t = qobject_cast<QTerm::QTermQuickPaintedItem *>(item))
+            t->setTheme(theme);
+        else if (auto *t = qobject_cast<QTerm::QTermQuickItem *>(item))
+            t->loadTheme(theme);
     }
 };
 
@@ -74,6 +79,7 @@ int main(int argc, char *argv[])
     qmlRegisterUncreatableType<QTerm::QTermSurfaceModel>(
         "QTerm", 1, 0, "QTermSurfaceModel", "QTermSurfaceModel is provided by QTermTerminal.");
     qmlRegisterType<QTerm::QTermQuickPaintedItem>("QTerm", 1, 0, "QTermQuickPaintedItem");
+    qmlRegisterType<QTerm::QTermQuickItem>("QTerm", 1, 0, "QTermQuickItem");
 
     QTerm::QTermTerminal terminal;
     QTerm::QTermSession session;
