@@ -69,6 +69,8 @@ public:
     void setKeypadMode(bool application);
     // OSC 8: url=empty to close the link
     void setHyperlink(const QString &url);
+    // DECSCUSR: CSI n SP q  (n=0..6)
+    void setCursorShape(int parameter);
 
 private:
     QTermScreenState &currentScreen() noexcept;

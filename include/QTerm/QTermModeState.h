@@ -18,6 +18,16 @@ enum class MouseEncoding : int {
     URXVT   = 1015, // ?1015 — ESC[btn;x;yM
 };
 
+// DECSCUSR 光标形状（CSI n SP q）
+// 0/1 = blinking block, 2 = steady block, 3 = blinking underline,
+// 4 = steady underline, 5 = blinking bar, 6 = steady bar.
+// We map blink/steady pairs to the same shape; blink is handled by the UI.
+enum class CursorShape : int {
+    Block     = 0,   // default / 0 / 1 / 2
+    Underline = 1,   // 3 / 4
+    Bar       = 2,   // 5 / 6 (I-beam)
+};
+
 struct QTermModeState
 {
     bool cursorVisible = true;
@@ -30,6 +40,8 @@ struct QTermModeState
     MouseEncoding mouseEncoding = MouseEncoding::Default;
     // OSC 8 hyperlink: 0 = none active; positive = index into core URL table
     int activeHyperlinkId = 0;
+    // DECSCUSR cursor shape (CSI n SP q)
+    CursorShape cursorShape = CursorShape::Block;
 };
 
 } // namespace QTerm

@@ -229,6 +229,26 @@ void QTermInputExecutor::setHyperlink(const QString &url)
     }
 }
 
+void QTermInputExecutor::setCursorShape(int parameter)
+{
+    // DECSCUSR parameter mapping:
+    // 0, 1, 2 → Block; 3, 4 → Underline; 5, 6 → Bar (I-beam)
+    // Default (0) and blinking (odd) map to same shape as steady (even).
+    switch (parameter) {
+    case 3:
+    case 4:
+        m_modeState.cursorShape = CursorShape::Underline;
+        break;
+    case 5:
+    case 6:
+        m_modeState.cursorShape = CursorShape::Bar;
+        break;
+    default: // 0, 1, 2 and unknown
+        m_modeState.cursorShape = CursorShape::Block;
+        break;
+    }
+}
+
 void QTermInputExecutor::print(const QString &text)
 {
     // DEC line drawing translation: if active and the character is in the

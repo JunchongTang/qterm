@@ -338,6 +338,69 @@ printf '\033[3J'
 
 ---
 
+## 9. 光标形状（DECSCUSR）
+
+### 9.1 基本形状切换
+
+**步骤**：在 demo 终端内运行：
+
+```bash
+# 细竖线（Bar）
+printf '\e[6 q'; sleep 1
+# 下划线
+printf '\e[4 q'; sleep 1
+# 方块（默认）
+printf '\e[2 q'
+```
+
+期望：光标形状随每条命令立即改变。
+
+### 9.2 循环演示
+
+```bash
+while true; do
+  for s in 2 4 6; do
+    printf '\e[%d q' "$s"
+    sleep 0.8
+  done
+done
+```
+
+期望：方块 → 下划线 → 竖线每 0.8 秒轮换，`Ctrl+C` 后光标停留在最后一种形状。
+
+### 9.3 参数映射表
+
+| 参数 `n` | 期望形状 |
+|----------|----------|
+| 0 或 2   | 方块（Block） |
+| 3 或 4   | 下划线（Underline） |
+| 5 或 6   | 细竖线（Bar） |
+| 1        | 方块（Block，闪烁变体） |
+
+```bash
+for s in 0 1 2 3 4 5 6; do
+  printf "n=%d: " "$s"
+  printf '\e[%d q' "$s"
+  read -r   # 按 Enter 继续
+done
+```
+
+### 9.4 vim 光标形状跟随模式
+
+```bash
+vim
+```
+
+vim 默认在插入模式发送 `\e[5 q`（竖线），普通模式发送 `\e[2 q`（方块）。
+
+1. 启动 vim，处于普通模式 → 期望光标为**方块**
+2. 按 `i` 进入插入模式 → 期望光标变为**细竖线**
+3. 按 `Esc` 返回普通模式 → 期望光标变回**方块**
+
+> **失败现象**：形状不变 → `QTermTextParser` 的 `CsiIntermediate` 状态未正确识别 `SP q` 序列，或 `QTermQuickPaintedItem::paint` 未读取 `surfaceModel->cursorShape()`。
+
+---
+
 ## 常见失败速查
 
 | 现象 | 最可能原因 |
