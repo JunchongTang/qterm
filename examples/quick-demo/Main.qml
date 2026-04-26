@@ -239,8 +239,6 @@ ApplicationWindow {
             Component {
                 id: paintedRendererComponent
                 QTermQuickPaintedItem {
-                    anchors.fill: parent
-                    anchors.margins: 26
                     focus: true
                     terminal: root.terminal
                     fontFamily: root.terminalFontFamily
@@ -267,8 +265,6 @@ ApplicationWindow {
             Component {
                 id: sgRendererComponent
                 QTermQuickItem {
-                    anchors.fill: parent
-                    anchors.margins: 26
                     focus: true
                     terminal: root.terminal
                     fontFamily: root.terminalFontFamily
@@ -297,6 +293,7 @@ ApplicationWindow {
                 id: terminalView
 
                 anchors.fill: parent
+                anchors.margins: 26
                 focus: true
                 sourceComponent: root.useSGRenderer ? sgRendererComponent : paintedRendererComponent
 

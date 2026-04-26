@@ -423,7 +423,6 @@ QTermTerminal *QTermQuickItem::terminal() const noexcept
 
 void QTermQuickItem::setTerminal(QTermTerminal *terminal)
 {
-    m_controller->notifyGeometryChanged(width(), height());
     m_controller->setTerminal(terminal);
     scheduleFullDirty();
 }
