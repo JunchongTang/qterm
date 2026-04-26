@@ -26,6 +26,8 @@ qt_add_library(qterm STATIC
     core/QTermTextParser.cpp
     core/QTermSurfaceModel.cpp
     core/QTermTerminal.cpp
+    quick/QTermViewController.h
+    quick/QTermViewController.cpp
     quick/QTermQuickPaintedItem.cpp
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
