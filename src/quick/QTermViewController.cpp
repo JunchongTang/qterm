@@ -244,13 +244,13 @@ int QTermViewController::hyperlinkIdAtPosition(int row, int col) const
 bool QTermViewController::mouseProtocolEnabled() const
 {
     if (!m_terminal) return false;
-    return m_terminal->modeState().mouseTracking != MouseTracking::Disabled;
+    return m_terminal->isMouseProtocolActive();
 }
 
 bool QTermViewController::hoverEventsNeeded() const
 {
     if (!m_terminal) return false;
-    return m_terminal->modeState().mouseTracking == MouseTracking::AnyEvent;
+    return m_terminal->isHoverTrackingActive();
 }
 
 // ── IME 光标矩形 ──────────────────────────────────────────────────────────────
@@ -300,8 +300,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
 
     emit focusRequested();
 
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking != MouseTracking::Disabled) {
+    if (m_terminal->isMouseProtocolActive()) {
         m_terminal->sendMouse(rowAtPosition(event->position().y()),
                               columnAtPosition(event->position().x()),
                               event->button(), event->modifiers(), true);
@@ -375,9 +374,8 @@ bool QTermViewController::handleMouseMove(QMouseEvent *event)
 {
     if (!m_terminal) return false;
 
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking == MouseTracking::AnyEvent ||
-        (modeState.mouseTracking == MouseTracking::Button && (event->buttons() & Qt::LeftButton))) {
+    if (m_terminal->isHoverTrackingActive() ||
+        (m_terminal->isButtonTrackingActive() && (event->buttons() & Qt::LeftButton))) {
         const Qt::MouseButton heldButton =
             (event->buttons() & Qt::LeftButton)   ? Qt::LeftButton   :
             (event->buttons() & Qt::MiddleButton) ? Qt::MiddleButton :
@@ -415,8 +413,7 @@ bool QTermViewController::handleMouseRelease(QMouseEvent *event)
 {
     if (!m_terminal) return false;
 
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking != MouseTracking::Disabled) {
+    if (m_terminal->isMouseProtocolActive()) {
         m_terminal->sendMouse(rowAtPosition(event->position().y()),
                               columnAtPosition(event->position().x()),
                               event->button(), event->modifiers(), false);
@@ -444,8 +441,7 @@ bool QTermViewController::handleHoverMove(QHoverEvent *event)
 {
     if (!m_terminal) return false;
 
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking == MouseTracking::AnyEvent) {
+    if (m_terminal->isHoverTrackingActive()) {
         const QPointF pos = event->position();
         m_terminal->sendMouse(rowAtPosition(pos.y()), columnAtPosition(pos.x()),
                               Qt::NoButton, Qt::NoModifier, false, /*isMotion=*/true);
@@ -458,10 +454,9 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
 {
     if (!m_terminal) return false;
 
-    const auto &modeState = m_terminal->modeState();
     const QPoint angleDelta = event->angleDelta();
 
-    if (modeState.mouseTracking != MouseTracking::Disabled && angleDelta.y() != 0) {
+    if (m_terminal->isMouseProtocolActive() && angleDelta.y() != 0) {
         // 鼠标协议启用：虚拟按钮码 64=向上、65=向下（X10/SGR 滚轮约定）
         const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
         m_terminal->sendMouse(

@@ -51,16 +51,8 @@ public:
     QVariantList visibleLineRuns() const;
     QString plainText() const;
 
-    void setSize(int columns, int rows);
-    void setCursor(int row, int column, bool visible, int shape = 0);
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
-    void setSelectionController(QTermTerminal *terminal);
-    void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn);
-    void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
-    void setVisibleLines(const QStringList &visibleLines);
-    void setVisibleLineRuns(const QVariantList &visibleLineRuns);
-    void setPlainText(const QString &plainText);
 
 signals:
     void sizeChanged();
@@ -71,6 +63,17 @@ signals:
     void plainTextChanged();
 
 private:
+    friend class QTermTerminal;
+
+    void setSize(int columns, int rows);
+    void setCursor(int row, int column, bool visible, int shape = 0);
+    void setSelectionController(QTermTerminal *terminal);
+    void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn);
+    void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
+    void setVisibleLines(const QStringList &visibleLines);
+    void setVisibleLineRuns(const QVariantList &visibleLineRuns);
+    void setPlainText(const QString &plainText);
+
     int m_rows = 24;
     int m_columns = 80;
     int m_cursorRow = 0;

@@ -195,7 +195,7 @@
 
 ## Phase 8：API 稳定化与适配层
 
-状态：未开始
+状态：进行中
 
 目标：
 
@@ -203,10 +203,18 @@
 * 在同一 surface model 之上增加 QWidget adapter。
 * 补充稳定扩展点文档。
 
+已完成：
+
+* `QTermSurfaceModel` 所有内部写方法（`setSize`、`setCursor`、`setSelectionController`、`setSelectionSnapshot`、`setVisibleLines`、`setVisibleLineRuns`、`setPlainText`）移入 `private`，`QTermTerminal` 为 `friend class`，外部不可直接调用。
+* `QTermTerminal` 移除 `modeState()` 公开方法，替换为语义化查询：`isMouseProtocolActive()`、`isHoverTrackingActive()`、`isButtonTrackingActive()`。
+* `QTermModeState.h` 不再被 `QTermTerminal.h` 包含，切断外部头文件对 VT 内部 struct 的依赖。
+* `setCurrentDirectory` 改为 `private slot`（仅内部 core 信号触发）；`setTitle` 保留公开（允许应用层设置初始标题）。
+* `QTermViewController` 改用新的 Terminal 语义方法，不再直接读取 `modeState()` struct。
+
 退出标准：
 
-* 公开头文件已经过兼容性审视。
-* QWidget 只是适配层，而不是第二套核心实现。
+* 公开头文件已经过兼容性审视。✅（已完成核心审查）
+* QWidget 只是适配层，而不是第二套核心实现。（待做）
 
 ## 跨阶段测试矩阵
 
