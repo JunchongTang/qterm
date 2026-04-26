@@ -37,6 +37,11 @@ QString QTermCore::title() const
     return m_title;
 }
 
+QString QTermCore::currentDirectory() const
+{
+    return m_currentDirectory;
+}
+
 QString QTermCore::debugPlainText() const
 {
     return activeScreen().buffer.debugPlainText();
@@ -114,6 +119,14 @@ void QTermCore::writePlainText(const QString &text)
 
         m_title = title;
         emit titleChanged(m_title);
+    });
+    executor.setCurrentDirectoryHandler([this](const QString &url) {
+        if (m_currentDirectory == url) {
+            return;
+        }
+
+        m_currentDirectory = url;
+        emit currentDirectoryChanged(m_currentDirectory);
     });
     executor.setOutboundHandler([this](const QByteArray &data) {
         emit outboundData(data);

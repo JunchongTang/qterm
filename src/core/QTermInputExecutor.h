@@ -27,6 +27,7 @@ public:
     bool isAlternateScreenActive() const noexcept;
     void setBellHandler(const std::function<void()> &handler);
     void setWindowTitleHandler(const std::function<void(const QString &)> &handler);
+    void setCurrentDirectoryHandler(const std::function<void(const QString &)> &handler);
     void setOutboundHandler(const std::function<void(const QByteArray &)> &handler);
     void setRegisterHyperlinkHandler(const std::function<int(const QString &)> &handler);
 
@@ -59,6 +60,8 @@ public:
     void reset();
     void setPrivateModes(const QVector<int> &parameters, bool enabled);
     void setWindowTitle(const QString &title);
+    // OSC 7: notify shell's current working directory
+    void setCurrentDirectory(const QString &url);
     void deviceStatusReport();
     void deviceAttributes();
     void secondaryDeviceAttributes();
@@ -87,6 +90,7 @@ private:
     QTermModeState &m_modeState;
     std::function<void()> m_bellHandler;
     std::function<void(const QString &)> m_windowTitleHandler;
+    std::function<void(const QString &)> m_currentDirectoryHandler;
     std::function<void(const QByteArray &)> m_outboundHandler;
     std::function<int(const QString &)> m_registerHyperlinkHandler;
 };

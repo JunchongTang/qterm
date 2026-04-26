@@ -210,6 +210,11 @@ void QTermInputExecutor::setWindowTitleHandler(const std::function<void(const QS
     m_windowTitleHandler = handler;
 }
 
+void QTermInputExecutor::setCurrentDirectoryHandler(const std::function<void(const QString &)> &handler)
+{
+    m_currentDirectoryHandler = handler;
+}
+
 void QTermInputExecutor::setOutboundHandler(const std::function<void(const QByteArray &)> &handler)
 {
     m_outboundHandler = handler;
@@ -740,6 +745,13 @@ void QTermInputExecutor::setWindowTitle(const QString &title)
 {
     if (m_windowTitleHandler) {
         m_windowTitleHandler(title);
+    }
+}
+
+void QTermInputExecutor::setCurrentDirectory(const QString &url)
+{
+    if (m_currentDirectoryHandler) {
+        m_currentDirectoryHandler(url);
     }
 }
 

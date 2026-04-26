@@ -22,6 +22,7 @@ public:
     int rows() const noexcept;
     int columns() const noexcept;
     QString title() const;
+    QString currentDirectory() const;
     QString debugPlainText() const;
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
@@ -44,6 +45,7 @@ signals:
     void bell();
     void sizeChanged();
     void titleChanged(const QString &title);
+    void currentDirectoryChanged(const QString &url);
     void debugPlainTextChanged();
     void cursorStateChanged();
     void modeStateChanged();
@@ -57,6 +59,7 @@ private:
     QTermModeState m_modeState;
     QTermTextParser m_textParser;
     QString m_title;
+    QString m_currentDirectory;
     // OSC 8 hyperlink registry: id -> URL (id 0 is reserved for "no link")
     QHash<int, QString> m_hyperlinkUrls;
     int m_nextHyperlinkId = 1;
