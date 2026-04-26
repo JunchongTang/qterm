@@ -27,13 +27,20 @@ QTermTheme QTermTheme::make(const char *name, bool darkMode,
 
 QTermTheme::QTermTheme() : QTermTheme(dark()) {}
 
-// ── paletteColor ─────────────────────────────────────────────────────────────
+// ── paletteColor / setPaletteColor ───────────────────────────────────────────
 
 QColor QTermTheme::paletteColor(int index) const
 {
     if (index < 0 || index > 15)
         return QColor();
     return m_palette[index];
+}
+
+void QTermTheme::setPaletteColor(int index, const QColor &color)
+{
+    if (index < 0 || index > 15)
+        return;
+    m_palette[index] = color;
 }
 
 // ── Built-in factories ────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermTheme.h>
 
+#include <QtQml/qqmlregistration.h>
+
 namespace QTerm {
 
 class QTermViewController;
@@ -30,6 +32,7 @@ class QTermViewController;
 class QTermQuickItem : public QQuickItem
 {
     Q_OBJECT
+    QML_ELEMENT
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontPixelSize READ fontPixelSize WRITE setFontPixelSize NOTIFY fontChanged)

@@ -74,13 +74,6 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
 
-    qmlRegisterUncreatableType<QTerm::QTermTerminal>(
-        "QTerm", 1, 0, "QTermTerminal", "QTermTerminal is provided by the application.");
-    qmlRegisterUncreatableType<QTerm::QTermSurfaceModel>(
-        "QTerm", 1, 0, "QTermSurfaceModel", "QTermSurfaceModel is provided by QTermTerminal.");
-    qmlRegisterType<QTerm::QTermQuickPaintedItem>("QTerm", 1, 0, "QTermQuickPaintedItem");
-    qmlRegisterType<QTerm::QTermQuickItem>("QTerm", 1, 0, "QTermQuickItem");
-
     QTerm::QTermTerminal terminal;
     QTerm::QTermSession session;
     QTerm::QTermLocalPtyBackend backend;
