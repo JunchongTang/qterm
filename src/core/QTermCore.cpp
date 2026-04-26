@@ -42,6 +42,16 @@ QString QTermCore::currentDirectory() const
     return m_currentDirectory;
 }
 
+int QTermCore::shellZone() const noexcept
+{
+    return m_shellZone;
+}
+
+int QTermCore::lastExitCode() const noexcept
+{
+    return m_lastExitCode;
+}
+
 QString QTermCore::debugPlainText() const
 {
     return activeScreen().buffer.debugPlainText();
@@ -127,6 +137,39 @@ void QTermCore::writePlainText(const QString &text)
 
         m_currentDirectory = url;
         emit currentDirectoryChanged(m_currentDirectory);
+    });
+    executor.setWriteClipboardHandler([this](const QString &text) {
+        emit clipboardWriteRequested(text);
+    });
+    executor.setShellZoneHandler([this](const QString &mark) {
+        int newZone = m_shellZone;
+        int newExitCode = m_lastExitCode;
+
+        if (mark.startsWith(u'A')) {
+            newZone = 1; // Prompt
+        } else if (mark.startsWith(u'B')) {
+            newZone = 2; // CommandInput
+        } else if (mark.startsWith(u'C')) {
+            newZone = 3; // Output
+        } else if (mark.startsWith(u'D')) {
+            newZone = 0; // Unknown (command ended)
+            const qsizetype sep = mark.indexOf(u';');
+            if (sep >= 0) {
+                bool ok = false;
+                const int code = mark.sliced(sep + 1).toInt(&ok);
+                if (ok) {
+                    newExitCode = code;
+                }
+            } else {
+                newExitCode = 0;
+            }
+        }
+
+        if (newZone != m_shellZone || newExitCode != m_lastExitCode) {
+            m_shellZone = newZone;
+            m_lastExitCode = newExitCode;
+            emit shellZoneChanged();
+        }
     });
     executor.setOutboundHandler([this](const QByteArray &data) {
         emit outboundData(data);

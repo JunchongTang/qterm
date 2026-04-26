@@ -28,6 +28,8 @@ public:
     void setBellHandler(const std::function<void()> &handler);
     void setWindowTitleHandler(const std::function<void(const QString &)> &handler);
     void setCurrentDirectoryHandler(const std::function<void(const QString &)> &handler);
+    void setWriteClipboardHandler(const std::function<void(const QString &)> &handler);
+    void setShellZoneHandler(const std::function<void(const QString &)> &handler);
     void setOutboundHandler(const std::function<void(const QByteArray &)> &handler);
     void setRegisterHyperlinkHandler(const std::function<int(const QString &)> &handler);
 
@@ -62,6 +64,10 @@ public:
     void setWindowTitle(const QString &title);
     // OSC 7: notify shell's current working directory
     void setCurrentDirectory(const QString &url);
+    // OSC 52: clipboard write (base64 already decoded)
+    void requestClipboardWrite(const QString &text);
+    // OSC 133: shell integration mark (A/B/C/D or D;exitcode)
+    void notifyShellZone(const QString &mark);
     void deviceStatusReport();
     void deviceAttributes();
     void secondaryDeviceAttributes();
@@ -91,6 +97,8 @@ private:
     std::function<void()> m_bellHandler;
     std::function<void(const QString &)> m_windowTitleHandler;
     std::function<void(const QString &)> m_currentDirectoryHandler;
+    std::function<void(const QString &)> m_writeClipboardHandler;
+    std::function<void(const QString &)> m_shellZoneHandler;
     std::function<void(const QByteArray &)> m_outboundHandler;
     std::function<int(const QString &)> m_registerHyperlinkHandler;
 };

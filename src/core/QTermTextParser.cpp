@@ -2,6 +2,8 @@
 
 #include "QTermInputExecutor.h"
 
+#include <QByteArray>
+
 namespace QTerm {
 
 void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
@@ -328,11 +330,27 @@ void QTermTextParser::handleOscTerminator(QTermInputExecutor &executor)
             executor.setCurrentDirectory(m_oscData.sliced(separatorIndex + 1));
         } else if (command == u"8") {
             // OSC 8 ; params ; uri BEL/ST
-            // The content after the command separator is "params;uri"
             const QString rest = m_oscData.sliced(separatorIndex + 1);
             const qsizetype uriSep = rest.indexOf(u';');
             const QString uri = (uriSep >= 0) ? rest.sliced(uriSep + 1) : QString();
             executor.setHyperlink(uri);
+        } else if (command == u"52") {
+            // OSC 52 ; Pc ; Pd BEL/ST  — clipboard access
+            // Pc = clipboard selection (e.g. "c"), Pd = base64 data or "?" (read request)
+            const QString payload = m_oscData.sliced(separatorIndex + 1);
+            const qsizetype selSep = payload.indexOf(u';');
+            if (selSep >= 0) {
+                const QString encoded = payload.sliced(selSep + 1);
+                if (encoded != u"?") {
+                    // Write: decode base64 and forward; read requests are silently ignored
+                    const QByteArray decoded = QByteArray::fromBase64(encoded.toLatin1());
+                    executor.requestClipboardWrite(QString::fromUtf8(decoded));
+                }
+            }
+        } else if (command == u"133") {
+            // OSC 133 ; mark BEL/ST  — shell integration (FinalTerm / iTerm2 / VTE)
+            // mark: A=prompt-start B=command-start C=output-start D[;exitcode]=command-end
+            executor.notifyShellZone(m_oscData.sliced(separatorIndex + 1));
         }
     }
 

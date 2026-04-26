@@ -215,6 +215,16 @@ void QTermInputExecutor::setCurrentDirectoryHandler(const std::function<void(con
     m_currentDirectoryHandler = handler;
 }
 
+void QTermInputExecutor::setWriteClipboardHandler(const std::function<void(const QString &)> &handler)
+{
+    m_writeClipboardHandler = handler;
+}
+
+void QTermInputExecutor::setShellZoneHandler(const std::function<void(const QString &)> &handler)
+{
+    m_shellZoneHandler = handler;
+}
+
 void QTermInputExecutor::setOutboundHandler(const std::function<void(const QByteArray &)> &handler)
 {
     m_outboundHandler = handler;
@@ -752,6 +762,20 @@ void QTermInputExecutor::setCurrentDirectory(const QString &url)
 {
     if (m_currentDirectoryHandler) {
         m_currentDirectoryHandler(url);
+    }
+}
+
+void QTermInputExecutor::requestClipboardWrite(const QString &text)
+{
+    if (m_writeClipboardHandler) {
+        m_writeClipboardHandler(text);
+    }
+}
+
+void QTermInputExecutor::notifyShellZone(const QString &mark)
+{
+    if (m_shellZoneHandler) {
+        m_shellZoneHandler(mark);
     }
 }
 

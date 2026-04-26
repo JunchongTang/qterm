@@ -27,6 +27,9 @@ class QTermTerminal final : public QObject
     Q_PROPERTY(QTerm::QTermSession *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(QString currentDirectory READ currentDirectory NOTIFY currentDirectoryChanged)
+    // OSC 133 shell integration
+    Q_PROPERTY(int shellZone READ shellZone NOTIFY shellZoneChanged)
+    Q_PROPERTY(int lastExitCode READ lastExitCode NOTIFY shellZoneChanged)
     Q_PROPERTY(QTerm::QTermSurfaceModel *surfaceModel READ surfaceModel CONSTANT)
 
 public:
@@ -40,6 +43,8 @@ public:
     QTermSession *session() const noexcept;
     QString title() const;
     QString currentDirectory() const;
+    int shellZone() const noexcept;
+    int lastExitCode() const noexcept;
     QTermSurfaceModel *surfaceModel() noexcept;
     const QTermModeState &modeState() const noexcept;
 
@@ -72,6 +77,8 @@ signals:
     void sessionChanged();
     void titleChanged();
     void currentDirectoryChanged();
+    void shellZoneChanged();
+    void clipboardWriteRequested(const QString &text);
     void modeStateChanged();
     void outboundData(const QByteArray &data);
 
