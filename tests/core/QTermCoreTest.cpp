@@ -100,6 +100,9 @@ private slots:
     void reflowsMixedCjkPreservesLogicalContent();
     // Cursor tracking across scrollback reflow
     void cursorTracksLogicalPositionAfterScrollbackReflow();
+    // Combining text — multi-cycle and scrollback
+    void reflowsCombiningTextMultipleCycles();
+    void reflowsCombiningTextInScrollback();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -1604,12 +1607,12 @@ void QTermCoreTest::reflowsMixedCjkPreservesLogicalContent()
 
 void QTermCoreTest::cursorTracksLogicalPositionAfterScrollbackReflow()
 {
-    // When scrollback is reflowed, the visible cursor must stay anchored to
-    // the same logical line (not drift to a stale physical row index).
+    // When scrollback is reflowed, the visible cursor must maintain its
+    // relative distance from the bottom of the terminal (not jump to row 0).
     //
     // Setup: 6-col, 3-row terminal. Four lines written with \r\n ensure the
     // first line scrolls cleanly to history and the cursor ends up at row 2
-    // (the "ab" line).
+    // (the "ab" line, bottom of the visible area).
     QTermCore core;
     core.setTerminalSize(6, 3);
 
@@ -1621,17 +1624,75 @@ void QTermCoreTest::cursorTracksLogicalPositionAfterScrollbackReflow()
     QCOMPARE(core.buffer().historyLineCount(), 1);
 
     core.setTerminalSize(3, 3);  // narrow: history + visible lines split
-    // The reflow algorithm pushes all rows before the cursor's logical line
-    // into history so the cursor lands at visible row 0 (first visible row).
-    // The cursor column and logical content must still be correct.
-    QCOMPARE(core.cursorState().row, 0);
+    // Cursor was at row 2 (bottom, distanceFromBottom=0). After reflow the
+    // cursor stays at row 2 of the new 3-row terminal. Lines above it
+    // (split XXXXXX + YYYYYY fragments) push into history.
+    QCOMPARE(core.cursorState().row, 2);
     QCOMPARE(core.cursorState().column, 2);
     QCOMPARE(core.buffer().lineAt(core.cursorState().row).plainText(), "ab"_L1);
 
     core.setTerminalSize(6, 3);  // widen back: content reassembles
-    QCOMPARE(core.cursorState().row, 0);
+    // Cursor still at row 2 (bottom), logical content "ab" intact.
+    QCOMPARE(core.cursorState().row, 2);
     QCOMPARE(core.cursorState().column, 2);
     QCOMPARE(core.buffer().lineAt(core.cursorState().row).plainText(), "ab"_L1);
+}
+
+void QTermCoreTest::reflowsCombiningTextMultipleCycles()
+{
+    // Combining marks (e + U+0301) must survive 6 alternating narrow/widen
+    // cycles without being lost, duplicated, or corrupted.
+    //
+    // "e\u0301abc" = é(1 col) + a + b + c = 4 display columns.
+    QTermCore core;
+    const QString text = QStringLiteral("e\u0301abc");
+
+    core.setTerminalSize(4, 4);
+    core.writePlainText(text);
+    const QString expected = core.debugPlainText();
+
+    for (const int width : {2, 4, 3, 4, 2, 4}) {
+        core.setTerminalSize(width, 4);
+        QCOMPARE(core.debugPlainText(), expected);
+    }
+}
+
+void QTermCoreTest::reflowsCombiningTextInScrollback()
+{
+    // A line containing combining marks pushed into scrollback history must
+    // survive narrow/widen reflow with its combining marks intact.
+    //
+    // Setup: 5-col, 3-row terminal. Four lines via \r\n ensure the first
+    // ("e\u0301abc") scrolls into history. The visible lines ("XX","YY","XY")
+    // are ≤ 2 cols so they never split when narrowed to width 3.
+    //
+    // Note: the reflow algorithm always pushes all predecessors of the cursor's
+    // logical line into history (to keep the cursor at visible row 0), so
+    // historyLineCount grows beyond 1 after narrow/widen. The test only
+    // verifies logical content preservation and combining-mark integrity.
+    QTermCore core;
+    core.setTerminalSize(5, 3);
+
+    // "e\u0301abc" = é + abc = 4 display cols; fits on one row at width 5.
+    const QString combining = QStringLiteral("e\u0301abc");
+    core.writePlainText(combining + "\r\nXX\r\nYY\r\nXY");
+    // history=["e\u0301abc"], visible=["XX","YY","XY"]
+
+    QCOMPARE(core.buffer().historyLineCount(), 1);
+    const QString full = combining + "\nXX\nYY\nXY";
+    QCOMPARE(core.buffer().debugPlainText(), full);
+
+    // Narrow: "e\u0301abc" (4 cols) splits → content still intact.
+    core.setTerminalSize(3, 3);
+    QCOMPARE(core.buffer().debugPlainText(), full);
+
+    // Widen: combining marks must reassemble. Cursor was at the bottom
+    // (distanceFromBottom=0), so only the minimum overflow rows land in
+    // history. projectionLineAt(0) = the reassembled combining line.
+    core.setTerminalSize(5, 3);
+    QCOMPARE(core.buffer().debugPlainText(), full);
+    QCOMPARE(core.buffer().projectionLineAt(0).plainText(), combining);
+    QVERIFY(!core.buffer().projectionLineAt(0).wrappedToNextLine());
 }
 
 } // namespace QTerm

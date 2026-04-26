@@ -189,6 +189,7 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
         }
     }
 
+    const int oldRows = m_rows;
     m_columns = columns;
     m_rows = rows;
 
@@ -196,18 +197,27 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
         reflowedCursor = QTermCursorState();
     }
 
-    // Push the cursor's logical line predecessors into history so that the
-    // cursor's logical line sits at the bottom of the visible region.
-    // After a SIGWINCH the shell uses ESC[nA + ESC[J to redraw the prompt;
-    // ESC[J only erases the visible region, so rows already in scrollback
-    // (history) are unaffected and their content is preserved across resize.
+    // Maintain the cursor's relative distance from the bottom of the visible
+    // area across resize — consistent with xterm / iTerm2 behaviour.
+    // When narrowing, lines above the cursor may split and flow into history;
+    // the cursor stays anchored to the same logical content near the bottom.
+    // Lines that must overflow (reflowedLines.size() > rows) always go to
+    // history first; on top of that we push just enough extra rows so the
+    // cursor ends up at targetCursorVisibleRow.
+    //
+    // Hard constraint: never push any part of the cursor's own logical line
+    // into history (cursorLogicalLineStartRow is the first physical row of
+    // that logical line in the reflowed array).
     const int defaultHistoryCount = qMax(0, reflowedLines.size() - rows);
-    const int cursorLinePhysicalRows = cursorResolved
-        ? (reflowedCursor.row - cursorLogicalLineStartRow + 1)
+    const int distanceFromBottom = qMax(0, (oldRows - 1) - cursorState.row);
+    const int targetCursorVisibleRow = qBound(0, (rows - 1) - distanceFromBottom, rows - 1);
+    const int rawMinHistoryForCursor = cursorResolved
+        ? qMax(0, reflowedCursor.row - targetCursorVisibleRow)
         : 0;
-    const int historyCount = (cursorResolved && cursorLinePhysicalRows <= rows)
-        ? qMax(defaultHistoryCount, cursorLogicalLineStartRow)
-        : defaultHistoryCount;
+    const int minHistoryForCursor = cursorResolved
+        ? qMin(rawMinHistoryForCursor, cursorLogicalLineStartRow)
+        : rawMinHistoryForCursor;
+    const int historyCount = qMax(defaultHistoryCount, minHistoryForCursor);
     m_historyLines = reflowedLines.first(historyCount);
     m_visibleLines = reflowedLines.mid(historyCount);
 
