@@ -74,6 +74,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
 
     connect(m_core, &QTermCore::bell, this, &QTermTerminal::bell);
     connect(m_core, &QTermCore::titleChanged, this, &QTermTerminal::setTitle);
+    connect(m_core, &QTermCore::currentDirectoryChanged, this, &QTermTerminal::setCurrentDirectory);
     connect(m_core, &QTermCore::modeStateChanged, this, &QTermTerminal::modeStateChanged);
     connect(m_core, &QTermCore::outboundData, this, &QTermTerminal::outboundData);
 
@@ -115,6 +116,11 @@ QTermSession *QTermTerminal::session() const noexcept
 QString QTermTerminal::title() const
 {
     return m_title;
+}
+
+QString QTermTerminal::currentDirectory() const
+{
+    return m_currentDirectory;
 }
 
 QTermSurfaceModel *QTermTerminal::surfaceModel() noexcept
@@ -304,6 +310,16 @@ void QTermTerminal::setTitle(const QString &title)
 
     m_title = title;
     emit titleChanged();
+}
+
+void QTermTerminal::setCurrentDirectory(const QString &url)
+{
+    if (m_currentDirectory == url) {
+        return;
+    }
+
+    m_currentDirectory = url;
+    emit currentDirectoryChanged();
 }
 
 void QTermTerminal::syncSurfaceSelection()

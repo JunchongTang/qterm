@@ -26,6 +26,7 @@ class QTermTerminal final : public QObject
     Q_PROPERTY(int maxScrollOffset READ maxScrollOffset NOTIFY viewportChanged)
     Q_PROPERTY(QTerm::QTermSession *session READ session WRITE setSession NOTIFY sessionChanged)
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
+    Q_PROPERTY(QString currentDirectory READ currentDirectory NOTIFY currentDirectoryChanged)
     Q_PROPERTY(QTerm::QTermSurfaceModel *surfaceModel READ surfaceModel CONSTANT)
 
 public:
@@ -38,6 +39,7 @@ public:
     int maxScrollOffset() const noexcept;
     QTermSession *session() const noexcept;
     QString title() const;
+    QString currentDirectory() const;
     QTermSurfaceModel *surfaceModel() noexcept;
     const QTermModeState &modeState() const noexcept;
 
@@ -61,6 +63,7 @@ public:
 
 public slots:
     void setTitle(const QString &title);
+    void setCurrentDirectory(const QString &url);
 
 signals:
     void bell();
@@ -68,6 +71,7 @@ signals:
     void viewportChanged();
     void sessionChanged();
     void titleChanged();
+    void currentDirectoryChanged();
     void modeStateChanged();
     void outboundData(const QByteArray &data);
 
@@ -82,6 +86,7 @@ private:
     QTermSurfaceModel m_surfaceModel;
     std::unique_ptr<QTermSelectionModel> m_selectionModel;
     QString m_title;
+    QString m_currentDirectory;
     QMetaObject::Connection m_sessionDataConnection;
     QMetaObject::Connection m_sessionDestroyedConnection;
     QMetaObject::Connection m_coreOutboundConnection;

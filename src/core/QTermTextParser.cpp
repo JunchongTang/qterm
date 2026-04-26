@@ -323,6 +323,9 @@ void QTermTextParser::handleOscTerminator(QTermInputExecutor &executor)
         const QString command = m_oscData.left(separatorIndex);
         if (command == u"0" || command == u"2") {
             executor.setWindowTitle(m_oscData.sliced(separatorIndex + 1));
+        } else if (command == u"7") {
+            // OSC 7 ; file:///hostname/path BEL/ST
+            executor.setCurrentDirectory(m_oscData.sliced(separatorIndex + 1));
         } else if (command == u"8") {
             // OSC 8 ; params ; uri BEL/ST
             // The content after the command separator is "params;uri"

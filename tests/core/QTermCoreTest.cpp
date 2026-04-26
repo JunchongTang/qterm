@@ -105,6 +105,8 @@ private slots:
     void reflowsCombiningTextInScrollback();
     // DECSCUSR cursor shape
     void supportsDecScusr();
+    // OSC 7 current working directory
+    void supportsOsc7CurrentDirectory();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -1722,6 +1724,24 @@ void QTerm::QTermCoreTest::supportsDecScusr()
 
     core.writePlainText(u"\x1b[0 q"_s); // default → block
     QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+}
+
+void QTerm::QTermCoreTest::supportsOsc7CurrentDirectory()
+{
+    QTermCore core;
+    QVERIFY(core.currentDirectory().isEmpty());
+
+    // Standard form: OSC 7 ; file:///hostname/path BEL
+    core.writePlainText(u"\x1b]7;file:///myhost/home/user\x07"_s);
+    QCOMPARE(core.currentDirectory(), u"file:///myhost/home/user"_s);
+
+    // Update to a new path
+    core.writePlainText(u"\x1b]7;file:///myhost/home/user/projects\x07"_s);
+    QCOMPARE(core.currentDirectory(), u"file:///myhost/home/user/projects"_s);
+
+    // ST terminator (ESC \) also works
+    core.writePlainText(u"\x1b]7;file:///tmp\x1b\\"_s);
+    QCOMPARE(core.currentDirectory(), u"file:///tmp"_s);
 }
 
 QTEST_MAIN(QTerm::QTermCoreTest)
