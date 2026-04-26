@@ -40,6 +40,7 @@ signals:
     void titleChanged(const QString &title);
     void debugPlainTextChanged();
     void cursorStateChanged();
+    void modeStateChanged();
     void outboundData(const QByteArray &data);
 
 private:

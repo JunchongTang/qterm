@@ -67,43 +67,39 @@ QByteArray QTermInputEncoder::encodePaste(const QTermModeState &modeState, const
 
 QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton button,
                                            Qt::KeyboardModifiers modifiers, bool isPress,
-                                           const QTermModeState &modeState)
+                                           const QTermModeState &modeState, bool isMotion)
 {
-    // 鼠标模式禁用则不编码
-    if (modeState.mouseMode == MouseMode::Disabled) {
+    // 鼠标跟踪禁用则不编码
+    if (modeState.mouseTracking == MouseTracking::Disabled) {
         return QByteArray();
     }
 
-    // 确定按钮码
-    int buttonCode = 3;  // 默认为释放
-    if (isPress) {
-        switch (button) {
-        case Qt::LeftButton:
-            buttonCode = 0;
-            break;
-        case Qt::MiddleButton:
-            buttonCode = 1;
-            break;
-        case Qt::RightButton:
-            buttonCode = 2;
-            break;
-        case Qt::NoButton:
-            // 特殊虚拟码：64=滚轮向上，65=滚轮向下
-            buttonCode = 3;  // 默认移动事件
-            break;
-        default:
-            // 检查虚拟按钮码：64 和 65 用于滚轮
-            if (static_cast<int>(button) == 64) {
-                buttonCode = 64;  // 滚轮向上
-            } else if (static_cast<int>(button) == 65) {
-                buttonCode = 65;  // 滚轮向下
-            } else {
-                buttonCode = 3;
-            }
-            break;
-        }
-    } else {
-        // 松开时，使用 3（可选加修饰符）
+    // 确定基础按钮码（与 isPress/isMotion 无关）
+    int buttonCode;
+    switch (button) {
+    case Qt::LeftButton:   buttonCode = 0; break;
+    case Qt::MiddleButton: buttonCode = 1; break;
+    case Qt::RightButton:  buttonCode = 2; break;
+    case Qt::NoButton:     buttonCode = 3; break;
+    default:
+        if (static_cast<int>(button) == 64)       buttonCode = 64;  // 滚轮向上
+        else if (static_cast<int>(button) == 65)  buttonCode = 65;  // 滚轮向下
+        else                                       buttonCode = 3;
+        break;
+    }
+
+    // 移动事件（拖拽/悬停）：在按钮码上加 32
+    // buttonCode 3（NoButton）+ 32 = 35（无按键移动）
+    // buttonCode 0（左键）  + 32 = 32（左键拖拽）
+    if (isMotion) {
+        buttonCode += 32;
+    }
+
+    // X10/基础格式下，释放事件统一编码为 button=3（不区分具体按键）
+    // SGR/URXVT 格式保留原始按钮码，用 M/m 区分按下/释放
+    const bool isSGRFamily = (modeState.mouseEncoding == MouseEncoding::SGR ||
+                              modeState.mouseEncoding == MouseEncoding::URXVT);
+    if (!isPress && !isMotion && !isSGRFamily) {
         buttonCode = 3;
     }
 
@@ -123,17 +119,17 @@ QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton b
     const int y = row + 1;
 
     // SGR 扩展格式 (?1006)
-    if (modeState.mouseMode == MouseMode::SGR) {
-        // ESC [ <button> ; <x> ; <y> M/m
-        return QByteArray("\x1b[") + QByteArray::number(buttonCode + modifierCode) +
+    if (modeState.mouseEncoding == MouseEncoding::SGR) {
+        // ESC [ < button ; x ; y M/m
+        return QByteArray("\x1b[<") + QByteArray::number(buttonCode + modifierCode) +
                ';' + QByteArray::number(x) +
                ';' + QByteArray::number(y) +
                (isPress ? 'M' : 'm');
     }
 
     // URXVT 格式 (?1015)
-    if (modeState.mouseMode == MouseMode::URXVT) {
-        // ESC [ <button> ; <x> ; <y> M
+    if (modeState.mouseEncoding == MouseEncoding::URXVT) {
+        // ESC [ button ; x ; y M
         return QByteArray("\x1b[") + QByteArray::number(buttonCode + modifierCode) +
                ';' + QByteArray::number(x) +
                ';' + QByteArray::number(y) +

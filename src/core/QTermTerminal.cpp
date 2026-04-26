@@ -73,7 +73,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
 
     connect(m_core, &QTermCore::bell, this, &QTermTerminal::bell);
     connect(m_core, &QTermCore::titleChanged, this, &QTermTerminal::setTitle);
-
+    connect(m_core, &QTermCore::modeStateChanged, this, &QTermTerminal::modeStateChanged);
     connect(m_core, &QTermCore::outboundData, this, &QTermTerminal::outboundData);
 
     m_surfaceModel.setSize(m_core->columns(), m_core->rows());
@@ -238,15 +238,15 @@ void QTermTerminal::sendPaste(const QString &text)
     m_core->sendPaste(text);
 }
 
-void QTermTerminal::sendMouse(int row, int column, int button, int modifiers, bool isPress)
+void QTermTerminal::sendMouse(int row, int column, int button, int modifiers, bool isPress, bool isMotion)
 {
     const Qt::MouseButton qtButton = static_cast<Qt::MouseButton>(button);
     const Qt::KeyboardModifiers qtModifiers = static_cast<Qt::KeyboardModifiers>(modifiers);
     const QByteArray mouseSequence = QTermInputEncoder::encodeMouse(
-        row, column, qtButton, qtModifiers, isPress, m_core->modeState());
-    
+        row, column, qtButton, qtModifiers, isPress, m_core->modeState(), isMotion);
+
     if (!mouseSequence.isEmpty()) {
-        feedText(QString::fromLatin1(mouseSequence));
+        emit outboundData(mouseSequence);
     }
 }
 
@@ -278,7 +278,7 @@ void QTermTerminal::setSession(QTermSession *session)
             m_session = nullptr;
             emit sessionChanged();
         });
-        m_coreOutboundConnection = connect(m_core, &QTermCore::outboundData, m_session, &QTermSession::writeData);
+        m_coreOutboundConnection = connect(this, &QTermTerminal::outboundData, m_session, &QTermSession::writeData);
         m_sizeToSessionResizeConnection = connect(this, &QTermTerminal::sizeChanged, this, [this]() {
             if (m_session) {
                 m_session->resize(columns(), rows());

@@ -164,19 +164,29 @@
 
 已完成：
 
-* alternate screen 已有基础支持。
-* bracketed paste 已有基础支持。
+* alternate screen 已有完整支持（?47 / ?1047 / ?1049）。
+* bracketed paste 已有完整支持。
 * application cursor keys、OSC title 等已有实现。
+* DECAWM (?7) 自动换行模式已实现。
+* DECSTBM 光标归位语义已修正（移至绝对 (0,0) 而非滚动区顶端）。
+* 滚动区外末行 LF 不触发全屏滚动的边界行为已修正。
+* ESC c (RIS) 全终端硬复位已实现。
+* CNL / CPL、ECH、CSI 3 J 等补全指令已实现。
+* SO / SI / NUL / DEL 控制字符已正确处理。
+* macOS Cocoa 拦截 Ctrl+字母 导致 text 为空的问题已在 encoder 层修正。
+* **vim、less、htop、tmux（含分屏、框线、滚动）经过人工验证，行为正确。**
 
 未完成：
 
-* mouse tracking 尚未真正实现。
+* mouse tracking 的 UI 层转发尚未接入（encoder 已实现，前端 QTermQuickPaintedItem 尚未转发鼠标事件到 PTY）。
 * OSC 8 hyperlink 尚未实现。
-* 距离 vim、less、htop 等复杂 CLI 的可接受兼容性还有距离。
+* 更复杂的 shell 集成（OSC 133 提示符标记、OSC 7 工作目录）尚未验证。
 
 退出标准：
 
-* vim、less、htop 和交互式 shell 等常见 CLI 工具行为基本可接受。
+* vim、less、htop 和交互式 shell 等常见 CLI 工具行为基本可接受。✅（已达到）
+* mouse tracking 在 tmux / htop 中可用。
+* OSC 8 超链接可渲染与交互。
 
 ## Phase 7：更多会话后端
 
@@ -232,6 +242,14 @@
 
 ## 当前下一步
 
-1. 继续收敛 Phase 3，把 reflow 从“第一版可用”推进到“复杂场景稳定”，重点补 combining text、复杂 prompt、反复窄宽循环的 golden tests。
-2. 继续收敛 Phase 4，把当前 demo 级前端推进到真正的 QTermQuickPaintedItem 与增量渲染路径。
-3. 继续推进 Phase 6，优先补 mouse tracking 与 OSC 8 hyperlink，逐步验证更复杂的交互式 CLI 工作负载。
+1. **Phase 6 收尾 — mouse tracking UI 层接入（优先）**
+   mouse tracking 的编码层（`QTermInputEncoder::encodeMouse`）和模式状态（`?1000/?1002/?1003/?1006`）均已实现，唯一缺失的是 `QTermQuickPaintedItem` 尚未将 `mousePressEvent` / `mouseMoveEvent` / `wheelEvent` 转发给 PTY。完成这一步后 tmux 鼠标选窗格、htop 鼠标选进程即可工作。
+
+2. **Phase 6 收尾 — OSC 8 超链接渲染**
+   解析器已能接收 OSC 8，需要在 `QTermCell` 中增加 URL 字段，在 `QTermQuickPaintedItem` 绘制下划线并处理点击跳转。
+
+3. **Phase 3 收尾 — reflow golden tests 补全**
+   当前 reflow 已覆盖 ASCII、CJK、宽字符、wrap 边界基础场景，仍需补充 combining text 多轮循环、复杂 prompt 拼接、scrollback 与可见屏拼接边界的 golden tests，把 Phase 3 状态从"进行中"推进到"已完成"。
+
+4. **Phase 4 收尾 — QSG 增量渲染**
+   当前前端基于 `QQuickPaintedItem` 全量重绘，后续迁移到 `QSGSimpleTextureNode` 脏行更新模型以支持大窗口高帧率场景。

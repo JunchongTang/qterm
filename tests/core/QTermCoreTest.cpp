@@ -77,6 +77,14 @@ private slots:
     void togglesMouseModeSGR();
     void encodesMouseEventX10();
     void encodesMouseEventSGR();
+    // tmux 支持回归测试
+    void decawmDisablesPendingWrap();
+    void decstbmMovesCursorToHomeNotScrollTop();
+    void lineFeedOutsideScrollRegionDoesNotScroll();
+    void eraseInDisplayMode3ClearsScrollbackOnly();
+    void risResetsTerminalState();
+    void cursorNextAndPreviousLine();
+    void encodesCtrlLetterWhenTextIsEmpty();
 };
 
 void QTermCoreTest::usesDefaultTerminalSize()
@@ -949,29 +957,29 @@ void QTermCoreTest::clearsState(){
 void QTermCoreTest::togglesMouseModeX10()
 {
     QTermCore core;
-    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+    QCOMPARE(core.modeState().mouseTracking, MouseTracking::Disabled);
 
     // 启用 X10 鼠标模式：ESC[?1000h
     core.writePlainText("\x1b[?1000h"_L1);
-    QCOMPARE(core.modeState().mouseMode, MouseMode::X10);
+    QCOMPARE(core.modeState().mouseTracking, MouseTracking::X10);
 
     // 禁用鼠标模式：ESC[?1000l
     core.writePlainText("\x1b[?1000l"_L1);
-    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+    QCOMPARE(core.modeState().mouseTracking, MouseTracking::Disabled);
 }
 
 void QTermCoreTest::togglesMouseModeSGR()
 {
     QTermCore core;
-    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+    QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::Default);
 
-    // 启用 SGR 鼠标模式：ESC[?1006h
+    // 启用 SGR 编码：ESC[?1006h
     core.writePlainText("\x1b[?1006h"_L1);
-    QCOMPARE(core.modeState().mouseMode, MouseMode::SGR);
+    QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::SGR);
 
-    // 禁用鼠标模式：ESC[?1006l
+    // 禁用 SGR 编码：ESC[?1006l
     core.writePlainText("\x1b[?1006l"_L1);
-    QCOMPARE(core.modeState().mouseMode, MouseMode::Disabled);
+    QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::Default);
 }
 
 void QTermCoreTest::encodesMouseEventX10()
@@ -995,7 +1003,8 @@ void QTermCoreTest::encodesMouseEventX10()
 void QTermCoreTest::encodesMouseEventSGR()
 {
     QTermCore core;
-    core.writePlainText("\x1b[?1006h"_L1);  // 启用 SGR 模式
+    core.writePlainText("\x1b[?1006h"_L1);  // 启用 SGR 编码格式
+    core.writePlainText("\x1b[?1002h"_L1);  // 启用 Button 事件跟踪
 
     // 编码鼠标按下事件：右键按下在 (5, 10)，带 Shift 修饰符
     const QByteArray encoded = QTermInputEncoder::encodeMouse(
@@ -1005,7 +1014,7 @@ void QTermCoreTest::encodesMouseEventSGR()
     // button = 2 (右键) + 4 (Shift) = 6
     // x = 5 + 1 = 6
     // y = 10 + 1 = 11
-    const QByteArray expected = QByteArray("\x1b[6;6;11M");
+    const QByteArray expected = QByteArray("\x1b[<6;6;11M");
     QCOMPARE(encoded, expected);
 }
 
@@ -1178,6 +1187,202 @@ void QTermCoreTest::supportsSaveCursorAnsi()
     core.writePlainText("\x1b[u"_L1);     // restore
     QCOMPARE(core.cursorState().row, 2);  // 0-based: row 3 → 2
     QCOMPARE(core.cursorState().column, 4);  // 0-based: col 5 → 4
+}
+
+void QTermCoreTest::decawmDisablesPendingWrap()
+{
+    // ?7l disables auto-wrap: writing at the last column must NOT advance to the
+    // next row — the character is overwritten in-place at the last column.
+    QTermCore core;
+    core.setTerminalSize(5, 3);
+
+    core.writePlainText("\x1b[?7l"_L1);  // DECAWM off
+    core.writePlainText("ABCDE"_L1);     // fills cols 0-4, no wrap
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 4);
+    core.writePlainText("X"_L1);         // overwrite at col 4, cursor stays
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 4);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "ABCDX"_L1);
+
+    // Re-enable DECAWM — wrap should work again.
+    core.writePlainText("\x1b[?7h"_L1);
+    core.writePlainText("Y"_L1);         // Y overwrites col 4 with wrap-pending set
+    QCOMPARE(core.cursorState().row, 0);
+    // wrapPending is now true; next character will land on row 1.
+    core.writePlainText("Z"_L1);
+    QCOMPARE(core.cursorState().row, 1);
+    QCOMPARE(core.cursorState().column, 1);
+}
+
+void QTermCoreTest::decstbmMovesCursorToHomeNotScrollTop()
+{
+    // DECSTBM (CSI r) must always move the cursor to absolute (0,0),
+    // not to the top of the scroll region.
+    QTermCore core;
+    core.setTerminalSize(10, 10);
+
+    // Move cursor away from home first.
+    core.writePlainText("\x1b[5;5H"_L1);  // cursor to row 5, col 5 (1-based)
+    QCOMPARE(core.cursorState().row, 4);
+    QCOMPARE(core.cursorState().column, 4);
+
+    // Set scroll region to rows 3-8 (1-based).
+    core.writePlainText("\x1b[3;8r"_L1);
+
+    // Cursor must be at (0,0), NOT at (2,0) (the scroll region top).
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 0);
+}
+
+void QTermCoreTest::lineFeedOutsideScrollRegionDoesNotScroll()
+{
+    // When the cursor is outside the scroll region and a LF is received:
+    //   - cursor moves down normally (no scroll region logic applies)
+    //   - at the very last row of the terminal it stops (no full-screen scroll)
+    //   - content inside the scroll region must NOT be disturbed
+    QTermCore core;
+    core.setTerminalSize(5, 6);
+
+    // Fill all rows with identifiable content.
+    core.writePlainText("aaaaa\r\nbbbbb\r\nccccc\r\nddddd\r\neeeee\r\nfffff"_L1);
+    // cursor is at row 5 (0-based, last row).
+
+    // Set scroll region to rows 1-4 (1-based) = 0-3 (0-based).
+    core.writePlainText("\x1b[1;4r"_L1);  // cursor moved to (0,0) by DECSTBM
+
+    // Move cursor BELOW the scroll region bottom but not at the very last row.
+    core.writePlainText("\x1b[5;1H"_L1);  // row 5, col 1 (1-based) = row 4, col 0 (0-based)
+    QCOMPARE(core.cursorState().row, 4);
+
+    // LF below the scroll region should advance cursor normally (not scroll).
+    core.writePlainText("\n"_L1);
+    QCOMPARE(core.cursorState().row, 5);  // moved to last row
+
+    // Another LF at the very last row (still outside scroll region) must stay.
+    core.writePlainText("\n"_L1);
+    QCOMPARE(core.cursorState().row, 5);  // clamped at last row, no scroll
+
+    // The scroll region content (rows 0-3) must be intact.
+    QCOMPARE(core.buffer().lineAt(0).plainText(), "aaaaa"_L1);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "bbbbb"_L1);
+    QCOMPARE(core.buffer().lineAt(2).plainText(), "ccccc"_L1);
+    QCOMPARE(core.buffer().lineAt(3).plainText(), "ddddd"_L1);
+}
+
+void QTermCoreTest::eraseInDisplayMode3ClearsScrollbackOnly()
+{
+    // CSI 3 J must erase the scrollback history but leave the visible screen
+    // untouched and must NOT erase from the cursor to the end of screen.
+    QTermCore core;
+    core.setTerminalSize(5, 3);
+
+    // Write enough content to push lines into scrollback.
+    core.writePlainText("aaa\r\nbbb\r\nccc\r\nddd\r\neee"_L1);
+    // Now visible rows are bbb/ccc/ddd/eee (last 3+cursor row).
+    QVERIFY(core.buffer().historyLineCount() > 0);
+
+    const int historyBefore = core.buffer().historyLineCount();
+    Q_UNUSED(historyBefore);
+
+    // Move cursor to middle of screen to verify screen content is preserved.
+    core.writePlainText("\x1b[2;1H"_L1);  // row 2, col 1 (1-based)
+
+    // Capture visible row content before the erase.
+    const QString row0Before = core.buffer().lineAt(0).plainText();
+    const QString row1Before = core.buffer().lineAt(1).plainText();
+    const QString row2Before = core.buffer().lineAt(2).plainText();
+
+    core.writePlainText("\x1b[3J"_L1);  // erase scrollback
+
+    // Scrollback must be gone.
+    QCOMPARE(core.buffer().historyLineCount(), 0);
+
+    // Visible screen must be unchanged.
+    QCOMPARE(core.buffer().lineAt(0).plainText(), row0Before);
+    QCOMPARE(core.buffer().lineAt(1).plainText(), row1Before);
+    QCOMPARE(core.buffer().lineAt(2).plainText(), row2Before);
+
+    // Cursor must not have moved.
+    QCOMPARE(core.cursorState().row, 1);  // 0-based: row 2 → 1
+    QCOMPARE(core.cursorState().column, 0);
+}
+
+void QTermCoreTest::risResetsTerminalState()
+{
+    // ESC c (RIS) must reset the terminal to its initial state:
+    // clear both screens, reset all modes, cursor to (0,0).
+    QTermCore core;
+    core.setTerminalSize(10, 5);
+
+    // Set up non-default state.
+    core.writePlainText("hello"_L1);           // write some text
+    core.writePlainText("\x1b[?1049h"_L1);     // enter alternate screen
+    core.writePlainText("\x1b[?25l"_L1);       // hide cursor
+    core.writePlainText("\x1b[?7l"_L1);        // disable DECAWM
+    core.writePlainText("\x1b[3;8r"_L1);       // set scroll region
+
+    // Send RIS.
+    core.writePlainText("\x1b""c"_L1);
+
+    // Must be on primary screen.
+    QVERIFY(!core.modeState().alternateScreenActive);
+    // Cursor visible by default.
+    QVERIFY(core.modeState().cursorVisible);
+    // Auto-wrap re-enabled.
+    QVERIFY(core.modeState().autoWrap);
+    // Cursor at home.
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 0);
+    // Screen cleared.
+    QCOMPARE(core.debugPlainText(), QString());
+}
+
+void QTermCoreTest::cursorNextAndPreviousLine()
+{
+    // CNL (CSI E) moves down n rows and to column 0.
+    // CPL (CSI F) moves up n rows and to column 0.
+    QTermCore core;
+    core.setTerminalSize(10, 6);
+
+    core.writePlainText("\x1b[3;5H"_L1);  // cursor to row 3, col 5 (1-based)
+    QCOMPARE(core.cursorState().row, 2);
+    QCOMPARE(core.cursorState().column, 4);
+
+    core.writePlainText("\x1b[2E"_L1);    // CNL 2: move down 2, go to col 0
+    QCOMPARE(core.cursorState().row, 4);
+    QCOMPARE(core.cursorState().column, 0);
+
+    core.writePlainText("\x1b[3F"_L1);    // CPL 3: move up 3, go to col 0
+    QCOMPARE(core.cursorState().row, 1);
+    QCOMPARE(core.cursorState().column, 0);
+
+    // Clamp at first row.
+    core.writePlainText("\x1b[99F"_L1);
+    QCOMPARE(core.cursorState().row, 0);
+
+    // Clamp at last row.
+    core.writePlainText("\x1b[99E"_L1);
+    QCOMPARE(core.cursorState().row, 5);
+}
+
+void QTermCoreTest::encodesCtrlLetterWhenTextIsEmpty()
+{
+    // On macOS, Cocoa intercepts Ctrl+letter shortcuts at the NSTextInputClient
+    // level, leaving event->text() empty.  QTermInputEncoder must synthesize
+    // the correct control byte (0x01–0x1a) from the Qt key code alone.
+    QTermModeState modeState;
+
+    // Ctrl+B → 0x02 (used as tmux prefix)
+    QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_B, QString()), QByteArray("\x02"));
+    // Ctrl+C → 0x03 (SIGINT)
+    QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_C, QString()), QByteArray("\x03"));
+    // Ctrl+A → 0x01 (move to line start in shell)
+    QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_A, QString()), QByteArray("\x01"));
+    // Ctrl+Z → 0x1a (SIGTSTP)
+    QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_Z, QString()), QByteArray("\x1a"));
+    // When text IS provided, it takes precedence (normal path).
+    QCOMPARE(QTermInputEncoder::encodeKey(modeState, Qt::Key_B, "b"_L1), QByteArray("b"));
 }
 
 } // namespace QTerm
