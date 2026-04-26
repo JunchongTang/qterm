@@ -3,7 +3,7 @@
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
 
-#include "../core/QTermInputEncoder.h"
+#include "QTermViewController.h"
 
 #include <QFont>
 #include <QFontMetricsF>
@@ -24,20 +24,13 @@ namespace QTerm {
 
 namespace {
 
-constexpr int kMinimumColumns = 20;
-constexpr int kMinimumRows = 8;
-constexpr int kWheelScrollRowsPerStep = 3;
-constexpr int kResizeDebounceIntervalMs = 30;
-
 QColor colorFromRgb(int rgb)
 {
-    if (rgb < 0) {
+    if (rgb < 0)
         return QColor();
-    }
-
     return QColor((rgb >> 16) & 0xff,
-                  (rgb >> 8) & 0xff,
-                  rgb & 0xff);
+                  (rgb >>  8) & 0xff,
+                   rgb        & 0xff);
 }
 
 QColor colorFromPaletteIndex(int index)
@@ -53,23 +46,21 @@ QColor colorFromPaletteIndex(int index)
         QColor(QStringLiteral("#7dd3d8")), QColor(QStringLiteral("#f5fbff"))
     };
 
-    if (index < 0) {
+    if (index < 0)
         return QColor();
-    }
 
-    if (index < static_cast<int>(std::size(palette))) {
+    if (index < static_cast<int>(std::size(palette)))
         return palette[index];
-    }
 
     if (index >= 232) {
         const int level = 8 + (index - 232) * 10;
         return QColor(level, level, level);
     }
 
-    const int cubeIndex = qMax(0, index - 16);
-    const int redIndex = (cubeIndex / 36) % 6;
-    const int greenIndex = (cubeIndex / 6) % 6;
-    const int blueIndex = cubeIndex % 6;
+    const int cubeIndex  = qMax(0, index - 16);
+    const int redIndex   = (cubeIndex / 36) % 6;
+    const int greenIndex = (cubeIndex /  6) % 6;
+    const int blueIndex  =  cubeIndex       % 6;
     static const int componentValues[] = {0, 95, 135, 175, 215, 255};
     return QColor(componentValues[redIndex],
                   componentValues[greenIndex],
@@ -79,14 +70,12 @@ QColor colorFromPaletteIndex(int index)
 QColor runForegroundColor(const QVariantMap &run, const QColor &defaultForeground)
 {
     const int foregroundRgb = run.value(QStringLiteral("foregroundRgb"), -1).toInt();
-    if (foregroundRgb >= 0) {
+    if (foregroundRgb >= 0)
         return colorFromRgb(foregroundRgb);
-    }
 
     const int foregroundIndex = run.value(QStringLiteral("foregroundIndex"), -1).toInt();
-    if (foregroundIndex >= 0) {
+    if (foregroundIndex >= 0)
         return colorFromPaletteIndex(foregroundIndex);
-    }
 
     return defaultForeground;
 }
@@ -94,14 +83,12 @@ QColor runForegroundColor(const QVariantMap &run, const QColor &defaultForegroun
 QColor runBackgroundColor(const QVariantMap &run)
 {
     const int backgroundRgb = run.value(QStringLiteral("backgroundRgb"), -1).toInt();
-    if (backgroundRgb >= 0) {
+    if (backgroundRgb >= 0)
         return colorFromRgb(backgroundRgb);
-    }
 
     const int backgroundIndex = run.value(QStringLiteral("backgroundIndex"), -1).toInt();
-    if (backgroundIndex >= 0) {
+    if (backgroundIndex >= 0)
         return colorFromPaletteIndex(backgroundIndex);
-    }
 
     return QColor();
 }
@@ -112,34 +99,29 @@ QColor effectiveForegroundColor(const QVariantMap &run, const QColor &defaultFor
         const QColor background = runBackgroundColor(run);
         return background.isValid() ? background : QColor(QStringLiteral("#0a0f15"));
     }
-
     return runForegroundColor(run, defaultForeground);
 }
 
 QColor effectiveBackgroundColor(const QVariantMap &run, const QColor &defaultForeground)
 {
-    if (run.value(QStringLiteral("inverse")).toBool()) {
+    if (run.value(QStringLiteral("inverse")).toBool())
         return runForegroundColor(run, defaultForeground);
-    }
-
     return runBackgroundColor(run);
 }
 
 int runColumns(const QVariantMap &run)
 {
     const int columns = run.value(QStringLiteral("columns"), 0).toInt();
-    if (columns > 0) {
+    if (columns > 0)
         return columns;
-    }
-
     return qMax(1, run.value(QStringLiteral("text")).toString().size());
 }
 
 bool selectionSpansRow(const QTermSurfaceModel *surfaceModel, int row)
 {
     return surfaceModel && surfaceModel->selectionVisible() &&
-        row >= surfaceModel->selectionStartRow() &&
-        row <= surfaceModel->selectionEndRow();
+           row >= surfaceModel->selectionStartRow() &&
+           row <= surfaceModel->selectionEndRow();
 }
 
 QFont buildFont(const QString &family, int pixelSize)
@@ -151,286 +133,337 @@ QFont buildFont(const QString &family, int pixelSize)
 
 } // namespace
 
+// ── Constructor ───────────────────────────────────────────────────────────────
+
 QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
-    , m_resizeDebounceTimer(new QTimer(this))
-    , m_selectionAutoScrollTimer(new QTimer(this))
-    , m_clickResetTimer(new QTimer(this))
+    , m_controller(new QTermViewController(this))
 {
     setOpaquePainting(true);
     setAcceptedMouseButtons(Qt::LeftButton);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
     setAcceptHoverEvents(false);
+
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
         updateCursorDelegateGeometry();
     });
 
-    m_resizeDebounceTimer->setSingleShot(true);
-    m_resizeDebounceTimer->setInterval(kResizeDebounceIntervalMs);
-    connect(m_resizeDebounceTimer, &QTimer::timeout, this, [this]() {
-        syncTerminalSize();
+    connect(m_controller, &QTermViewController::repaintNeeded, this, [this]() {
+        update();
     });
-
-    // 点击连击重置：360ms 内无新点击则归零
-    m_clickResetTimer->setSingleShot(true);
-    m_clickResetTimer->setInterval(360);
-    connect(m_clickResetTimer, &QTimer::timeout, this, [this]() {
-        m_clickStreak = 0;
-        m_lastClickRow = -1;
-        m_lastClickColumn = -1;
+    connect(m_controller, &QTermViewController::cursorUpdateNeeded, this, [this]() {
+        updateCursorDelegateGeometry();
     });
-
-    // 选区超出边界时自动滚动，35ms 一次
-    m_selectionAutoScrollTimer->setSingleShot(false);
-    m_selectionAutoScrollTimer->setInterval(35);
-    connect(m_selectionAutoScrollTimer, &QTimer::timeout, this, [this]() {
-        if (!m_terminal || m_autoScrollDirection == 0) {
-            m_selectionAutoScrollTimer->stop();
-            return;
-        }
-        const qreal overflow = m_autoScrollDirection > 0
-            ? qMax<qreal>(0.0, -m_dragY)
-            : qMax<qreal>(0.0, m_dragY - height());
-        const int rowsPerTick = qMax(1, static_cast<int>(std::ceil(overflow / qMax<qreal>(1.0, m_cellHeight))));
-        m_terminal->scrollByLines(m_autoScrollDirection * rowsPerTick);
-        updateSelectionFromDrag(m_dragX, m_dragY);
+    connect(m_controller, &QTermViewController::mouseAcceptanceChanged,
+            this, &QTermQuickPaintedItem::updateMouseAcceptance);
+    connect(m_controller, &QTermViewController::focusRequested, this, [this]() {
+        forceActiveFocus(Qt::MouseFocusReason);
     });
-
-    updateMetrics();
+    connect(m_controller, &QTermViewController::metricsChanged, this, [this]() {
+        update();
+        emit metricsChanged();
+    });
+    connect(m_controller, &QTermViewController::scrollChanged,
+            this, &QTermQuickPaintedItem::scrollChanged);
+    connect(m_controller, &QTermViewController::wheelScrolled,
+            this, &QTermQuickPaintedItem::wheelScrolled);
+    connect(m_controller, &QTermViewController::copyRequested,
+            this, &QTermQuickPaintedItem::copyRequested);
+    connect(m_controller, &QTermViewController::hyperlinkActivated,
+            this, &QTermQuickPaintedItem::hyperlinkActivated);
+    connect(m_controller, &QTermViewController::terminalChanged, this, [this]() {
+        update();
+        emit terminalChanged();
+        emit scrollChanged();
+    });
 }
+
+// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
 
 QTermTerminal *QTermQuickPaintedItem::terminal() const noexcept
 {
-    return m_terminal;
+    return m_controller->terminal();
 }
 
 void QTermQuickPaintedItem::setTerminal(QTermTerminal *terminal)
 {
-    if (m_terminal == terminal) {
-        return;
-    }
-
-    disconnectSurfaceModel();
-    QObject::disconnect(m_viewportConnection);
-    QObject::disconnect(m_modeStateConnection);
-    m_terminal = terminal;
-    reconnectSurfaceModel();
-    if (m_terminal) {
-        m_viewportConnection = connect(m_terminal, &QTermTerminal::viewportChanged,
-                                       this, [this]() { emit scrollChanged(); });
-        m_modeStateConnection = connect(m_terminal, &QTermTerminal::modeStateChanged,
-                                        this, [this]() { updateMouseAcceptance(); });
-    }
-    scheduleTerminalSizeSync();
+    // Geometry is already stored in controller; pass current size so
+    // syncTerminalSize() runs correctly right after setTerminal.
+    m_controller->notifyGeometryChanged(width(), height());
+    m_controller->setTerminal(terminal);
     update();
-    emit terminalChanged();
-    emit scrollChanged();
 }
+
+// ── 字体 ──────────────────────────────────────────────────────────────────────
 
 QString QTermQuickPaintedItem::fontFamily() const
 {
-    return m_fontFamily;
+    return m_controller->fontFamily();
 }
 
 void QTermQuickPaintedItem::setFontFamily(const QString &fontFamily)
 {
-    if (m_fontFamily == fontFamily) {
+    if (m_controller->fontFamily() == fontFamily)
         return;
-    }
-
-    m_fontFamily = fontFamily;
-    updateMetrics();
+    m_controller->setFontFamily(fontFamily);
     update();
     emit fontChanged();
 }
 
 int QTermQuickPaintedItem::fontPixelSize() const noexcept
 {
-    return m_fontPixelSize;
+    return m_controller->fontPixelSize();
 }
 
 void QTermQuickPaintedItem::setFontPixelSize(int fontPixelSize)
 {
-    const int boundedPixelSize = qMax(1, fontPixelSize);
-    if (m_fontPixelSize == boundedPixelSize) {
+    const int bounded = qMax(1, fontPixelSize);
+    if (m_controller->fontPixelSize() == bounded)
         return;
-    }
-
-    m_fontPixelSize = boundedPixelSize;
-    updateMetrics();
+    m_controller->setFontPixelSize(bounded);
     update();
     emit fontChanged();
 }
 
 qreal QTermQuickPaintedItem::cellWidth() const noexcept
 {
-    return m_cellWidth;
+    return m_controller->cellWidth();
 }
 
 qreal QTermQuickPaintedItem::cellHeight() const noexcept
 {
-    return m_cellHeight;
+    return m_controller->cellHeight();
 }
 
-QColor QTermQuickPaintedItem::foregroundColor() const
-{
-    return m_foregroundColor;
-}
+// ── 调色板 ────────────────────────────────────────────────────────────────────
+
+QColor QTermQuickPaintedItem::foregroundColor() const { return m_foregroundColor; }
 
 void QTermQuickPaintedItem::setForegroundColor(const QColor &foregroundColor)
 {
-    if (m_foregroundColor == foregroundColor) {
-        return;
-    }
-
+    if (m_foregroundColor == foregroundColor) return;
     m_foregroundColor = foregroundColor;
     update();
     emit paletteChanged();
 }
 
-QColor QTermQuickPaintedItem::backgroundColor() const
-{
-    return m_backgroundColor;
-}
+QColor QTermQuickPaintedItem::backgroundColor() const { return m_backgroundColor; }
 
 void QTermQuickPaintedItem::setBackgroundColor(const QColor &backgroundColor)
 {
-    if (m_backgroundColor == backgroundColor) {
-        return;
-    }
-
+    if (m_backgroundColor == backgroundColor) return;
     m_backgroundColor = backgroundColor;
     update();
     emit paletteChanged();
 }
 
-QColor QTermQuickPaintedItem::selectionColor() const
-{
-    return m_selectionColor;
-}
+QColor QTermQuickPaintedItem::selectionColor() const { return m_selectionColor; }
 
 void QTermQuickPaintedItem::setSelectionColor(const QColor &selectionColor)
 {
-    if (m_selectionColor == selectionColor) {
-        return;
-    }
-
+    if (m_selectionColor == selectionColor) return;
     m_selectionColor = selectionColor;
     update();
     emit paletteChanged();
 }
 
-QColor QTermQuickPaintedItem::cursorColor() const
-{
-    return m_cursorColor;
-}
+QColor QTermQuickPaintedItem::cursorColor() const { return m_cursorColor; }
 
 void QTermQuickPaintedItem::setCursorColor(const QColor &cursorColor)
 {
-    if (m_cursorColor == cursorColor) {
-        return;
-    }
-
+    if (m_cursorColor == cursorColor) return;
     m_cursorColor = cursorColor;
     update();
     emit paletteChanged();
 }
 
-qreal QTermQuickPaintedItem::cursorOpacity() const noexcept
-{
-    return m_cursorOpacity;
-}
+qreal QTermQuickPaintedItem::cursorOpacity() const noexcept { return m_cursorOpacity; }
 
 void QTermQuickPaintedItem::setCursorOpacity(qreal cursorOpacity)
 {
-    const qreal boundedOpacity = qBound(0.0, cursorOpacity, 1.0);
-    if (qFuzzyCompare(m_cursorOpacity, boundedOpacity)) {
-        return;
-    }
-
-    m_cursorOpacity = boundedOpacity;
+    const qreal bounded = qBound(0.0, cursorOpacity, 1.0);
+    if (qFuzzyCompare(m_cursorOpacity, bounded)) return;
+    m_cursorOpacity = bounded;
     update();
     updateCursorDelegateGeometry();
     emit cursorOpacityChanged();
 }
 
+// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+
 int QTermQuickPaintedItem::rowAtPosition(qreal y) const
 {
-    const int rowCount = m_terminal ? m_terminal->rows() : 0;
-    if (rowCount <= 0) {
-        return 0;
-    }
-
-    const int row = static_cast<int>(std::floor(y / qMax<qreal>(1.0, m_cellHeight)));
-    return qBound(0, row, rowCount - 1);
+    return m_controller->rowAtPosition(y);
 }
 
 int QTermQuickPaintedItem::columnAtPosition(qreal x) const
 {
-    const int columnCount = m_terminal ? m_terminal->columns() : 0;
-    if (columnCount <= 0) {
-        return 0;
-    }
-
-    const int column = static_cast<int>(std::floor(x / qMax<qreal>(1.0, m_cellWidth)));
-    return qBound(0, column, columnCount);
+    return m_controller->columnAtPosition(x);
 }
+
+// ── 滚动 ──────────────────────────────────────────────────────────────────────
+
+qreal QTermQuickPaintedItem::scrollSize() const noexcept
+{
+    return m_controller->scrollSize();
+}
+
+qreal QTermQuickPaintedItem::scrollPosition() const noexcept
+{
+    return m_controller->scrollPosition();
+}
+
+void QTermQuickPaintedItem::setScrollPosition(qreal position)
+{
+    m_controller->setScrollPosition(position);
+}
+
+// ── IME ───────────────────────────────────────────────────────────────────────
+
+QVariant QTermQuickPaintedItem::inputMethodQuery(Qt::InputMethodQuery query) const
+{
+    switch (query) {
+    case Qt::ImEnabled:
+        return true;
+    case Qt::ImCursorRectangle:
+        return m_controller->cursorRect();
+    default:
+        return QQuickPaintedItem::inputMethodQuery(query);
+    }
+}
+
+// ── geometryChange ────────────────────────────────────────────────────────────
+
+void QTermQuickPaintedItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry)
+{
+    QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
+    if (newGeometry.size() != oldGeometry.size())
+        m_controller->notifyGeometryChanged(newGeometry.width(), newGeometry.height());
+}
+
+// ── Event forwarding ──────────────────────────────────────────────────────────
+
+void QTermQuickPaintedItem::keyPressEvent(QKeyEvent *event)
+{
+    if (m_controller->handleKeyPress(event)) event->accept();
+    else QQuickPaintedItem::keyPressEvent(event);
+}
+
+void QTermQuickPaintedItem::inputMethodEvent(QInputMethodEvent *event)
+{
+    if (m_controller->handleInputMethod(event)) event->accept();
+    else QQuickPaintedItem::inputMethodEvent(event);
+}
+
+void QTermQuickPaintedItem::mousePressEvent(QMouseEvent *event)
+{
+    if (m_controller->handleMousePress(event)) event->accept();
+    else QQuickPaintedItem::mousePressEvent(event);
+}
+
+void QTermQuickPaintedItem::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (m_controller->handleMouseDoubleClick(event)) event->accept();
+    else QQuickPaintedItem::mouseDoubleClickEvent(event);
+}
+
+void QTermQuickPaintedItem::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_controller->handleMouseMove(event)) event->accept();
+    else QQuickPaintedItem::mouseMoveEvent(event);
+}
+
+void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (m_controller->handleMouseRelease(event)) event->accept();
+    else QQuickPaintedItem::mouseReleaseEvent(event);
+}
+
+void QTermQuickPaintedItem::hoverMoveEvent(QHoverEvent *event)
+{
+    if (m_controller->handleHoverMove(event)) event->accept();
+    else QQuickPaintedItem::hoverMoveEvent(event);
+}
+
+void QTermQuickPaintedItem::wheelEvent(QWheelEvent *event)
+{
+    if (m_controller->handleWheel(event)) event->accept();
+    else QQuickPaintedItem::wheelEvent(event);
+}
+
+// ── updateMouseAcceptance ─────────────────────────────────────────────────────
+
+void QTermQuickPaintedItem::updateMouseAcceptance()
+{
+    if (m_controller->mouseProtocolEnabled()) {
+        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
+        setAcceptHoverEvents(m_controller->hoverEventsNeeded());
+    } else {
+        setAcceptedMouseButtons(Qt::LeftButton);
+        setAcceptHoverEvents(false);
+    }
+}
+
+// ── paint() ───────────────────────────────────────────────────────────────────
 
 void QTermQuickPaintedItem::paint(QPainter *painter)
 {
     painter->fillRect(boundingRect(), m_backgroundColor);
 
-    if (!m_terminal) {
+    QTermTerminal *terminal = m_controller->terminal();
+    if (!terminal)
         return;
-    }
 
-    QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
-    if (!surfaceModel) {
+    QTermSurfaceModel *surfaceModel = terminal->surfaceModel();
+    if (!surfaceModel)
         return;
-    }
 
-    const QFont baseFont = buildFont(m_fontFamily, m_fontPixelSize);
+    const qreal cellW = m_controller->cellWidth();
+    const qreal cellH = m_controller->cellHeight();
+    const QFont baseFont = buildFont(m_controller->fontFamily(), m_controller->fontPixelSize());
     const QFontMetricsF metrics(baseFont);
-    const qreal textTopOffset = (m_cellHeight - metrics.height()) * 0.5;
+    const qreal textTopOffset = (cellH - metrics.height()) * 0.5;
     const QVariantList visibleRuns = surfaceModel->visibleLineRuns();
     const int lineCount = qMin(surfaceModel->rows(), visibleRuns.size());
 
     painter->setRenderHint(QPainter::TextAntialiasing, true);
 
     for (int row = 0; row < lineCount; ++row) {
-        const qreal y = row * m_cellHeight;
+        const qreal y = row * cellH;
         const QVariantList lineRuns = visibleRuns.at(row).toList();
         qreal x = 0.0;
 
+        // Pass 1: backgrounds
         for (const QVariant &runValue : lineRuns) {
             const QVariantMap run = runValue.toMap();
             const int columns = runColumns(run);
-            const QRectF runRect(x, y, columns * m_cellWidth, m_cellHeight);
+            const QRectF runRect(x, y, columns * cellW, cellH);
             const QColor background = effectiveBackgroundColor(run, m_foregroundColor);
-            if (background.isValid()) {
+            if (background.isValid())
                 painter->fillRect(runRect, background);
-            }
             x += runRect.width();
         }
 
+        // Pass 1b: selection overlay
         if (selectionSpansRow(surfaceModel, row)) {
-            const int selectionStart = row == surfaceModel->selectionStartRow() ? surfaceModel->selectionStartColumn() : 0;
-            const int selectionEnd = row == surfaceModel->selectionEndRow() ? surfaceModel->selectionEndColumn() : surfaceModel->columns();
-            if (selectionEnd > selectionStart) {
-                painter->fillRect(QRectF(selectionStart * m_cellWidth,
-                                         y,
-                                         (selectionEnd - selectionStart) * m_cellWidth,
-                                         m_cellHeight),
-                                  m_selectionColor);
+            const int selStart = row == surfaceModel->selectionStartRow()
+                ? surfaceModel->selectionStartColumn() : 0;
+            const int selEnd   = row == surfaceModel->selectionEndRow()
+                ? surfaceModel->selectionEndColumn() : surfaceModel->columns();
+            if (selEnd > selStart) {
+                painter->fillRect(
+                    QRectF(selStart * cellW, y, (selEnd - selStart) * cellW, cellH),
+                    m_selectionColor);
             }
         }
 
+        // Pass 2: text
         x = 0.0;
         for (const QVariant &runValue : lineRuns) {
             const QVariantMap run = runValue.toMap();
             const int columns = runColumns(run);
-            const QRectF runRect(x, y, columns * m_cellWidth, m_cellHeight);
+            const QRectF runRect(x, y, columns * cellW, cellH);
 
             QFont runFont = baseFont;
             runFont.setBold(run.value(QStringLiteral("bold")).toBool());
@@ -441,9 +474,9 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
             painter->setFont(runFont);
 
             QColor foreground = effectiveForegroundColor(run, m_foregroundColor);
-            // Hyperlink: tint text with a blue-ish color if no explicit foreground
-            if (hasHyperlink && run.value(QStringLiteral("foregroundIndex")).toInt() < 0
-                    && run.value(QStringLiteral("foregroundRgb")).toInt() < 0) {
+            if (hasHyperlink
+                && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
+                && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
                 foreground = QColor(QStringLiteral("#6ab0f5"));
             }
             foreground.setAlphaF(run.value(QStringLiteral("dim")).toBool() ? 0.65 : 1.0);
@@ -455,538 +488,42 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
         }
     }
 
+    // Cursor (built-in styles; skipped when delegate item is active)
     if (surfaceModel->cursorVisible() && hasActiveFocus() && m_cursorOpacity > 0.0) {
-        // delegate item 存在时跳过此处绘制，由 QQuickItem 子项自行渲染
         if (!m_cursorDelegateItem) {
             QColor cursor = m_cursorColor;
             cursor.setAlphaF(qBound(0.0, m_cursorOpacity * 0.72, 1.0));
             painter->setPen(Qt::NoPen);
             painter->setBrush(cursor);
-            const qreal cx = surfaceModel->cursorColumn() * m_cellWidth;
-            const qreal cy = surfaceModel->cursorRow() * m_cellHeight;
+            const qreal cx = surfaceModel->cursorColumn() * cellW;
+            const qreal cy = surfaceModel->cursorRow()    * cellH;
             switch (m_cursorStyle) {
             case Underline:
-                painter->drawRect(QRectF(cx, cy + m_cellHeight - 2.0,
-                                         qMax<qreal>(2.0, m_cellWidth), 2.0));
+                painter->drawRect(QRectF(cx, cy + cellH - 2.0, qMax<qreal>(2.0, cellW), 2.0));
                 break;
             case Bar:
-                painter->drawRect(QRectF(cx, cy, 2.0, m_cellHeight));
+                painter->drawRect(QRectF(cx, cy, 2.0, cellH));
                 break;
             case Block:
             default:
-                painter->drawRoundedRect(QRectF(cx, cy,
-                                                 qMax<qreal>(2.0, m_cellWidth),
-                                                 m_cellHeight),
-                                          1.0, 1.0);
+                painter->drawRoundedRect(
+                    QRectF(cx, cy, qMax<qreal>(2.0, cellW), cellH), 1.0, 1.0);
                 break;
             }
         }
     }
 }
 
-void QTermQuickPaintedItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry)
-{
-    QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
-    if (newGeometry.size() != oldGeometry.size()) {
-        // First time the item gets a real size (e.g. window just showed):
-        // sync immediately so the PTY receives TIOCSWINSZ before the user
-        // can interact with the shell. This prevents full-screen apps like
-        // top(1) from starting with the stale 80x24 default PTY size.
-        //
-        // Subsequent geometry changes (window drag): coalesce via debounce to
-        // avoid sending a SIGWINCH on every pixel, which would flood the shell
-        // with intermediate redraws and corrupt the buffer state.
-        if (oldGeometry.isEmpty()) {
-            syncTerminalSize();
-        } else {
-            scheduleTerminalSizeSync();
-        }
-    }
-}
-
-void QTermQuickPaintedItem::wheelEvent(QWheelEvent *event)
-{
-    if (!m_terminal) {
-        QQuickPaintedItem::wheelEvent(event);
-        return;
-    }
-
-    // 检查鼠标协议模式
-    const auto &modeState = m_terminal->modeState();
-    const QPoint angleDelta = event->angleDelta();
-    
-    if (modeState.mouseTracking != MouseTracking::Disabled && angleDelta.y() != 0) {
-        // 鼠标协议启用：直接用 sendMouse 转发滚轮事件（outbound → PTY）。
-        // 虚拟按钮码：64=向上，65=向下（X10/SGR 滚轮约定）。
-        const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
-        m_terminal->sendMouse(
-            rowAtPosition(event->position().y()),
-            columnAtPosition(event->position().x()),
-            wheelButton,
-            static_cast<int>(event->modifiers()),
-            true);
-        event->accept();
-        return;
-    }
-
-    // 鼠标协议禁用或纵向滚轮无效：进行页面滚动
-    int deltaRows = 0;
-    if (angleDelta.y() != 0) {
-        const int stepCount = qMax(1, qAbs(angleDelta.y()) / 120);
-        deltaRows = (angleDelta.y() > 0 ? 1 : -1) * stepCount * kWheelScrollRowsPerStep;
-    } else if (event->pixelDelta().y() != 0) {
-        const int pixelRows = static_cast<int>(std::round(event->pixelDelta().y() / qMax<qreal>(1.0, m_cellHeight)));
-        deltaRows = pixelRows != 0 ? pixelRows : (event->pixelDelta().y() > 0 ? 1 : -1);
-    }
-
-    if (deltaRows == 0) {
-        QQuickPaintedItem::wheelEvent(event);
-        return;
-    }
-
-    m_terminal->scrollByLines(deltaRows);
-    emit wheelScrolled(m_terminal->scrollOffset());
-    emit scrollChanged();
-    event->accept();
-}
-
-// ── 键盘事件 ──────────────────────────────────────────────────────────────
-
-void QTermQuickPaintedItem::keyPressEvent(QKeyEvent *event)
-{
-    if (!m_terminal) {
-        QQuickPaintedItem::keyPressEvent(event);
-        return;
-    }
-
-    // 有任何可见按键时回到底部
-    if (m_terminal->scrollOffset() > 0)
-        m_terminal->scrollToBottom();
-
-    // 将 (key, text) 传给 encoder。macOS 下 Ctrl+字母 的 text 可能为空，
-    // QTermInputEncoder::encodeKey 会在 default 分支中合成控制字符。
-    m_terminal->sendKey(event->key(), event->text());
-    event->accept();
-}
-
-// ── IME / CJK 输入 ────────────────────────────────────────────────────────
-
-QVariant QTermQuickPaintedItem::inputMethodQuery(Qt::InputMethodQuery query) const
-{
-    switch (query) {
-    case Qt::ImEnabled:
-        return true;
-    case Qt::ImCursorRectangle: {
-        if (!m_terminal) return QVariant();
-        QTermSurfaceModel *sm = m_terminal->surfaceModel();
-        if (!sm) return QVariant();
-        return QRectF(sm->cursorColumn() * m_cellWidth,
-                      sm->cursorRow() * m_cellHeight,
-                      m_cellWidth,
-                      m_cellHeight);
-    }
-    default:
-        return QQuickPaintedItem::inputMethodQuery(query);
-    }
-}
-
-void QTermQuickPaintedItem::inputMethodEvent(QInputMethodEvent *event)
-{
-    if (!m_terminal) {
-        QQuickPaintedItem::inputMethodEvent(event);
-        return;
-    }
-
-    // commit string: IME 确认输入，发送给终端（等同于粘贴）
-    const QString commit = event->commitString();
-    if (!commit.isEmpty()) {
-        if (m_terminal->scrollOffset() > 0)
-            m_terminal->scrollToBottom();
-        m_terminal->sendPaste(commit);
-    }
-
-    // preedit（输入法预输入）由 Qt 平台插件在候选框中显示，无需我们额外处理
-    event->accept();
-}
-
-// ── 鼠标事件 ──────────────────────────────────────────────────────────────
-
-void QTermQuickPaintedItem::mousePressEvent(QMouseEvent *event)
-{
-    if (!m_terminal || event->button() != Qt::LeftButton) {
-        QQuickPaintedItem::mousePressEvent(event);
-        return;
-    }
-
-    forceActiveFocus(Qt::MouseFocusReason);
-
-    // 检查鼠标协议模式
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking != MouseTracking::Disabled) {
-        // 鼠标协议启用：转发鼠标事件
-        m_terminal->sendMouse(rowAtPosition(event->position().y()),
-                             columnAtPosition(event->position().x()),
-                             event->button(), event->modifiers(), true);
-        event->accept();
-        return;
-    }
-
-    // 鼠标协议禁用：进行文本选择
-    const int row = rowAtPosition(event->position().y());
-    const int col = columnAtPosition(event->position().x());
-
-    // OSC 8 超链接：Cmd+单击（macOS: ControlModifier = ⌘）发射信号，由 QML 层决定如何打开 URL
-    if (event->modifiers() & Qt::ControlModifier) {
-        const int hyperlinkId = hyperlinkIdAtPosition(row, col);
-        if (hyperlinkId > 0) {
-            const QString url = m_terminal->hyperlinkUrl(hyperlinkId);
-            if (!url.isEmpty()) {
-                emit hyperlinkActivated(url);
-                event->accept();
-                return;
-            }
-        }
-    }
-
-    // 连击检测
-    if (m_clickResetTimer->isActive() && m_lastClickRow == row && m_lastClickColumn == col)
-        m_clickStreak += 1;
-    else
-        m_clickStreak = 1;
-
-    m_lastClickRow = row;
-    m_lastClickColumn = col;
-    m_clickResetTimer->start();
-
-    if (m_clickStreak >= 3) {
-        // 三击：选整逻辑行
-        m_selectionAnchorRow = -1;
-        m_selectionAnchorColumn = -1;
-        m_suppressSelectionRelease = true;
-        m_autoScrollDirection = 0;
-        m_selectionAutoScrollTimer->stop();
-        m_terminal->selectLogicalLineAt(row);
-        event->accept();
-        return;
-    }
-
-    m_selectionAnchorRow = row;
-    m_selectionAnchorColumn = col;
-    m_dragX = event->position().x();
-    m_dragY = event->position().y();
-    m_suppressSelectionRelease = false;
-    m_autoScrollDirection = 0;
-    m_selectionAutoScrollTimer->stop();
-    m_terminal->clearSelection();
-    event->accept();
-}
-
-void QTermQuickPaintedItem::mouseDoubleClickEvent(QMouseEvent *event)
-{
-    if (!m_terminal || event->button() != Qt::LeftButton) {
-        QQuickPaintedItem::mouseDoubleClickEvent(event);
-        return;
-    }
-
-    forceActiveFocus(Qt::MouseFocusReason);
-
-    // 双击：选词
-    m_selectionAnchorRow = -1;
-    m_selectionAnchorColumn = -1;
-    m_autoScrollDirection = 0;
-    m_selectionAutoScrollTimer->stop();
-    m_terminal->selectWordAt(rowAtPosition(event->position().y()),
-                             columnAtPosition(event->position().x()));
-    event->accept();
-}
-
-void QTermQuickPaintedItem::mouseMoveEvent(QMouseEvent *event)
-{
-    if (!m_terminal) {
-        QQuickPaintedItem::mouseMoveEvent(event);
-        return;
-    }
-
-    // 检查鼠标协议模式
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking == MouseTracking::AnyEvent ||
-        (modeState.mouseTracking == MouseTracking::Button && (event->buttons() & Qt::LeftButton))) {
-        // 鼠标协议启用且支持移动报告：转发鼠标移动事件
-        // Button 模式下传递持按的按键（加 32 偏移表示拖拽）；AnyEvent 传 NoButton（→ 35）
-        const Qt::MouseButton heldButton =
-            (event->buttons() & Qt::LeftButton)   ? Qt::LeftButton   :
-            (event->buttons() & Qt::MiddleButton) ? Qt::MiddleButton :
-            (event->buttons() & Qt::RightButton)  ? Qt::RightButton  : Qt::NoButton;
-        m_terminal->sendMouse(rowAtPosition(event->position().y()),
-                             columnAtPosition(event->position().x()),
-                             heldButton, event->modifiers(), false, /*isMotion=*/true);
-        event->accept();
-        return;
-    }
-
-    // 鼠标协议禁用或不支持移动：进行文本选择
-    if (!(event->buttons() & Qt::LeftButton) || m_suppressSelectionRelease
-        || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0) {
-        QQuickPaintedItem::mouseMoveEvent(event);
-        return;
-    }
-
-    m_dragX = event->position().x();
-    m_dragY = event->position().y();
-    updateSelectionFromDrag(m_dragX, m_dragY);
-
-    // 判断是否需要自动滚动
-    if (m_dragY < 0)
-        m_autoScrollDirection = 1;   // 超出上边界 → 向上滚
-    else if (m_dragY > height())
-        m_autoScrollDirection = -1;  // 超出下边界 → 向下滚
-    else
-        m_autoScrollDirection = 0;
-
-    if (m_autoScrollDirection != 0 && !m_selectionAutoScrollTimer->isActive())
-        m_selectionAutoScrollTimer->start();
-    else if (m_autoScrollDirection == 0)
-        m_selectionAutoScrollTimer->stop();
-
-    event->accept();
-}
-
-void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
-{
-    if (!m_terminal) {
-        QQuickPaintedItem::mouseReleaseEvent(event);
-        return;
-    }
-
-    // 检查鼠标协议模式
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking != MouseTracking::Disabled) {
-        // 鼠标协议启用：转发鼠标释放事件
-        m_terminal->sendMouse(rowAtPosition(event->position().y()),
-                             columnAtPosition(event->position().x()),
-                             event->button(), event->modifiers(), false);
-        event->accept();
-        return;
-    }
-
-    if (event->button() != Qt::LeftButton) {
-        QQuickPaintedItem::mouseReleaseEvent(event);
-        return;
-    }
-
-    // 鼠标协议禁用：完成文本选择
-    m_autoScrollDirection = 0;
-    m_selectionAutoScrollTimer->stop();
-
-    if (m_suppressSelectionRelease) {
-        m_suppressSelectionRelease = false;
-        event->accept();
-        return;
-    }
-
-    updateSelectionFromDrag(event->position().x(), event->position().y());
-    m_selectionAnchorRow = -1;
-    m_selectionAnchorColumn = -1;
-    event->accept();
-}
-
-void QTermQuickPaintedItem::hoverMoveEvent(QHoverEvent *event)
-{
-    if (!m_terminal) {
-        QQuickPaintedItem::hoverMoveEvent(event);
-        return;
-    }
-
-    const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseTracking == MouseTracking::AnyEvent) {
-        const QPointF pos = event->position();
-        m_terminal->sendMouse(rowAtPosition(pos.y()), columnAtPosition(pos.x()),
-                              Qt::NoButton, Qt::NoModifier, false, /*isMotion=*/true);
-        event->accept();
-        return;
-    }
-
-    QQuickPaintedItem::hoverMoveEvent(event);
-}
-
-void QTermQuickPaintedItem::updateSelectionFromDrag(qreal x, qreal y)
-{
-    if (!m_terminal || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0)
-        return;
-
-    const int row = rowAtPosition(y);
-    const int col = qMin(m_terminal->columns(),
-                         columnAtPosition(x) + 1);
-    m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn, row, col);
-}
-
-void QTermQuickPaintedItem::reconnectSurfaceModel()
-{
-    if (!m_terminal) {
-        return;
-    }
-
-    QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
-    if (!surfaceModel) {
-        return;
-    }
-
-    m_surfaceSizeConnection = connect(surfaceModel, &QTermSurfaceModel::sizeChanged, this, [this]() {
-        update();
-    });
-    m_surfaceCursorConnection = connect(surfaceModel, &QTermSurfaceModel::cursorChanged, this, [this]() {
-        update();
-        updateCursorDelegateGeometry();
-    });
-    m_surfaceSelectionConnection = connect(surfaceModel, &QTermSurfaceModel::selectionChanged, this, [this]() {
-        update();
-    });
-    m_surfaceVisibleRunsConnection = connect(surfaceModel, &QTermSurfaceModel::visibleLineRunsChanged, this, [this]() {
-        update();
-    });
-    m_surfaceDestroyedConnection = connect(surfaceModel, &QObject::destroyed, this, [this]() {
-        disconnectSurfaceModel();
-        update();
-    });
-}
-
-void QTermQuickPaintedItem::disconnectSurfaceModel()
-{
-    QObject::disconnect(m_surfaceSizeConnection);
-    QObject::disconnect(m_surfaceCursorConnection);
-    QObject::disconnect(m_surfaceSelectionConnection);
-    QObject::disconnect(m_surfaceVisibleRunsConnection);
-    QObject::disconnect(m_surfaceDestroyedConnection);
-}
-
-int QTermQuickPaintedItem::hyperlinkIdAtPosition(int row, int col) const
-{
-    if (!m_terminal) {
-        return 0;
-    }
-    QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
-    if (!surfaceModel) {
-        return 0;
-    }
-    const QVariantList allRuns = surfaceModel->visibleLineRuns();
-    if (row < 0 || row >= allRuns.size()) {
-        return 0;
-    }
-    const QVariantList lineRuns = allRuns.at(row).toList();
-    int x = 0;
-    for (const QVariant &rv : lineRuns) {
-        const QVariantMap run = rv.toMap();
-        const int columns = runColumns(run);
-        if (col < x + columns) {
-            return run.value(QStringLiteral("hyperlinkId")).toInt();
-        }
-        x += columns;
-    }
-    return 0;
-}
-
-void QTermQuickPaintedItem::updateMouseAcceptance()
-{
-    if (!m_terminal) {
-        setAcceptedMouseButtons(Qt::LeftButton);
-        setAcceptHoverEvents(false);
-        return;
-    }
-
-    const MouseTracking tracking = m_terminal->modeState().mouseTracking;
-    if (tracking == MouseTracking::Disabled) {
-        setAcceptedMouseButtons(Qt::LeftButton);
-        setAcceptHoverEvents(false);
-    } else {
-        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
-        setAcceptHoverEvents(tracking == MouseTracking::AnyEvent);
-    }
-}
-
-void QTermQuickPaintedItem::updateMetrics()
-{
-    const QFontMetricsF metrics(buildFont(m_fontFamily, m_fontPixelSize));
-    const qreal previousCellWidth = m_cellWidth;
-    const qreal previousCellHeight = m_cellHeight;
-
-    m_cellWidth = qMax<qreal>(1.0, metrics.horizontalAdvance(QLatin1Char('M')));
-    m_cellHeight = qMax<qreal>(1.0, metrics.lineSpacing());
-
-    if (!qFuzzyCompare(previousCellWidth, m_cellWidth) || !qFuzzyCompare(previousCellHeight, m_cellHeight)) {
-        emit metricsChanged();
-        scheduleTerminalSizeSync();
-    }
-}
-
-void QTermQuickPaintedItem::scheduleTerminalSizeSync()
-{
-    if (!m_terminal) {
-        return;
-    }
-
-    if (width() <= 0.0 || height() <= 0.0) {
-        return;
-    }
-
-    // Used only for font changes (not geometry changes) to avoid redundant
-    // reflows when the font metrics haven't actually settled yet.
-    m_resizeDebounceTimer->start();
-}
-
-void QTermQuickPaintedItem::syncTerminalSize()
-{
-    if (!m_terminal || width() <= 0.0 || height() <= 0.0) {
-        return;
-    }
-
-    const int columns = qMax(kMinimumColumns, static_cast<int>(std::floor(width() / qMax<qreal>(1.0, m_cellWidth))));
-    const int rows = qMax(kMinimumRows, static_cast<int>(std::floor(height() / qMax<qreal>(1.0, m_cellHeight))));
-    m_terminal->setTerminalSize(columns, rows);
-}
-
-// ── Scroll position / size ────────────────────────────────────────────────
-
-qreal QTermQuickPaintedItem::scrollSize() const noexcept
-{
-    if (!m_terminal) return 1.0;
-    const int rows = m_terminal->rows();
-    const int total = rows + m_terminal->maxScrollOffset();
-    if (total <= 0) return 1.0;
-    return qMax(0.08, qMin(1.0, static_cast<qreal>(rows) / total));
-}
-
-qreal QTermQuickPaintedItem::scrollPosition() const noexcept
-{
-    if (!m_terminal || m_terminal->maxScrollOffset() <= 0) return 0.0;
-    const qreal trackSpan = 1.0 - scrollSize();
-    if (trackSpan <= 0.0) return 0.0;
-    // scrollOffset=0 → 底部 → position=trackSpan；scrollOffset=max → 顶部 → position=0
-    return trackSpan * (1.0 - static_cast<qreal>(m_terminal->scrollOffset())
-                                   / m_terminal->maxScrollOffset());
-}
-
-void QTermQuickPaintedItem::setScrollPosition(qreal position)
-{
-    if (!m_terminal || m_terminal->maxScrollOffset() <= 0) return;
-    const qreal trackSpan = 1.0 - scrollSize();
-    if (trackSpan <= 0.0) return;
-    const qreal normalized = qBound(0.0, position / trackSpan, 1.0);
-    const int targetOffset = qRound(m_terminal->maxScrollOffset() * (1.0 - normalized));
-    const int delta = targetOffset - m_terminal->scrollOffset();
-    if (delta != 0) m_terminal->scrollByLines(delta);
-}
-
-// ── componentComplete ─────────────────────────────────────────────────────
+// ── componentComplete ─────────────────────────────────────────────────────────
 
 void QTermQuickPaintedItem::componentComplete()
 {
     QQuickPaintedItem::componentComplete();
-    // 组件完成后 QML context 已就绪，可以实例化 delegate
     if (m_cursorDelegate && !m_cursorDelegateItem)
         recreateCursorDelegateItem();
 }
 
-// ── CursorStyle ────────────────────────────────────────────────────────────
+// ── CursorStyle ───────────────────────────────────────────────────────────────
 
 QTermQuickPaintedItem::CursorStyle QTermQuickPaintedItem::cursorStyle() const noexcept
 {
@@ -995,14 +532,13 @@ QTermQuickPaintedItem::CursorStyle QTermQuickPaintedItem::cursorStyle() const no
 
 void QTermQuickPaintedItem::setCursorStyle(CursorStyle style)
 {
-    if (m_cursorStyle == style)
-        return;
+    if (m_cursorStyle == style) return;
     m_cursorStyle = style;
     update();
     emit cursorStyleChanged();
 }
 
-// ── CursorDelegate ────────────────────────────────────────────────────────
+// ── CursorDelegate ────────────────────────────────────────────────────────────
 
 QQmlComponent *QTermQuickPaintedItem::cursorDelegate() const noexcept
 {
@@ -1011,19 +547,16 @@ QQmlComponent *QTermQuickPaintedItem::cursorDelegate() const noexcept
 
 void QTermQuickPaintedItem::setCursorDelegate(QQmlComponent *delegate)
 {
-    if (m_cursorDelegate == delegate)
-        return;
+    if (m_cursorDelegate == delegate) return;
 
     m_cursorDelegate = delegate;
 
-    // 销毁旧 item
     if (m_cursorDelegateItem) {
         m_cursorDelegateItem->setParentItem(nullptr);
         m_cursorDelegateItem->deleteLater();
         m_cursorDelegateItem = nullptr;
     }
 
-    // 组件完成后才有 context；未完成则等 componentComplete() 创建
     if (m_cursorDelegate && isComponentComplete())
         recreateCursorDelegateItem();
 
@@ -1039,12 +572,10 @@ void QTermQuickPaintedItem::recreateCursorDelegateItem()
         m_cursorDelegateItem = nullptr;
     }
 
-    if (!m_cursorDelegate)
-        return;
+    if (!m_cursorDelegate) return;
 
     QQmlContext *ctx = QQmlEngine::contextForObject(this);
-    if (!ctx)
-        return;
+    if (!ctx) return;
 
     QObject *obj = m_cursorDelegate->beginCreate(ctx);
     m_cursorDelegateItem = qobject_cast<QQuickItem *>(obj);
@@ -1060,23 +591,25 @@ void QTermQuickPaintedItem::recreateCursorDelegateItem()
 
 void QTermQuickPaintedItem::updateCursorDelegateGeometry()
 {
-    if (!m_cursorDelegateItem)
-        return;
+    if (!m_cursorDelegateItem) return;
 
-    if (!m_terminal) {
+    QTermTerminal *terminal = m_controller->terminal();
+    if (!terminal) {
         m_cursorDelegateItem->setVisible(false);
         return;
     }
 
-    QTermSurfaceModel *sm = m_terminal->surfaceModel();
+    QTermSurfaceModel *sm = terminal->surfaceModel();
     const bool visible = sm && sm->cursorVisible() && hasActiveFocus() && m_cursorOpacity > 0.0;
     m_cursorDelegateItem->setVisible(visible);
 
     if (visible) {
-        m_cursorDelegateItem->setX(sm->cursorColumn() * m_cellWidth);
-        m_cursorDelegateItem->setY(sm->cursorRow() * m_cellHeight);
-        m_cursorDelegateItem->setWidth(m_cellWidth);
-        m_cursorDelegateItem->setHeight(m_cellHeight);
+        const qreal cellW = m_controller->cellWidth();
+        const qreal cellH = m_controller->cellHeight();
+        m_cursorDelegateItem->setX(sm->cursorColumn() * cellW);
+        m_cursorDelegateItem->setY(sm->cursorRow()    * cellH);
+        m_cursorDelegateItem->setWidth(cellW);
+        m_cursorDelegateItem->setHeight(cellH);
         m_cursorDelegateItem->setOpacity(m_cursorOpacity);
     }
 }
