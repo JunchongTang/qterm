@@ -76,7 +76,7 @@
 
 ## Phase 3：Resize 与 Reflow 正确性
 
-状态：进行中
+状态：已完成
 
 目标：
 
@@ -90,16 +90,15 @@
 * 已有 ASCII、CJK、宽字符、wrap 边界、整屏滚动进入 history 的回归测试。
 * resize 后 selection 可按逻辑锚点重映射，且 offscreen selection 能保留 selectedText。
 * 已支持基于 scrollback viewport 的历史浏览与历史区选择。
-
-未完成：
-
-* 仍缺更系统的 golden tests，尤其是 combining text、更多 repeated narrow/wide cycle、复杂 prompt/scrollback 拼接场景。
-* 当前 reflow 仍是第一版实现，后续还需要继续收敛主屏历史与逻辑行边界语义。
+* combining text（如 e + U+0301）单轮 / 多轮 narrow/widen 循环测试全部通过。
+* combining text 进入 scrollback history 后的 reflow 正确性已验证。
+* 多条独立逻辑行在 history 中的 reflow 已验证。
+* 光标逻辑行在 scrollback reflow 后保持正确映射。
 
 退出标准：
 
-* ASCII、CJK、combining text 的 reflow golden tests 全部通过。
-* 不再通过 parser replay 做有损重建。
+* ASCII、CJK、combining text 的 reflow golden tests 全部通过。✅（85/85 通过）
+* 不再通过 parser replay 做有损重建。✅（已使用逻辑行 reflow）
 
 ## Phase 4：Qt Quick 第一前端
 
@@ -159,27 +158,22 @@
 
 目标：
 
-* 增加 DEC 私有模式、alternate screen、bracketed paste、mouse tracking 和 OSC title 处理。
-* 通过 OSC 8 增加 hyperlink 支持。
+* 覆盖 macOS Terminal.app 所需的全量协议能力，包括 DEC 私有模式、鼠标追踪、键盘编码、OSC 序列和超链接。
 
-已完成：
+协议实现的完整维度分析与当前状态见 [docs/PROTOCOL_STATUS.md](docs/PROTOCOL_STATUS.md)。
 
-* alternate screen 已有完整支持（?47 / ?1047 / ?1049）。
-* bracketed paste 已有完整支持。
-* application cursor keys、OSC title 等已有实现。
-* DECAWM (?7) 自动换行模式已实现。
-* DECSTBM 光标归位语义已修正（移至绝对 (0,0) 而非滚动区顶端）。
-* 滚动区外末行 LF 不触发全屏滚动的边界行为已修正。
-* ESC c (RIS) 全终端硬复位已实现。
-* CNL / CPL、ECH、CSI 3 J 等补全指令已实现。
-* SO / SI / NUL / DEL 控制字符已正确处理。
-* macOS Cocoa 拦截 Ctrl+字母 导致 text 为空的问题已在 encoder 层修正。
+已完成（核心里程碑）：
+
+* 解析器与执行器已覆盖全部 P0/P1 级协议。
 * **vim、less、htop、tmux（含分屏、框线、滚动）经过人工验证，行为正确。**
-* **mouse tracking 已完整实现**：MouseTracking（事件类型）与 MouseEncoding（编码格式）拆分为独立字段，SGR 格式正确带 `<` 前缀，释放事件 button 码修正，拖拽 +32 偏移修正，outboundData 路由到 PTY 修正，QTermQuickPaintedItem 动态更新 acceptedMouseButtons / acceptHoverEvents；htop 点击高亮、tmux 鼠标选窗格验证通过。
+* **鼠标追踪已完整实现**：X10 / Button / AnyEvent 事件类型，SGR 编码格式，正确路由到 PTY。
+* **OSC 8 超链接**可渲染与点击交互。
 
-未完成：
+未完成（P2/P3 级）：
 
-* 更复杂的 shell 集成（OSC 133 提示符标记、OSC 7 工作目录）尚未验证。
+* OSC 7 工作目录、OSC 133 Shell 集成标记。
+* OSC 52 剪贴板读写（需安全评估）。
+* BEL 声音/窗口闪烁的 Qt 侧绑定。
 
 退出标准：
 

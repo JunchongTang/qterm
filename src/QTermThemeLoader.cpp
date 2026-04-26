@@ -9,10 +9,10 @@ namespace QTerm {
 // ── JSON key → palette index mapping ─────────────────────────────────────────
 
 static const struct { const char *key; int index; } kPaletteKeys[] = {
-    {"black", 0}, {"red", 1}, {"green", 2}, {"yellow", 3},
-    {"blue", 4}, {"magenta", 5}, {"cyan", 6}, {"white", 7},
-    {"brightBlack", 8}, {"brightRed", 9}, {"brightGreen", 10}, {"brightYellow", 11},
-    {"brightBlue", 12}, {"brightMagenta", 13}, {"brightCyan", 14}, {"brightWhite", 15}
+    {"black",         0}, {"red",           1}, {"green",         2}, {"yellow",        3},
+    {"blue",          4}, {"magenta",        5}, {"cyan",          6}, {"white",         7},
+    {"brightBlack",   8}, {"brightRed",      9}, {"brightGreen",  10}, {"brightYellow", 11},
+    {"brightBlue",   12}, {"brightMagenta", 13}, {"brightCyan",   14}, {"brightWhite",  15}
 };
 
 // ── Private helpers (QTermThemeLoader methods → have friend access) ───────────
@@ -37,12 +37,12 @@ QTermTheme QTermThemeLoader::themeFromJsonObject(const QJsonObject &obj,
     }
 
     QTermTheme t;
-    t.m_name = obj.value(QLatin1String("name")).toString(fallbackName);
-    t.m_darkMode = obj.value(QLatin1String("darkMode")).toBool(true);
-    t.m_foreground = QColor(obj.value(QLatin1String("foreground")).toString());
-    t.m_background = QColor(obj.value(QLatin1String("background")).toString());
-    t.m_selection = QColor(obj.value(QLatin1String("selection")).toString());
-    t.m_cursor = QColor(obj.value(QLatin1String("cursor")).toString());
+    t.m_name         = obj.value(QLatin1String("name")).toString(fallbackName);
+    t.m_darkMode     = obj.value(QLatin1String("darkMode")).toBool(true);
+    t.m_foreground   = QColor(obj.value(QLatin1String("foreground")).toString());
+    t.m_background   = QColor(obj.value(QLatin1String("background")).toString());
+    t.m_selection    = QColor(obj.value(QLatin1String("selection")).toString());
+    t.m_cursor       = QColor(obj.value(QLatin1String("cursor")).toString());
 
     const QString hyperlink = obj.value(QLatin1String("hyperlinkTint")).toString();
     if (!hyperlink.isEmpty()) t.m_hyperlinkTint = QColor(hyperlink);
@@ -50,14 +50,10 @@ QTermTheme QTermThemeLoader::themeFromJsonObject(const QJsonObject &obj,
     for (const auto &entry : kPaletteKeys)
         t.m_palette[entry.index] = QColor(palette.value(QLatin1String(entry.key)).toString());
 
-    if (!t.m_foreground.isValid())
-        return fail(QStringLiteral("Invalid 'foreground' color"));
-    if (!t.m_background.isValid())
-        return fail(QStringLiteral("Invalid 'background' color"));
-    if (!t.m_selection.isValid())
-        return fail(QStringLiteral("Invalid 'selection' color"));
-    if (!t.m_cursor.isValid())
-        return fail(QStringLiteral("Invalid 'cursor' color"));
+    if (!t.m_foreground.isValid()) return fail(QStringLiteral("Invalid 'foreground' color"));
+    if (!t.m_background.isValid()) return fail(QStringLiteral("Invalid 'background' color"));
+    if (!t.m_selection.isValid())  return fail(QStringLiteral("Invalid 'selection' color"));
+    if (!t.m_cursor.isValid())     return fail(QStringLiteral("Invalid 'cursor' color"));
 
     if (ok) *ok = true;
     return t;
@@ -66,13 +62,13 @@ QTermTheme QTermThemeLoader::themeFromJsonObject(const QJsonObject &obj,
 QJsonObject QTermThemeLoader::themeToJsonObject(const QTermTheme &t)
 {
     QJsonObject obj;
-    obj[QLatin1String("name")] = t.m_name;
-    obj[QLatin1String("version")] = 1;
-    obj[QLatin1String("darkMode")] = t.m_darkMode;
-    obj[QLatin1String("foreground")] = t.m_foreground.name(QColor::HexRgb);
-    obj[QLatin1String("background")] = t.m_background.name(QColor::HexRgb);
-    obj[QLatin1String("selection")] = t.m_selection.name(QColor::HexRgb);
-    obj[QLatin1String("cursor")] = t.m_cursor.name(QColor::HexRgb);
+    obj[QLatin1String("name")]          = t.m_name;
+    obj[QLatin1String("version")]       = 1;
+    obj[QLatin1String("darkMode")]      = t.m_darkMode;
+    obj[QLatin1String("foreground")]    = t.m_foreground.name(QColor::HexRgb);
+    obj[QLatin1String("background")]    = t.m_background.name(QColor::HexRgb);
+    obj[QLatin1String("selection")]     = t.m_selection.name(QColor::HexRgb);
+    obj[QLatin1String("cursor")]        = t.m_cursor.name(QColor::HexRgb);
     obj[QLatin1String("hyperlinkTint")] = t.m_hyperlinkTint.name(QColor::HexRgb);
 
     QJsonObject palette;
