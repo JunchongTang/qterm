@@ -164,6 +164,11 @@ void QTermInputExecutor::setWindowTitleHandler(const std::function<void(const QS
     m_windowTitleHandler = handler;
 }
 
+void QTermInputExecutor::setOutboundHandler(const std::function<void(const QByteArray &)> &handler)
+{
+    m_outboundHandler = handler;
+}
+
 void QTermInputExecutor::print(const QString &text)
 {
     const int width = displayWidth(text);
@@ -693,6 +698,37 @@ void QTermInputExecutor::leaveAlternateScreen(bool restoreCursor)
         m_primaryScreen.cursorState = m_primaryScreen.savedCursorState->cursorState;
         m_primaryScreen.wrapPending = false;
     }
+}
+
+void QTermInputExecutor::deviceStatusReport()
+{
+    // CSI 6n — report current cursor position as ESC[row;colR (1-based).
+    if (!m_outboundHandler) {
+        return;
+    }
+    const int row = currentScreen().cursorState.row + 1;
+    const int col = currentScreen().cursorState.column + 1;
+    m_outboundHandler(QByteArray("\x1b[") + QByteArray::number(row) + ';' + QByteArray::number(col) + 'R');
+}
+
+void QTermInputExecutor::deviceAttributes()
+{
+    // CSI c (or CSI 0c) — primary device attributes.
+    // Report as a VT100 with no options: ESC[?1;0c
+    if (!m_outboundHandler) {
+        return;
+    }
+    m_outboundHandler(QByteArray("\x1b[?1;0c"));
+}
+
+void QTermInputExecutor::secondaryDeviceAttributes()
+{
+    // CSI >c (or CSI >0c) — secondary device attributes.
+    // Report as VT100 firmware version 0: ESC[>0;0;0c
+    if (!m_outboundHandler) {
+        return;
+    }
+    m_outboundHandler(QByteArray("\x1b[>0;0;0c"));
 }
 
 } // namespace QTerm

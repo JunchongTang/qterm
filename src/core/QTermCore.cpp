@@ -94,6 +94,9 @@ void QTermCore::writePlainText(const QString &text)
         m_title = title;
         emit titleChanged(m_title);
     });
+    executor.setOutboundHandler([this](const QByteArray &data) {
+        emit outboundData(data);
+    });
     m_textParser.parse(text, executor);
 
     emit debugPlainTextChanged();

@@ -45,10 +45,12 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
             }
             break;
         case State::Csi:
-            if (character.isDigit() || character == u';' || character == u'?') {
+            if (character.isDigit() || character == u';' || character == u'?' || character == u'>') {
                 m_csiParameters.append(character);
             } else {
-                handleCsiFinal(m_csiParameters.startsWith(u'?'), character, executor);
+                handleCsiFinal(m_csiParameters.startsWith(u'?'),
+                               m_csiParameters.startsWith(u'>'),
+                               character, executor);
                 m_csiParameters.clear();
                 m_state = State::Ground;
             }
@@ -87,7 +89,7 @@ int QTermTextParser::parameterAt(const QVector<int> &parameters, int index, int 
 QVector<int> QTermTextParser::parseCsiParameters(const QString &text)
 {
     QString parametersText = text;
-    if (parametersText.startsWith(u'?')) {
+    if (parametersText.startsWith(u'?') || parametersText.startsWith(u'>')) {
         parametersText.remove(0, 1);
     }
 
@@ -138,7 +140,7 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
     executor.print(text);
 }
 
-void QTermTextParser::handleCsiFinal(bool privateMode, QChar final, QTermInputExecutor &executor)
+void QTermTextParser::handleCsiFinal(bool privateMode, bool secondaryMode, QChar final, QTermInputExecutor &executor)
 {
     const QVector<int> parameters = parseCsiParameters(m_csiParameters);
 
@@ -149,6 +151,17 @@ void QTermTextParser::handleCsiFinal(bool privateMode, QChar final, QTermInputEx
             break;
         case 'l':
             executor.setPrivateModes(parameters, false);
+            break;
+        default:
+            break;
+        }
+        return;
+    }
+
+    if (secondaryMode) {
+        switch (final.unicode()) {
+        case 'c':
+            executor.secondaryDeviceAttributes();
             break;
         default:
             break;
@@ -203,11 +216,19 @@ void QTermTextParser::handleCsiFinal(bool privateMode, QChar final, QTermInputEx
     case 'X':
         executor.eraseCharacters(parameterAt(parameters, 0, 1));
         break;
+    case 'c':
+        executor.deviceAttributes();
+        break;
     case 'd':
         executor.linePositionAbsolute(parameterAt(parameters, 0, 1) - 1);
         break;
     case 'm':
         executor.characterAttributes(parameters);
+        break;
+    case 'n':
+        if (parameterAt(parameters, 0, 0) == 6) {
+            executor.deviceStatusReport();
+        }
         break;
     case 'r':
         executor.setScrollRegion(parameterAt(parameters, 0, 1) - 1,

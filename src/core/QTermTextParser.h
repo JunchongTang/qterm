@@ -25,7 +25,7 @@ private:
     static int parameterAt(const QVector<int> &parameters, int index, int defaultValue);
     static QVector<int> parseCsiParameters(const QString &text);
     void handleGroundTextUnit(const QString &text, QTermInputExecutor &executor);
-    void handleCsiFinal(bool privateMode, QChar final, QTermInputExecutor &executor);
+    void handleCsiFinal(bool privateMode, bool secondaryMode, QChar final, QTermInputExecutor &executor);
     void handleEscapeFinal(QChar final, QTermInputExecutor &executor);
     void handleOscTerminator(QTermInputExecutor &executor);
 
