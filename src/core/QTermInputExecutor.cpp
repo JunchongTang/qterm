@@ -541,6 +541,28 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         case 2004:
             m_modeState.bracketedPaste = enabled;
             break;
+        // 鼠标模式：?1000, ?1002, ?1003, ?1005, ?1006, ?1015
+        case 1000:
+            m_modeState.mouseMode = enabled ? MouseMode::X10 : MouseMode::Disabled;
+            break;
+        case 1002:
+            m_modeState.mouseMode = enabled ? MouseMode::Button : MouseMode::Disabled;
+            break;
+        case 1003:
+            m_modeState.mouseMode = enabled ? MouseMode::AnyEvent : MouseMode::Disabled;
+            break;
+        case 1005:
+            // UTF-8 mouse encoding（与其他模式组合使用）
+            if (!enabled) {
+                m_modeState.mouseMode = MouseMode::Disabled;
+            }
+            break;
+        case 1006:
+            m_modeState.mouseMode = enabled ? MouseMode::SGR : MouseMode::Disabled;
+            break;
+        case 1015:
+            m_modeState.mouseMode = enabled ? MouseMode::URXVT : MouseMode::Disabled;
+            break;
         default:
             break;
         }

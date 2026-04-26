@@ -10,6 +10,7 @@
 
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermSurfaceModel.h>
+#include <QTerm/QTermModeState.h>
 
 namespace QTerm {
 
@@ -38,6 +39,7 @@ public:
     QTermSession *session() const noexcept;
     QString title() const;
     QTermSurfaceModel *surfaceModel() noexcept;
+    const QTermModeState &modeState() const noexcept;
 
     Q_INVOKABLE void clear();
     Q_INVOKABLE void feedText(const QString &text);
@@ -50,6 +52,7 @@ public:
     Q_INVOKABLE void scrollToBottom();
     Q_INVOKABLE void sendKey(int key, const QString &text = QString());
     Q_INVOKABLE void sendPaste(const QString &text);
+    Q_INVOKABLE void sendMouse(int row, int column, int button, int modifiers, bool isPress);
 
     void setSession(QTermSession *session);
 
