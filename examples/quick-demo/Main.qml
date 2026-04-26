@@ -10,6 +10,9 @@ ApplicationWindow {
 
     required property var terminal
     required property var clipboardBridge
+    required property var themeHelper
+    property bool isDarkTheme: true
+    property color terminalBgColor: root.isDarkTheme ? "#0b1016" : "#fafafa"
     property real bellFlashOpacity: 0.0
     property real cursorBlinkOpacity: 1.0
     property string terminalFontFamily: "Menlo"
@@ -150,7 +153,19 @@ ApplicationWindow {
         }
     }
 
-    footer: DebugStatusBar {
+    menuBar: TermMenuBar {
+        isDark: root.isDarkTheme
+        onDarkThemeRequested: {
+            root.themeHelper.applyDarkTheme(terminalView)
+            root.isDarkTheme = true
+        }
+        onLightThemeRequested: {
+            root.themeHelper.applyLightTheme(terminalView)
+            root.isDarkTheme = false
+        }
+    }
+
+    footer: TermStatusBar {
         titleText: root.title
         sessionStateText: root.sessionStateText
         geometryText: root.geometryText
@@ -200,7 +215,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: 20
-            color: "#0b1016"
+            color: root.terminalBgColor
             border.width: 1
             border.color: "#d8dde6"
             clip: true
@@ -277,84 +292,4 @@ ApplicationWindow {
         }
     }
 
-    component DebugStatusBar: Rectangle {
-        id: statusBar
-
-        required property string titleText
-        required property string sessionStateText
-        required property string geometryText
-        required property string cursorText
-        required property string selectionText
-        required property string noteText
-
-        implicitHeight: 42
-        color: "#fbfbfd"
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: 1
-            color: "#d7dbe2"
-        }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 18
-            anchors.rightMargin: 18
-            spacing: 10
-
-            Text {
-                Layout.preferredWidth: 220
-                Layout.alignment: Qt.AlignVCenter
-                elide: Text.ElideRight
-                color: "#111827"
-                font.pixelSize: 12
-                font.weight: Font.DemiBold
-                text: statusBar.titleText
-            }
-
-            Text {
-                Layout.alignment: Qt.AlignVCenter
-                color: "#6b7280"
-                font.pixelSize: 12
-                text: statusBar.sessionStateText
-            }
-
-            Text {
-                Layout.alignment: Qt.AlignVCenter
-                color: "#6b7280"
-                font.pixelSize: 12
-                text: statusBar.geometryText
-            }
-
-            Text {
-                Layout.alignment: Qt.AlignVCenter
-                color: "#6b7280"
-                font.pixelSize: 12
-                text: statusBar.cursorText
-            }
-
-            Text {
-                Layout.alignment: Qt.AlignVCenter
-                color: "#6b7280"
-                font.pixelSize: 12
-                text: statusBar.selectionText
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Text {
-                Layout.maximumWidth: 420
-                Layout.alignment: Qt.AlignVCenter
-                horizontalAlignment: Text.AlignRight
-                elide: Text.ElideRight
-                color: "#4b5563"
-                font.pixelSize: 12
-                text: statusBar.noteText
-            }
-        }
-    }
 }

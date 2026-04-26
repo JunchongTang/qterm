@@ -2,9 +2,9 @@
 
 ## TL;DR
 
-引入 `QTermTheme`（纯数据类）和 `QTermThemeLoader`（文件 I/O），
-两个 Widget 通过 `setTheme()` 接收主题，`QTermRenderUtils` 在渲染时消费调色盘。
-自有 JSON 格式为主，后续适配 `.itermcolors` / `.terminal` / Alacritty YAML 等。
+引入 `QTermTheme`（单套已解析颜色）、`QTermThemePack`（多变体容器）和 `QTermThemeLoader`（文件 I/O）。
+Widget 只接受 `QTermTheme`，变体选择和"跟随系统"逻辑由应用层通过 `QTermThemePack` 完成。
+自有 JSON 格式为主，后续适配 `.itermcolors` / Alacritty TOML 等。
 
 ---
 
@@ -189,13 +189,23 @@
 
 ## 三、C++ 类设计
 
-### 3.1 `QTermTheme`（纯数据，`include/QTerm/QTermTheme.h`）
+### 语义分层
+
+| 类 | 职责 | 对应文件 |
+|----|------|------|
+| `QTermTheme` | 单套已解析颜色，无 variant 概念 | `include/QTerm/QTermTheme.h` |
+| `QTermThemePack` | 多变体容器，对应含 `variants` 的 .qtheme 文件 | `include/QTerm/QTermThemePack.h` |
+| `QTermThemeLoader` | 文件 I/O，返回 `QTermTheme` 或 `QTermThemePack` | `include/QTerm/QTermThemeLoader.h` |
+
+**关键原则**：Widget 只接受已解析的 `QTermTheme`，不感知 variant 和系统颜色方案。
+"选哪个 variant"和"跟随系统深浅色"由**应用层**通过 `QTermThemePack` 完成。
+
+### 3.1 `QTermTheme`（单套颜色，`include/QTerm/QTermTheme.h`）
 
 ```cpp
 class QTermTheme {
 public:
-    // 从默认内建主题构造（Dark）
-    QTermTheme();
+    QTermTheme(); // 默认等同 dark()
 
     // 基础色
     QColor foreground()    const;
@@ -212,8 +222,8 @@ public:
     QString name() const;
     bool darkMode() const;
 
-    // 内建主题工厂
-    static QTermTheme dark();        // 当前默认配色
+    // 内建主题工厂（单 variant；多 variant 用 QTermThemePack）
+    static QTermTheme dark();
     static QTermTheme light();
     static QTermTheme solarizedDark();
     static QTermTheme solarizedLight();
@@ -234,56 +244,93 @@ private:
 };
 ```
 
-### 3.2 `QTermThemeLoader`（文件 I/O，`include/QTerm/QTermThemeLoader.h`）
+### 3.2 `QTermThemePack`（多变体容器，`include/QTerm/QTermThemePack.h`）
+
+对应含 `"variants"` 的 .qtheme 文件。
+
+```cpp
+class QTermThemePack {
+public:
+    // 包名（来自文件顶层 "name" 字段）
+    QString name() const;
+
+    // 所有变体名（按文件中 JSON key 顺序）
+    QStringList variantNames() const;
+
+    // 返回指定变体；若 name 不存在则返回第一个变体
+    QTermTheme variant(const QString &name) const;
+
+    // 根据系统当前深浅色偏好自动选择变体：
+    //   系统深色 → variant("dark")，系统浅色 → variant("light")
+    //   若对应变体不存在则返回第一个变体
+    QTermTheme resolveForSystem() const;
+
+    bool hasVariant(const QString &name) const;
+    int  variantCount() const;
+
+private:
+    QString                   m_name;
+    QStringList               m_variantOrder; // 保持插入顺序
+    QMap<QString, QTermTheme> m_variants;
+
+    friend class QTermThemeLoader;
+};
+```
+
+**典型应用层用法：**
+
+```cpp
+// 加载主题包
+QTermThemePack pack = QTermThemeLoader::loadPack("Solarized.qtheme");
+
+// 强制深色
+terminal->setTheme(pack.variant("dark"));
+
+// 跟随系统：初始化 + 监听颜色方案变化
+terminal->setTheme(pack.resolveForSystem());
+connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [&]() {
+    terminal->setTheme(pack.resolveForSystem());
+});
+```
+
+### 3.3 `QTermThemeLoader`（文件 I/O，`include/QTerm/QTermThemeLoader.h`）
 
 ```cpp
 class QTermThemeLoader {
 public:
-    // ── 单主题加载 ──────────────────────────────────────────────────────────
+    // ── 加载单套颜色 ────────────────────────────────────────────────────────
     // 单模式文件：直接加载。
     // 多变体文件：加载第一个变体（按 JSON key 顺序）。
-    static QTermTheme loadFromFile(const QString &path,
+    static QTermTheme loadTheme(const QString &path,
+                                bool *ok = nullptr,
+                                QString *errorString = nullptr);
+
+    static QTermTheme loadThemeFromJson(const QByteArray &json,
+                                        bool *ok = nullptr,
+                                        QString *errorString = nullptr);
+
+    // ── 加载主题包 ──────────────────────────────────────────────────────────
+    // 若文件无 "variants" 字段，返回含单个 variant（key = "default"）的 pack
+    static QTermThemePack loadPack(const QString &path,
                                    bool *ok = nullptr,
                                    QString *errorString = nullptr);
-
-    // 从 JSON 字节流加载（同上规则，用于网络/内嵌资源）
-    static QTermTheme loadFromJson(const QByteArray &json,
-                                   bool *ok = nullptr,
-                                   QString *errorString = nullptr);
-
-    // ── 多变体访问 ──────────────────────────────────────────────────────────
-    // 列出文件中所有变体名；单模式文件返回空列表
-    static QStringList listVariants(const QString &path);
-
-    // 加载指定变体（variantName = "dark" / "light" / 自定义）
-    static QTermTheme loadVariant(const QString &path,
-                                  const QString &variantName,
-                                  bool *ok = nullptr,
-                                  QString *errorString = nullptr);
-
-    // 加载所有变体，key = 变体名
-    static QMap<QString, QTermTheme> loadAllVariants(const QString &path,
-                                                     bool *ok = nullptr,
-                                                     QString *errorString = nullptr);
 
     // ── 保存 ────────────────────────────────────────────────────────────────
-    // 将单个主题保存为单模式 .qtheme 文件
-    static bool saveToFile(const QTermTheme &theme, const QString &path,
-                           QString *errorString = nullptr);
+    // 单套颜色 → 单模式 .qtheme
+    static bool saveTheme(const QTermTheme &theme, const QString &path,
+                          QString *errorString = nullptr);
 
-    // 将多个变体保存为多变体 .qtheme 文件
-    // variants: key = 变体名，value = QTermTheme
-    static bool saveVariantsToFile(const QString &name,
-                                   const QMap<QString, QTermTheme> &variants,
-                                   const QString &path,
-                                   QString *errorString = nullptr);
+    // 主题包 → 多变体 .qtheme
+    static bool savePack(const QTermThemePack &pack, const QString &path,
+                         QString *errorString = nullptr);
 
-    // 序列化为 JSON 字节流（单主题 → 单模式 JSON）
+    // 序列化为 JSON 字节流
     static QByteArray toJson(const QTermTheme &theme);
+    static QByteArray toJson(const QTermThemePack &pack);
 };
 ```
 
-### 3.3 `QTermRenderUtils` 改动
+### 3.4 `QTermRenderUtils` 改动
 
 `QTermPaintRequest` 新增一个字段：
 
@@ -301,25 +348,22 @@ struct QTermPaintRequest {
 QColor qtermColorFromPaletteIndex(int index, const QColor *palette16);
 ```
 
-### 3.4 Widget 侧 API
+### 3.5 Widget 侧 API
 
-`QTermQuickPaintedItem` 和 `QTermWidget` 均新增：
+两个 Widget 均只接受**已解析**的 `QTermTheme`，不持有 `QTermThemePack`：
 
 ```cpp
 // Q_PROPERTY
 QTermTheme theme() const;
-void setTheme(const QTermTheme &theme);
+void setTheme(const QTermTheme &theme);    // 批量覆盖所有颜色成员
 
 signals:
     void themeChanged();
 ```
 
-`setTheme` 内部：
-1. 存储 `m_theme`
-2. 用主题基础色覆盖 `m_foregroundColor` 等成员
-3. `update()` + `emit themeChanged()`
-
-颜色 setter（`setForegroundColor` 等）仍保留——允许逐项覆盖，`setTheme` 只是批量设置的便捷方法。
+`setTheme` 内部：覆盖所有颜色成员 → `update()` → `emit themeChanged()`。
+颜色 setter（`setForegroundColor` 等）仍保留，允许逐项覆盖。
+"跟随系统"由应用层实现（见 3.2 节用法示例）。
 
 ---
 
@@ -335,11 +379,13 @@ signals:
 
 ```
 include/QTerm/
-  QTermTheme.h          ← 公开头文件（纯数据 + 内建主题工厂）
-  QTermThemeLoader.h    ← 公开头文件（JSON 加载/保存）
+  QTermTheme.h          ← 公开头文件（单套颜色 + 内建工厂方法）
+  QTermThemePack.h      ← 公开头文件（多变体容器 + resolveForSystem）
+  QTermThemeLoader.h    ← 公开头文件（loadTheme / loadPack / save）
 
 src/
-  QTermTheme.cpp        ← 内建主题数据 + QTermTheme 实现
+  QTermTheme.cpp        ← 单套颜色实现 + 内建工厂方法
+  QTermThemePack.cpp    ← 多变体容器 + resolveForSystem 实现
   QTermThemeLoader.cpp  ← JSON 解析/序列化（Qt6 JSON API）
   QTermRenderUtils.h    ← 改动：palette16 指针 + 函数签名更新
 
@@ -364,19 +410,20 @@ themes/                 ← 内建 .qtheme 文件（可选，也可硬编码在 
 | Xresources | `.Xresources` / `.xrdb` | 低 | 文本 key-value，Linux 用户需求 |
 | Terminator | `.config` | 低 | INI-like |
 
-适配层设计：每个外部格式对应一个 `static QTermTheme fromXxx(...)` 函数（或单独的 `QTermThemeImporter` 命名空间），转换后统一返回 `QTermTheme`。用户可再用 `QTermThemeLoader::saveToFile()` 导出为 `.qtheme`。
+适配层设计：每个外部格式对应一个 `static QTermTheme fromXxx(...)` 函数（或单独的 `QTermThemeImporter` 命名空间），转换后统一返回 `QTermTheme`。用户可再用 `QTermThemeLoader::saveTheme()` 导出为 `.qtheme`。
 
 ---
 
 ## 七、实施步骤
 
 ### Phase T1 — 核心数据层
-1. 实现 `QTermTheme` + 1 个内建主题
-2. 实现 `QTermThemeLoader`（JSON 加载/保存）
-3. `QTermRenderUtils` 接收 `palette16` 指针
-4. `QTermQuickPaintedItem` / `QTermWidget` 加 `setTheme` API
-5. quick-demo / widget-demo 加主题切换 UI
-6. 验证：83 tests pass；两个 demo 切换主题无闪烁
+1. 实现 `QTermTheme`（单套颜色 + 6 个内建工厂方法）
+2. 实现 `QTermThemePack`（变体容器 + `resolveForSystem()`）
+3. 实现 `QTermThemeLoader`（`loadTheme` / `loadPack` / `saveTheme` / `savePack`）
+4. `QTermRenderUtils` 接收 `palette16` 指针
+5. `QTermQuickPaintedItem` / `QTermWidget` 加 `setTheme(QTermTheme)` API
+6. widget-demo 加主题切换 UI（演示变体选择 + 跟随系统）
+7. 验证：83 tests pass；demo 切换主题无闪烁
 
 ### Phase T2 — iTerm2 / Alacritty 导入
 1. `QTermThemeImporter::fromITermColors(path)`

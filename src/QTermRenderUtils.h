@@ -30,75 +30,81 @@ QColor qtermColorFromRgb(int rgb)
                    rgb        & 0xff);
 }
 
-QColor qtermColorFromPaletteIndex(int index)
+// palette16: pointer to QColor[16] from QTermTheme, or nullptr to use the
+// built-in fallback palette.  index 16–255 always use the fixed 256-color cube.
+QColor qtermColorFromPaletteIndex(int index, const QColor *palette16 = nullptr)
 {
-    static const QColor palette[] = {
-        QColor(QStringLiteral("#10151c")), QColor(QStringLiteral("#ff5f56")),
-        QColor(QStringLiteral("#27c93f")), QColor(QStringLiteral("#ffbd2e")),
-        QColor(QStringLiteral("#4f8cff")), QColor(QStringLiteral("#c678dd")),
-        QColor(QStringLiteral("#56b6c2")), QColor(QStringLiteral("#dce7f3")),
-        QColor(QStringLiteral("#5b6574")), QColor(QStringLiteral("#ff8f88")),
-        QColor(QStringLiteral("#58d26a")), QColor(QStringLiteral("#ffd866")),
-        QColor(QStringLiteral("#7aa2ff")), QColor(QStringLiteral("#d7a6ff")),
-        QColor(QStringLiteral("#7dd3d8")), QColor(QStringLiteral("#f5fbff"))
-    };
-
     if (index < 0) return QColor();
 
-    if (index < static_cast<int>(std::size(palette)))
-        return palette[index];
+    if (index < 16) {
+        if (palette16) return palette16[index];
+        static const QColor builtIn[] = {
+            QColor(QStringLiteral("#10151c")), QColor(QStringLiteral("#ff5f56")),
+            QColor(QStringLiteral("#27c93f")), QColor(QStringLiteral("#ffbd2e")),
+            QColor(QStringLiteral("#4f8cff")), QColor(QStringLiteral("#c678dd")),
+            QColor(QStringLiteral("#56b6c2")), QColor(QStringLiteral("#dce7f3")),
+            QColor(QStringLiteral("#5b6574")), QColor(QStringLiteral("#ff8f88")),
+            QColor(QStringLiteral("#58d26a")), QColor(QStringLiteral("#ffd866")),
+            QColor(QStringLiteral("#7aa2ff")), QColor(QStringLiteral("#d7a6ff")),
+            QColor(QStringLiteral("#7dd3d8")), QColor(QStringLiteral("#f5fbff"))
+        };
+        return builtIn[index];
+    }
 
     if (index >= 232) {
         const int level = 8 + (index - 232) * 10;
         return QColor(level, level, level);
     }
 
-    const int cubeIndex  = qMax(0, index - 16);
-    const int redIndex   = (cubeIndex / 36) % 6;
-    const int greenIndex = (cubeIndex /  6) % 6;
-    const int blueIndex  =  cubeIndex       % 6;
+    const int cubeIndex = qMax(0, index - 16);
+    const int redIndex = (cubeIndex / 36) % 6;
+    const int greenIndex = (cubeIndex / 6) % 6;
+    const int blueIndex = cubeIndex % 6;
     static const int componentValues[] = {0, 95, 135, 175, 215, 255};
     return QColor(componentValues[redIndex],
                   componentValues[greenIndex],
                   componentValues[blueIndex]);
 }
 
-QColor qtermRunForegroundColor(const QVariantMap &run, const QColor &defaultForeground)
+QColor qtermRunForegroundColor(const QVariantMap &run, const QColor &defaultForeground,
+                               const QColor *palette16 = nullptr)
 {
     const int foregroundRgb = run.value(QStringLiteral("foregroundRgb"), -1).toInt();
     if (foregroundRgb >= 0) return qtermColorFromRgb(foregroundRgb);
 
     const int foregroundIndex = run.value(QStringLiteral("foregroundIndex"), -1).toInt();
-    if (foregroundIndex >= 0) return qtermColorFromPaletteIndex(foregroundIndex);
+    if (foregroundIndex >= 0) return qtermColorFromPaletteIndex(foregroundIndex, palette16);
 
     return defaultForeground;
 }
 
-QColor qtermRunBackgroundColor(const QVariantMap &run)
+QColor qtermRunBackgroundColor(const QVariantMap &run, const QColor *palette16 = nullptr)
 {
     const int backgroundRgb = run.value(QStringLiteral("backgroundRgb"), -1).toInt();
     if (backgroundRgb >= 0) return qtermColorFromRgb(backgroundRgb);
 
     const int backgroundIndex = run.value(QStringLiteral("backgroundIndex"), -1).toInt();
-    if (backgroundIndex >= 0) return qtermColorFromPaletteIndex(backgroundIndex);
+    if (backgroundIndex >= 0) return qtermColorFromPaletteIndex(backgroundIndex, palette16);
 
     return QColor();
 }
 
-QColor qtermEffectiveForeground(const QVariantMap &run, const QColor &defaultForeground)
+QColor qtermEffectiveForeground(const QVariantMap &run, const QColor &defaultForeground,
+                                const QColor *palette16 = nullptr)
 {
     if (run.value(QStringLiteral("inverse")).toBool()) {
-        const QColor bg = qtermRunBackgroundColor(run);
+        const QColor bg = qtermRunBackgroundColor(run, palette16);
         return bg.isValid() ? bg : QColor(QStringLiteral("#0a0f15"));
     }
-    return qtermRunForegroundColor(run, defaultForeground);
+    return qtermRunForegroundColor(run, defaultForeground, palette16);
 }
 
-QColor qtermEffectiveBackground(const QVariantMap &run, const QColor &defaultForeground)
+QColor qtermEffectiveBackground(const QVariantMap &run, const QColor &defaultForeground,
+                                const QColor *palette16 = nullptr)
 {
     if (run.value(QStringLiteral("inverse")).toBool())
-        return qtermRunForegroundColor(run, defaultForeground);
-    return qtermRunBackgroundColor(run);
+        return qtermRunForegroundColor(run, defaultForeground, palette16);
+    return qtermRunBackgroundColor(run, palette16);
 }
 
 int qtermRunColumns(const QVariantMap &run)
@@ -112,19 +118,24 @@ int qtermRunColumns(const QVariantMap &run)
 
 // cursorStyle values: 0 = Block, 1 = Underline, 2 = Bar.
 struct QTermPaintRequest {
-    QRectF            bounds;
-    QTerm::QTermSurfaceModel *surfaceModel  = nullptr;
-    qreal             cellWidth      = 1.0;
-    qreal             cellHeight     = 1.0;
-    QFont             baseFont;
-    QColor            foreground;
-    QColor            background;
-    QColor            selection;
-    QColor            cursor;
-    qreal             cursorOpacity  = 1.0;
-    int               cursorStyle    = 0;
+    QRectF bounds;
+    QTerm::QTermSurfaceModel *surfaceModel = nullptr;
+    qreal cellWidth = 1.0;
+    qreal cellHeight = 1.0;
+    QFont baseFont;
+    QColor foreground;
+    QColor background;
+    QColor selection;
+    QColor cursor;
+    qreal cursorOpacity = 1.0;
+    int cursorStyle = 0;
     // Draw built-in cursor (false when delegate item handles it, or no focus).
-    bool              showCursor     = false;
+    bool showCursor = false;
+    // Hyperlink tint. If invalid, falls back to "#6ab0f5".
+    QColor hyperlinkTint;
+    // Pointer to QTermTheme::palette16() for ANSI color resolution.
+    // nullptr → use the built-in fallback palette.
+    const QColor *palette16 = nullptr;
 };
 
 // ── Main paint function ───────────────────────────────────────────────────────
@@ -155,7 +166,7 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             const QVariantMap run = rv.toMap();
             const int columns = qtermRunColumns(run);
             const QRectF runRect(x, y, columns * cellW, cellH);
-            const QColor bg = qtermEffectiveBackground(run, req.foreground);
+            const QColor bg = qtermEffectiveBackground(run, req.foreground, req.palette16);
             if (bg.isValid()) painter->fillRect(runRect, bg);
             x += runRect.width();
         }
@@ -188,11 +199,12 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
             painter->setFont(runFont);
 
-            QColor fg = qtermEffectiveForeground(run, req.foreground);
+            QColor fg = qtermEffectiveForeground(run, req.foreground, req.palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
-                fg = QColor(QStringLiteral("#6ab0f5"));
+                fg = req.hyperlinkTint.isValid() ? req.hyperlinkTint
+                                                 : QColor(QStringLiteral("#6ab0f5"));
             }
             fg.setAlphaF(run.value(QStringLiteral("dim")).toBool() ? 0.65 : 1.0);
             painter->setPen(fg);

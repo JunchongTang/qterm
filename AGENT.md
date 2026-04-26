@@ -10,3 +10,39 @@
 * 命名、接口设计、头源文件组织、注释风格和 Qt 对象使用方式，优先参考 Qt 官方代码风格。
 * 面向用户展示的文本允许被翻译为其他语言，但代码中的翻译源字符串必须统一写成英文。
 * 新增 UI 文本时，不要直接把中文写入 `qsTr()` 或 `tr()`。
+
+## 示例
+
+下面这种列对齐的代码风格是错误的：
+```
+t.m_name      = obj.value(QLatin1String("name")).toString(fallbackName);
+t.m_darkMode  = obj.value(QLatin1String("darkMode")).toBool(true);
+t.m_foreground   = QColor(obj.value(QLatin1String("foreground")).toString());
+t.m_background   = QColor(obj.value(QLatin1String("background")).toString());
+t.m_selection    = QColor(obj.value(QLatin1String("selection")).toString());
+t.m_cursor       = QColor(obj.value(QLatin1String("cursor")).toString());
+...
+if (!t.m_foreground.isValid()) return fail(QStringLiteral("Invalid 'foreground' color"));
+if (!t.m_background.isValid()) return fail(QStringLiteral("Invalid 'background' color"));
+if (!t.m_selection.isValid())  return fail(QStringLiteral("Invalid 'selection' color"));
+if (!t.m_cursor.isValid())     return fail(QStringLiteral("Invalid 'cursor' color"));
+```
+正确的风格是
+
+```
+t.m_name = obj.value(QLatin1String("name")).toString(fallbackName);
+t.m_darkMode = obj.value(QLatin1String("darkMode")).toBool(true);
+t.m_foreground = QColor(obj.value(QLatin1String("foreground")).toString());
+t.m_background = QColor(obj.value(QLatin1String("background")).toString());
+t.m_selection = QColor(obj.value(QLatin1String("selection")).toString());
+t.m_cursor = QColor(obj.value(QLatin1String("cursor")).toString());
+...
+if (!t.m_foreground.isValid()) 
+    return fail(QStringLiteral("Invalid 'foreground' color"));
+if (!t.m_background.isValid()) 
+    return fail(QStringLiteral("Invalid 'background' color"));
+if (!t.m_selection.isValid()) 
+    return fail(QStringLiteral("Invalid 'selection' color"));
+if (!t.m_cursor.isValid()) 
+    return fail(QStringLiteral("Invalid 'cursor' color"));
+```

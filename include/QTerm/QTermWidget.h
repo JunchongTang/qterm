@@ -6,6 +6,7 @@
 #include <QWidget>
 
 #include <QTerm/QTermTerminal.h>
+#include <QTerm/QTermTheme.h>
 
 namespace QTerm {
 
@@ -27,6 +28,7 @@ class QTermWidget : public QWidget
     Q_PROPERTY(QTerm::QTermWidget::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
+    Q_PROPERTY(QTerm::QTermTheme theme READ theme WRITE setTheme NOTIFY themeChanged)
 
 public:
     enum CursorStyle {
@@ -78,6 +80,9 @@ public:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     QSize sizeHint() const override;
 
+    QTermTheme theme() const;
+    void setTheme(const QTermTheme &theme);
+
 signals:
     void terminalChanged();
     void fontChanged();
@@ -89,6 +94,7 @@ signals:
     void wheelScrolled(int scrollOffset);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
+    void themeChanged();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -108,6 +114,7 @@ private:
 
     QTermViewController *m_controller  = nullptr;
 
+    QTermTheme  m_theme;   // current theme; individual color members follow it
     QColor      m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));
     QColor      m_backgroundColor = QColor(QStringLiteral("#0b1016"));
     QColor      m_selectionColor  = QColor(QStringLiteral("#214f76"));
