@@ -368,8 +368,13 @@ void QTermInputExecutor::carriageReturn()
     // Flag that the next character write should sever any predecessor wrap chain.
     // This is needed when a shell redraws the prompt after resize by issuing
     // CR followed by new content on the same physical row.
-    currentScreen().breakPredecessorWrapOnWrite = true;
-    setCursorState(QTermCursorState{currentScreen().cursorState.row, 0});
+    // Exception: if the cursor was just placed here by wrapToNextLine() (i.e.
+    // cursorOnWrapTarget is set), CR is merely repositioning within a typed wrap
+    // and must NOT trigger severing of the row that was just wrapped.
+    const int row = currentScreen().cursorState.row;
+    if (!currentScreen().cursorOnWrapTarget)
+        currentScreen().breakPredecessorWrapOnWrite = true;
+    setCursorState(QTermCursorState{row, 0});
 }
 
 void QTermInputExecutor::backspace()
@@ -431,7 +436,12 @@ void QTermInputExecutor::cursorHorizontalAbsolute(int column)
     // (which use ESC[1G instead of \r) work correctly after a resize.
     if (targetColumn == 0) {
         currentScreen().buffer.lineAt(currentScreen().cursorState.row).setWrappedToNextLine(false);
-        currentScreen().breakPredecessorWrapOnWrite = true;
+        // Moving to column 0 is semantically equivalent to CR: any subsequent write
+        // should sever the predecessor wrap chain so that shell prompt redraws
+        // (which use ESC[1G instead of \r) work correctly after a resize.
+        // Same guard as carriageReturn(): skip if cursor was placed here by auto-wrap.
+        if (!currentScreen().cursorOnWrapTarget)
+            currentScreen().breakPredecessorWrapOnWrite = true;
     }
     setCursorState(QTermCursorState{currentScreen().cursorState.row, targetColumn});
 }
@@ -796,6 +806,8 @@ QTermScreenState &QTermInputExecutor::inactiveScreen() noexcept
 
 void QTermInputExecutor::setCursorState(const QTermCursorState &cursorState)
 {
+    if (cursorState.row != currentScreen().cursorState.row)
+        currentScreen().cursorOnWrapTarget = false;
     currentScreen().cursorState = cursorState;
 }
 
@@ -805,6 +817,7 @@ void QTermInputExecutor::wrapToNextLine()
     currentScreen().wrapPending = false;
     advanceToNextRow();
     setCursorState(QTermCursorState{currentScreen().cursorState.row, 0});
+    currentScreen().cursorOnWrapTarget = true;
 }
 
 void QTermInputExecutor::advanceToNextRow()

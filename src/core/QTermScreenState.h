@@ -24,6 +24,7 @@ struct QTermScreenState
         cursorState = QTermCursorState();
         wrapPending = false;
         breakPredecessorWrapOnWrite = false;
+        cursorOnWrapTarget = false;
         currentAttributes = QTermCellAttributes();
         savedCursorState.reset();
         scrollTop = 0;
@@ -34,6 +35,7 @@ struct QTermScreenState
     void resize(int columns, int rows)
     {
         cursorState = buffer.resize(columns, rows, cursorState);
+        cursorOnWrapTarget = false;  // Reflow repositions cursor; invalidate auto-wrap tracking.
         if (savedCursorState.has_value()) {
             savedCursorState->cursorState.row = qBound(0, savedCursorState->cursorState.row, rows - 1);
             savedCursorState->cursorState.column = qBound(0, savedCursorState->cursorState.column, columns - 1);
@@ -50,6 +52,10 @@ struct QTermScreenState
     QTermCursorState cursorState;
     bool wrapPending = false;
     bool breakPredecessorWrapOnWrite = false;
+    // True when the cursor was most recently placed on this row by wrapToNextLine().
+    // Cleared on any explicit cursor-row change (cursor commands, resize, LF, etc.).
+    // Used to suppress predecessor-chain severing when CR/CHA fires after auto-wrap.
+    bool cursorOnWrapTarget = false;
     QTermCellAttributes currentAttributes;
     std::optional<QTermSavedCursorState> savedCursorState;
     int scrollTop = 0;
