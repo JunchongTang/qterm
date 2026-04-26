@@ -676,27 +676,24 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         case 2004:
             m_modeState.bracketedPaste = enabled;
             break;
-        // 鼠标模式：?1000, ?1002, ?1003, ?1005, ?1006, ?1015
+        // 鼠标事件类型：?1000, ?1002, ?1003
         case 1000:
-            m_modeState.mouseMode = enabled ? MouseMode::X10 : MouseMode::Disabled;
+            m_modeState.mouseTracking = enabled ? MouseTracking::X10 : MouseTracking::Disabled;
             break;
         case 1002:
-            m_modeState.mouseMode = enabled ? MouseMode::Button : MouseMode::Disabled;
+            m_modeState.mouseTracking = enabled ? MouseTracking::Button : MouseTracking::Disabled;
             break;
         case 1003:
-            m_modeState.mouseMode = enabled ? MouseMode::AnyEvent : MouseMode::Disabled;
+            m_modeState.mouseTracking = enabled ? MouseTracking::AnyEvent : MouseTracking::Disabled;
             break;
+        // 鼠标编码格式：?1005（UTF-8，忽略），?1006（SGR），?1015（URXVT）
         case 1005:
-            // UTF-8 mouse encoding（与其他模式组合使用）
-            if (!enabled) {
-                m_modeState.mouseMode = MouseMode::Disabled;
-            }
-            break;
+            break;  // UTF-8 编码忽略，不影响事件类型
         case 1006:
-            m_modeState.mouseMode = enabled ? MouseMode::SGR : MouseMode::Disabled;
+            m_modeState.mouseEncoding = enabled ? MouseEncoding::SGR : MouseEncoding::Default;
             break;
         case 1015:
-            m_modeState.mouseMode = enabled ? MouseMode::URXVT : MouseMode::Disabled;
+            m_modeState.mouseEncoding = enabled ? MouseEncoding::URXVT : MouseEncoding::Default;
             break;
         default:
             break;

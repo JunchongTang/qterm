@@ -213,11 +213,14 @@ void QTermQuickPaintedItem::setTerminal(QTermTerminal *terminal)
 
     disconnectSurfaceModel();
     QObject::disconnect(m_viewportConnection);
+    QObject::disconnect(m_modeStateConnection);
     m_terminal = terminal;
     reconnectSurfaceModel();
     if (m_terminal) {
         m_viewportConnection = connect(m_terminal, &QTermTerminal::viewportChanged,
                                        this, [this]() { emit scrollChanged(); });
+        m_modeStateConnection = connect(m_terminal, &QTermTerminal::modeStateChanged,
+                                        this, [this]() { updateMouseAcceptance(); });
     }
     scheduleTerminalSizeSync();
     update();
@@ -506,19 +509,16 @@ void QTermQuickPaintedItem::wheelEvent(QWheelEvent *event)
     const auto &modeState = m_terminal->modeState();
     const QPoint angleDelta = event->angleDelta();
     
-    if (modeState.mouseMode != MouseMode::Disabled && angleDelta.y() != 0) {
-        // 鼠标协议启用：直接编码并转发滚轮事件
-        // 虚拟按钮码：64=向上，65=向下
+    if (modeState.mouseTracking != MouseTracking::Disabled && angleDelta.y() != 0) {
+        // 鼠标协议启用：直接用 sendMouse 转发滚轮事件（outbound → PTY）。
+        // 虚拟按钮码：64=向上，65=向下（X10/SGR 滚轮约定）。
         const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
-        const QByteArray wheelSequence = QTermInputEncoder::encodeMouse(
+        m_terminal->sendMouse(
             rowAtPosition(event->position().y()),
             columnAtPosition(event->position().x()),
-            static_cast<Qt::MouseButton>(wheelButton),  // 临时转换虚拟码
-            event->modifiers(), true, modeState);
-        
-        if (!wheelSequence.isEmpty()) {
-            m_terminal->feedText(QString::fromLatin1(wheelSequence));
-        }
+            wheelButton,
+            static_cast<int>(event->modifiers()),
+            true);
         event->accept();
         return;
     }
@@ -627,7 +627,7 @@ void QTermQuickPaintedItem::mousePressEvent(QMouseEvent *event)
 
     // 检查鼠标协议模式
     const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseMode != MouseMode::Disabled) {
+    if (modeState.mouseTracking != MouseTracking::Disabled) {
         // 鼠标协议启用：转发鼠标事件
         m_terminal->sendMouse(rowAtPosition(event->position().y()),
                              columnAtPosition(event->position().x()),
@@ -701,13 +701,17 @@ void QTermQuickPaintedItem::mouseMoveEvent(QMouseEvent *event)
 
     // 检查鼠标协议模式
     const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseMode == MouseMode::AnyEvent ||
-        (modeState.mouseMode == MouseMode::Button && (event->buttons() & Qt::LeftButton))) {
+    if (modeState.mouseTracking == MouseTracking::AnyEvent ||
+        (modeState.mouseTracking == MouseTracking::Button && (event->buttons() & Qt::LeftButton))) {
         // 鼠标协议启用且支持移动报告：转发鼠标移动事件
-        // 对于 Button 模式，只有按钮按下时才报告移动
+        // Button 模式下传递持按的按键（加 32 偏移表示拖拽）；AnyEvent 传 NoButton（→ 35）
+        const Qt::MouseButton heldButton =
+            (event->buttons() & Qt::LeftButton)   ? Qt::LeftButton   :
+            (event->buttons() & Qt::MiddleButton) ? Qt::MiddleButton :
+            (event->buttons() & Qt::RightButton)  ? Qt::RightButton  : Qt::NoButton;
         m_terminal->sendMouse(rowAtPosition(event->position().y()),
                              columnAtPosition(event->position().x()),
-                             Qt::NoButton, event->modifiers(), false);
+                             heldButton, event->modifiers(), false, /*isMotion=*/true);
         event->accept();
         return;
     }
@@ -741,11 +745,6 @@ void QTermQuickPaintedItem::mouseMoveEvent(QMouseEvent *event)
 
 void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() != Qt::LeftButton) {
-        QQuickPaintedItem::mouseReleaseEvent(event);
-        return;
-    }
-
     if (!m_terminal) {
         QQuickPaintedItem::mouseReleaseEvent(event);
         return;
@@ -753,12 +752,17 @@ void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
 
     // 检查鼠标协议模式
     const auto &modeState = m_terminal->modeState();
-    if (modeState.mouseMode != MouseMode::Disabled) {
+    if (modeState.mouseTracking != MouseTracking::Disabled) {
         // 鼠标协议启用：转发鼠标释放事件
         m_terminal->sendMouse(rowAtPosition(event->position().y()),
                              columnAtPosition(event->position().x()),
                              event->button(), event->modifiers(), false);
         event->accept();
+        return;
+    }
+
+    if (event->button() != Qt::LeftButton) {
+        QQuickPaintedItem::mouseReleaseEvent(event);
         return;
     }
 
@@ -776,6 +780,25 @@ void QTermQuickPaintedItem::mouseReleaseEvent(QMouseEvent *event)
     m_selectionAnchorRow = -1;
     m_selectionAnchorColumn = -1;
     event->accept();
+}
+
+void QTermQuickPaintedItem::hoverMoveEvent(QHoverEvent *event)
+{
+    if (!m_terminal) {
+        QQuickPaintedItem::hoverMoveEvent(event);
+        return;
+    }
+
+    const auto &modeState = m_terminal->modeState();
+    if (modeState.mouseTracking == MouseTracking::AnyEvent) {
+        const QPointF pos = event->position();
+        m_terminal->sendMouse(rowAtPosition(pos.y()), columnAtPosition(pos.x()),
+                              Qt::NoButton, Qt::NoModifier, false, /*isMotion=*/true);
+        event->accept();
+        return;
+    }
+
+    QQuickPaintedItem::hoverMoveEvent(event);
 }
 
 void QTermQuickPaintedItem::updateSelectionFromDrag(qreal x, qreal y)
@@ -826,6 +849,24 @@ void QTermQuickPaintedItem::disconnectSurfaceModel()
     QObject::disconnect(m_surfaceSelectionConnection);
     QObject::disconnect(m_surfaceVisibleRunsConnection);
     QObject::disconnect(m_surfaceDestroyedConnection);
+}
+
+void QTermQuickPaintedItem::updateMouseAcceptance()
+{
+    if (!m_terminal) {
+        setAcceptedMouseButtons(Qt::LeftButton);
+        setAcceptHoverEvents(false);
+        return;
+    }
+
+    const MouseTracking tracking = m_terminal->modeState().mouseTracking;
+    if (tracking == MouseTracking::Disabled) {
+        setAcceptedMouseButtons(Qt::LeftButton);
+        setAcceptHoverEvents(false);
+    } else {
+        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
+        setAcceptHoverEvents(tracking == MouseTracking::AnyEvent);
+    }
 }
 
 void QTermQuickPaintedItem::updateMetrics()

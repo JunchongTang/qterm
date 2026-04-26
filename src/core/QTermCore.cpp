@@ -97,10 +97,18 @@ void QTermCore::writePlainText(const QString &text)
     executor.setOutboundHandler([this](const QByteArray &data) {
         emit outboundData(data);
     });
+    const MouseTracking prevMouseTracking = m_modeState.mouseTracking;
+    const bool prevAlternate = m_modeState.alternateScreenActive;
+
     m_textParser.parse(text, executor);
 
     emit debugPlainTextChanged();
     emit cursorStateChanged();
+
+    if (m_modeState.mouseTracking != prevMouseTracking ||
+        m_modeState.alternateScreenActive != prevAlternate) {
+        emit modeStateChanged();
+    }
 }
 
 void QTermCore::setTerminalSize(int columns, int rows)

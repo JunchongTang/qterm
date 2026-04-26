@@ -52,7 +52,7 @@ public:
     Q_INVOKABLE void scrollToBottom();
     Q_INVOKABLE void sendKey(int key, const QString &text = QString());
     Q_INVOKABLE void sendPaste(const QString &text);
-    Q_INVOKABLE void sendMouse(int row, int column, int button, int modifiers, bool isPress);
+    Q_INVOKABLE void sendMouse(int row, int column, int button, int modifiers, bool isPress, bool isMotion = false);
 
     void setSession(QTermSession *session);
 
@@ -65,6 +65,7 @@ signals:
     void viewportChanged();
     void sessionChanged();
     void titleChanged();
+    void modeStateChanged();
     void outboundData(const QByteArray &data);
 
 private:
