@@ -475,6 +475,51 @@ void QTermInputExecutor::deleteLines(int count)
                                        currentScreen().scrollBottom);
 }
 
+void QTermInputExecutor::scrollUpRegion(int count)
+{
+    // CSI S — scroll up: delete lines at the top of the scroll region,
+    // inserting blank lines at the bottom. Cursor does not move.
+    currentScreen().wrapPending = false;
+    currentScreen().buffer.deleteLines(currentScreen().scrollTop,
+                                       qMax(1, count),
+                                       currentScreen().scrollTop,
+                                       currentScreen().scrollBottom);
+}
+
+void QTermInputExecutor::scrollDownRegion(int count)
+{
+    // CSI T — scroll down: insert blank lines at the top of the scroll region,
+    // pushing existing lines down and discarding lines at the bottom.
+    // Cursor does not move.
+    currentScreen().wrapPending = false;
+    currentScreen().buffer.insertLines(currentScreen().scrollTop,
+                                       qMax(1, count),
+                                       currentScreen().scrollTop,
+                                       currentScreen().scrollBottom);
+}
+
+void QTermInputExecutor::eraseCharacters(int count)
+{
+    // CSI X — erase characters at the cursor position without moving the
+    // cursor. Unlike delete characters (CSI P), this does not shift content.
+    currentScreen().wrapPending = false;
+    const int col = currentScreen().cursorState.column;
+    const int cols = currentScreen().buffer.columns();
+    const int bounded = qMin(qMax(1, count), cols - col);
+    for (int i = 0; i < bounded; ++i) {
+        currentScreen().buffer.lineAt(currentScreen().cursorState.row).clearCharacterAt(col + i);
+    }
+}
+
+void QTermInputExecutor::linePositionAbsolute(int row)
+{
+    // CSI d — move cursor to the given row (1-based, already converted to
+    // 0-based by the caller), keeping the current column.
+    currentScreen().wrapPending = false;
+    const int bounded = qBound(0, row, currentScreen().buffer.rows() - 1);
+    setCursorState(QTermCursorState{bounded, currentScreen().cursorState.column});
+}
+
 void QTermInputExecutor::setScrollRegion(int top, int bottom)
 {
     const int normalizedTop = qBound(0, top, currentScreen().buffer.rows() - 1);

@@ -194,6 +194,18 @@ void QTermTextParser::handleCsiFinal(bool privateMode, QChar final, QTermInputEx
     case 'P':
         executor.deleteCharacters(parameterAt(parameters, 0, 1));
         break;
+    case 'S':
+        executor.scrollUpRegion(parameterAt(parameters, 0, 1));
+        break;
+    case 'T':
+        executor.scrollDownRegion(parameterAt(parameters, 0, 1));
+        break;
+    case 'X':
+        executor.eraseCharacters(parameterAt(parameters, 0, 1));
+        break;
+    case 'd':
+        executor.linePositionAbsolute(parameterAt(parameters, 0, 1) - 1);
+        break;
     case 'm':
         executor.characterAttributes(parameters);
         break;
