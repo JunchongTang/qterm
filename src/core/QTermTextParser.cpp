@@ -39,10 +39,20 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 m_oscData.clear();
             } else if (character == u'\x1b') {
                 m_state = State::Escape;
+            } else if (character == u'(' || character == u')' || character == u'%') {
+                // Intermediate character for designate character set sequences
+                // e.g. ESC ( 0, ESC ( B, ESC ) 0
+                m_escIntermediate = character;
+                m_state = State::EscapeIntermediate;
             } else {
                 handleEscapeFinal(character, executor);
                 m_state = State::Ground;
             }
+            break;
+        case State::EscapeIntermediate:
+            executor.designateCharacterSet(m_escIntermediate, character);
+            m_escIntermediate = QChar();
+            m_state = State::Ground;
             break;
         case State::Csi:
             if (character.isDigit() || character == u';' || character == u'?' || character == u'>') {
@@ -115,6 +125,8 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
 {
     if (text.size() == 1) {
         switch (text.front().unicode()) {
+        case '\0': // NUL — ignored
+            break;
         case '\a':
             executor.bell();
             break;
@@ -129,6 +141,10 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
             break;
         case '\t':
             executor.horizontalTab();
+            break;
+        case '\x0e': // SO — Locking-Shift G1 (not yet fully implemented, ignore to prevent garbage)
+        case '\x0f': // SI — Locking-Shift G0 (not yet fully implemented, ignore to prevent garbage)
+        case '\x7f': // DEL — ignored
             break;
         default:
             executor.print(text);
@@ -181,6 +197,12 @@ void QTermTextParser::handleCsiFinal(bool privateMode, bool secondaryMode, QChar
         break;
     case 'D':
         executor.cursorBackward(parameterAt(parameters, 0, 1));
+        break;
+    case 'E':
+        executor.cursorNextLine(parameterAt(parameters, 0, 1));
+        break;
+    case 'F':
+        executor.cursorPreviousLine(parameterAt(parameters, 0, 1));
         break;
     case 'G':
         executor.cursorHorizontalAbsolute(parameterAt(parameters, 0, 1) - 1);
@@ -253,6 +275,19 @@ void QTermTextParser::handleEscapeFinal(QChar final, QTermInputExecutor &executo
         break;
     case '8':
         executor.restoreCursor();
+        break;
+    case 'M':
+        executor.reverseIndex();
+        break;
+    case '=':
+        executor.setKeypadMode(true);
+        break;
+    case '>':
+        executor.setKeypadMode(false);
+        break;
+    case 'c':
+        // RIS — Reset to Initial State: full terminal hard reset.
+        executor.reset();
         break;
     default:
         break;

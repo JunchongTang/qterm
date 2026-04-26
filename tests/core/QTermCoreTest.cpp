@@ -69,6 +69,9 @@ private slots:
     void reportsDeviceStatusReport();
     void reportsPrimaryDeviceAttributes();
     void reportsSecondaryDeviceAttributes();
+    void supportsReverseIndex();
+    void supportsDecLineDrawing();
+    void supportsSaveCursorAnsi();
     void clearsState();
     void togglesMouseModeX10();
     void togglesMouseModeSGR();
@@ -1115,6 +1118,66 @@ void QTermCoreTest::reportsSecondaryDeviceAttributes()
 
     core.writePlainText("\x1b[>c"_L1);
     QCOMPARE(captured, QByteArray("\x1b[>0;0;0c"));
+}
+
+void QTermCoreTest::supportsReverseIndex()
+{
+    // ESC M at top of scroll region inserts a blank line and keeps cursor at top.
+    QTermCore core;
+    core.setTerminalSize(5, 4);
+    core.writePlainText("aaa\r\nbbb\r\nccc\r\nddd"_L1);
+    // Cursor is now at row 3. Move to top of scroll region (row 0).
+    core.writePlainText("\x1b[1;1H"_L1);  // cursor to row 1 (0-based: 0)
+    // ESC M: at top of screen → insert blank line at top, push content down.
+    core.writePlainText("\x1bM"_L1);
+    QCOMPARE(core.buffer().lineAt(0).plainText(), QString());
+    QCOMPARE(core.buffer().lineAt(1).plainText(), "aaa"_L1);
+    QCOMPARE(core.buffer().lineAt(2).plainText(), "bbb"_L1);
+    QCOMPARE(core.buffer().lineAt(3).plainText(), "ccc"_L1);  // ddd scrolled off
+    QCOMPARE(core.cursorState().row, 0);  // cursor stays at top
+
+    // ESC M NOT at top of scroll region → just move cursor up.
+    core.writePlainText("\x1b[3;1H"_L1);  // cursor to row 3 (0-based: 2)
+    core.writePlainText("\x1bM"_L1);
+    QCOMPARE(core.cursorState().row, 1);  // moved up by 1
+}
+
+void QTermCoreTest::supportsDecLineDrawing()
+{
+    // ESC (0 activates DEC line drawing; j→┘ k→┐ l→┌ m→└ q→─ x→│
+    // ESC (B restores normal ASCII.
+    QTermCore core;
+    core.setTerminalSize(10, 3);
+
+    core.writePlainText("\x1b(0"_L1);  // activate line drawing
+    core.writePlainText("jklm"_L1);    // ┘┐┌└
+    core.writePlainText("\x1b(B"_L1);  // back to ASCII
+    core.writePlainText("jklm"_L1);    // normal ASCII
+
+    const QString line = core.buffer().lineAt(0).plainText();
+    QCOMPARE(line.at(0), QChar(u'\u2518'));  // j → ┘
+    QCOMPARE(line.at(1), QChar(u'\u2510'));  // k → ┐
+    QCOMPARE(line.at(2), QChar(u'\u250c'));  // l → ┌
+    QCOMPARE(line.at(3), QChar(u'\u2514'));  // m → └
+    QCOMPARE(line.at(4), QChar(u'j'));        // back to ASCII
+    QCOMPARE(line.at(5), QChar(u'k'));
+    QCOMPARE(line.at(6), QChar(u'l'));
+    QCOMPARE(line.at(7), QChar(u'm'));
+}
+
+void QTermCoreTest::supportsSaveCursorAnsi()
+{
+    // CSI s saves cursor, CSI u restores it — equivalent to ESC 7 / ESC 8.
+    QTermCore core;
+    core.setTerminalSize(10, 5);
+    core.writePlainText("\x1b[3;5H"_L1);  // cursor to row 3, col 5 (1-based)
+    core.writePlainText("\x1b[s"_L1);     // save
+    core.writePlainText("\x1b[1;1H"_L1);  // move away
+    QCOMPARE(core.cursorState().row, 0);
+    QCOMPARE(core.cursorState().column, 0);
+    core.writePlainText("\x1b[u"_L1);     // restore
+    QCOMPARE(core.cursorState().row, 2);  // 0-based: row 3 → 2
+    QCOMPARE(core.cursorState().column, 4);  // 0-based: col 5 → 4
 }
 
 } // namespace QTerm

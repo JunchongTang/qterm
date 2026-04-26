@@ -41,7 +41,17 @@ QByteArray QTermInputEncoder::encodeKey(const QTermModeState &modeState, int key
     case Qt::Key_Escape:
         return QByteArray("\x1b");
     default:
-        return text.toUtf8();
+        // On macOS, Cocoa intercepts Ctrl+letter combinations that match Emacs text-editing
+        // shortcuts (Ctrl+B = moveBackward:, Ctrl+F = moveForward:, etc.) at the
+        // NSTextInputClient level, leaving event->text() empty.  We synthesize the correct
+        // control character here so that tmux / vim receive the expected byte.
+        if (!text.isEmpty()) {
+            return text.toUtf8();
+        }
+        if (key >= Qt::Key_A && key <= Qt::Key_Z) {
+            return QByteArray(1, static_cast<char>(key - Qt::Key_A + 1));
+        }
+        return QByteArray();
     }
 }
 

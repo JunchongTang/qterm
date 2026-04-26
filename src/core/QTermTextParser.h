@@ -17,6 +17,7 @@ private:
     enum class State {
         Ground,
         Escape,
+        EscapeIntermediate,
         Csi,
         Osc,
         OscEscape,
@@ -33,6 +34,7 @@ private:
     QString m_csiParameters;
     QString m_oscData;
     QChar m_pendingHighSurrogate;
+    QChar m_escIntermediate;
 };
 
 } // namespace QTerm

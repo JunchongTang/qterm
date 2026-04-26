@@ -55,11 +55,17 @@ public:
     void saveCursor();
     void restoreCursor();
     void bell();
+    void reset();
     void setPrivateModes(const QVector<int> &parameters, bool enabled);
     void setWindowTitle(const QString &title);
     void deviceStatusReport();
     void deviceAttributes();
     void secondaryDeviceAttributes();
+    void reverseIndex();
+    void cursorNextLine(int count);
+    void cursorPreviousLine(int count);
+    void designateCharacterSet(QChar intermediate, QChar final);
+    void setKeypadMode(bool application);
 
 private:
     QTermScreenState &currentScreen() noexcept;
