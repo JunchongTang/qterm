@@ -13,6 +13,11 @@
 #include <QWheelEvent>
 
 #include <cmath>
+#include <mutex>
+
+#ifdef Q_OS_MACOS
+namespace QTerm { void disableMacOSPressAndHold(); }
+#endif
 
 namespace QTerm {
 
@@ -81,6 +86,11 @@ QTermViewController::QTermViewController(QObject *parent)
     });
 
     updateMetrics();
+
+#ifdef Q_OS_MACOS
+    static std::once_flag s_pressAndHoldDisabled;
+    std::call_once(s_pressAndHoldDisabled, disableMacOSPressAndHold);
+#endif
 }
 
 // ── Terminal 绑定 ──────────────────────────────────────────────────────────────

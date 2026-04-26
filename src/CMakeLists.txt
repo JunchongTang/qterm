@@ -44,6 +44,11 @@ qt_add_library(qterm STATIC
     session/QTermSessionBackend.cpp
 )
 
+if(APPLE)
+    target_sources(qterm PRIVATE quick/QTermMacOSUtils.mm)
+    target_link_libraries(qterm PRIVATE "-framework Foundation")
+endif()
+
 if(UNIX AND NOT APPLE)
     target_link_libraries(qterm PRIVATE util)
 endif()
