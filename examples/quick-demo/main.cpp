@@ -28,6 +28,14 @@ public:
             QGuiApplication::clipboard()->setText(text);
         }
     }
+
+    Q_INVOKABLE QString clipboardText() const
+    {
+        if (QGuiApplication::clipboard()) {
+            return QGuiApplication::clipboard()->text();
+        }
+        return {};
+    }
 };
 
 } // namespace

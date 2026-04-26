@@ -80,6 +80,32 @@ ApplicationWindow {
         }
     }
 
+    // ── 剪贴板快捷键（应用层定义，widget 不感知）────────────────────────────
+    // Cmd+C: 复制选区。若无选区，通知 QML 层（可自定义：发响铃/忽略）
+    Shortcut {
+        sequence: StandardKey.Copy
+        enabled: terminalView.activeFocus
+        onActivated: {
+            const text = root.terminal.surfaceModel.selectedText
+            if (text.length > 0) {
+                root.clipboardBridge.copyText(text)
+                root.copyCount += 1
+                root.statusNote = "Copied selection"
+            }
+        }
+    }
+
+    // Cmd+V: 粘贴系统剪贴板内容到终端
+    Shortcut {
+        sequence: StandardKey.Paste
+        enabled: terminalView.activeFocus
+        onActivated: {
+            const text = root.clipboardBridge.clipboardText()
+            if (text.length > 0)
+                root.terminal.sendPaste(text)
+        }
+    }
+
     SequentialAnimation {
         id: bellFlash
 
@@ -206,6 +232,12 @@ ApplicationWindow {
                     root.clipboardBridge.copyText(text)
                     root.copyCount += 1
                     root.statusNote = text.length > 0 ? "Copied selection" : "Copy requested"
+                }
+
+                onHyperlinkActivated: url => {
+                    console.log("Hyperlink activated:", url)
+                    root.statusNote = "Opening: " + url
+                    Qt.openUrlExternally(url)
                 }
             }
 

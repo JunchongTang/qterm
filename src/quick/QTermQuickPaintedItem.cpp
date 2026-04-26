@@ -435,11 +435,17 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
             QFont runFont = baseFont;
             runFont.setBold(run.value(QStringLiteral("bold")).toBool());
             runFont.setItalic(run.value(QStringLiteral("italic")).toBool());
-            runFont.setUnderline(run.value(QStringLiteral("underline")).toBool());
+            const bool hasHyperlink = run.value(QStringLiteral("hyperlinkId")).toInt() > 0;
+            runFont.setUnderline(run.value(QStringLiteral("underline")).toBool() || hasHyperlink);
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
             painter->setFont(runFont);
 
             QColor foreground = effectiveForegroundColor(run, m_foregroundColor);
+            // Hyperlink: tint text with a blue-ish color if no explicit foreground
+            if (hasHyperlink && run.value(QStringLiteral("foregroundIndex")).toInt() < 0
+                    && run.value(QStringLiteral("foregroundRgb")).toInt() < 0) {
+                foreground = QColor(QStringLiteral("#6ab0f5"));
+            }
             foreground.setAlphaF(run.value(QStringLiteral("dim")).toBool() ? 0.65 : 1.0);
             painter->setPen(foreground);
             painter->drawText(runRect.adjusted(0.0, textTopOffset, 0.0, 0.0),
@@ -553,17 +559,6 @@ void QTermQuickPaintedItem::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Cmd+C (macOS) / Ctrl+C (other platforms) 优先检查选区复制。
-    // 在 macOS 上只有 Cmd+C 触发复制（MetaModifier），Ctrl+C 要发送 ^C 给 PTY。
-    const bool isCopyShortcut = (event->modifiers() & Qt::MetaModifier) && event->key() == Qt::Key_C;
-    if (isCopyShortcut) {
-        QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
-        const QString text = surfaceModel ? surfaceModel->selectedText() : QString();
-        emit copyRequested(text);
-        event->accept();
-        return;
-    }
-
     // 有任何可见按键时回到底部
     if (m_terminal->scrollOffset() > 0)
         m_terminal->scrollToBottom();
@@ -639,6 +634,19 @@ void QTermQuickPaintedItem::mousePressEvent(QMouseEvent *event)
     // 鼠标协议禁用：进行文本选择
     const int row = rowAtPosition(event->position().y());
     const int col = columnAtPosition(event->position().x());
+
+    // OSC 8 超链接：Cmd+单击（macOS: ControlModifier = ⌘）发射信号，由 QML 层决定如何打开 URL
+    if (event->modifiers() & Qt::ControlModifier) {
+        const int hyperlinkId = hyperlinkIdAtPosition(row, col);
+        if (hyperlinkId > 0) {
+            const QString url = m_terminal->hyperlinkUrl(hyperlinkId);
+            if (!url.isEmpty()) {
+                emit hyperlinkActivated(url);
+                event->accept();
+                return;
+            }
+        }
+    }
 
     // 连击检测
     if (m_clickResetTimer->isActive() && m_lastClickRow == row && m_lastClickColumn == col)
@@ -849,6 +857,32 @@ void QTermQuickPaintedItem::disconnectSurfaceModel()
     QObject::disconnect(m_surfaceSelectionConnection);
     QObject::disconnect(m_surfaceVisibleRunsConnection);
     QObject::disconnect(m_surfaceDestroyedConnection);
+}
+
+int QTermQuickPaintedItem::hyperlinkIdAtPosition(int row, int col) const
+{
+    if (!m_terminal) {
+        return 0;
+    }
+    QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
+    if (!surfaceModel) {
+        return 0;
+    }
+    const QVariantList allRuns = surfaceModel->visibleLineRuns();
+    if (row < 0 || row >= allRuns.size()) {
+        return 0;
+    }
+    const QVariantList lineRuns = allRuns.at(row).toList();
+    int x = 0;
+    for (const QVariant &rv : lineRuns) {
+        const QVariantMap run = rv.toMap();
+        const int columns = runColumns(run);
+        if (col < x + columns) {
+            return run.value(QStringLiteral("hyperlinkId")).toInt();
+        }
+        x += columns;
+    }
+    return 0;
 }
 
 void QTermQuickPaintedItem::updateMouseAcceptance()

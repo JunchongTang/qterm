@@ -236,6 +236,7 @@ QVariantList QTermLine::styleRuns() const
         run.insert(QStringLiteral("backgroundIndex"), currentAttributes.backgroundIndex);
         run.insert(QStringLiteral("foregroundRgb"), currentAttributes.foregroundRgb);
         run.insert(QStringLiteral("backgroundRgb"), currentAttributes.backgroundRgb);
+        run.insert(QStringLiteral("hyperlinkId"), currentAttributes.hyperlinkId);
         runs.append(run);
 
         currentText.clear();
@@ -267,7 +268,8 @@ QVariantList QTermLine::styleRuns() const
             currentAttributes.foregroundIndex == cell.attributes.foregroundIndex &&
             currentAttributes.backgroundIndex == cell.attributes.backgroundIndex &&
             currentAttributes.foregroundRgb == cell.attributes.foregroundRgb &&
-            currentAttributes.backgroundRgb == cell.attributes.backgroundRgb) {
+            currentAttributes.backgroundRgb == cell.attributes.backgroundRgb &&
+            currentAttributes.hyperlinkId == cell.attributes.hyperlinkId) {
             currentText.append(cellText);
             currentColumns += cellColumns;
             continue;

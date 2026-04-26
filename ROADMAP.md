@@ -175,17 +175,17 @@
 * SO / SI / NUL / DEL 控制字符已正确处理。
 * macOS Cocoa 拦截 Ctrl+字母 导致 text 为空的问题已在 encoder 层修正。
 * **vim、less、htop、tmux（含分屏、框线、滚动）经过人工验证，行为正确。**
+* **mouse tracking 已完整实现**：MouseTracking（事件类型）与 MouseEncoding（编码格式）拆分为独立字段，SGR 格式正确带 `<` 前缀，释放事件 button 码修正，拖拽 +32 偏移修正，outboundData 路由到 PTY 修正，QTermQuickPaintedItem 动态更新 acceptedMouseButtons / acceptHoverEvents；htop 点击高亮、tmux 鼠标选窗格验证通过。
 
 未完成：
 
-* mouse tracking 的 UI 层转发尚未接入（encoder 已实现，前端 QTermQuickPaintedItem 尚未转发鼠标事件到 PTY）。
 * OSC 8 hyperlink 尚未实现。
 * 更复杂的 shell 集成（OSC 133 提示符标记、OSC 7 工作目录）尚未验证。
 
 退出标准：
 
 * vim、less、htop 和交互式 shell 等常见 CLI 工具行为基本可接受。✅（已达到）
-* mouse tracking 在 tmux / htop 中可用。
+* mouse tracking 在 tmux / htop 中可用。✅（已达到）
 * OSC 8 超链接可渲染与交互。
 
 ## Phase 7：更多会话后端
@@ -242,14 +242,14 @@
 
 ## 当前下一步
 
-1. **Phase 6 收尾 — mouse tracking UI 层接入（优先）**
-   mouse tracking 的编码层（`QTermInputEncoder::encodeMouse`）和模式状态（`?1000/?1002/?1003/?1006`）均已实现，唯一缺失的是 `QTermQuickPaintedItem` 尚未将 `mousePressEvent` / `mouseMoveEvent` / `wheelEvent` 转发给 PTY。完成这一步后 tmux 鼠标选窗格、htop 鼠标选进程即可工作。
-
-2. **Phase 6 收尾 — OSC 8 超链接渲染**
+1. **Phase 6 收尾 — OSC 8 超链接渲染**
    解析器已能接收 OSC 8，需要在 `QTermCell` 中增加 URL 字段，在 `QTermQuickPaintedItem` 绘制下划线并处理点击跳转。
 
-3. **Phase 3 收尾 — reflow golden tests 补全**
+2. **Phase 3 收尾 — reflow golden tests 补全**
    当前 reflow 已覆盖 ASCII、CJK、宽字符、wrap 边界基础场景，仍需补充 combining text 多轮循环、复杂 prompt 拼接、scrollback 与可见屏拼接边界的 golden tests，把 Phase 3 状态从"进行中"推进到"已完成"。
 
-4. **Phase 4 收尾 — QSG 增量渲染**
+3. **Phase 4 收尾 — QSG 增量渲染**
    当前前端基于 `QQuickPaintedItem` 全量重绘，后续迁移到 `QSGSimpleTextureNode` 脏行更新模型以支持大窗口高帧率场景。
+
+4. **Phase 7 — 更多会话后端**
+   串口 backend、SSH backend，统一在同一 session abstraction 之后。

@@ -101,6 +101,8 @@ signals:
     void wheelScrolled(int scrollOffset);
     // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
     void copyRequested(const QString &text);
+    // OSC 8 超链接被激活（Cmd+单击），外部决定如何打开 URL
+    void hyperlinkActivated(const QString &url);
 
 protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
@@ -129,6 +131,9 @@ private:
 
     // 鼠标模式变化时同步 setAcceptedMouseButtons / setAcceptHoverEvents
     void updateMouseAcceptance();
+
+    // OSC 8: 返回可见行 (row, col) 处的 hyperlinkId，无链接返回 0
+    int hyperlinkIdAtPosition(int row, int col) const;
 
     // terminal viewport 信号连接（scroll 属性用）
     QMetaObject::Connection m_viewportConnection;

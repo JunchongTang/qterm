@@ -126,6 +126,11 @@ const QTermModeState &QTermTerminal::modeState() const noexcept
     return m_core->modeState();
 }
 
+QString QTermTerminal::hyperlinkUrl(int id) const
+{
+    return m_core->hyperlinkUrl(id);
+}
+
 void QTermTerminal::clear()
 {
     m_core->clear();

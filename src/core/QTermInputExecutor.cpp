@@ -215,6 +215,20 @@ void QTermInputExecutor::setOutboundHandler(const std::function<void(const QByte
     m_outboundHandler = handler;
 }
 
+void QTermInputExecutor::setRegisterHyperlinkHandler(const std::function<int(const QString &)> &handler)
+{
+    m_registerHyperlinkHandler = handler;
+}
+
+void QTermInputExecutor::setHyperlink(const QString &url)
+{
+    if (url.isEmpty()) {
+        m_modeState.activeHyperlinkId = 0;
+    } else if (m_registerHyperlinkHandler) {
+        m_modeState.activeHyperlinkId = m_registerHyperlinkHandler(url);
+    }
+}
+
 void QTermInputExecutor::print(const QString &text)
 {
     // DEC line drawing translation: if active and the character is in the
@@ -286,6 +300,7 @@ void QTermInputExecutor::print(const QString &text)
         }
     }
 
+    currentScreen().currentAttributes.hyperlinkId = m_modeState.activeHyperlinkId;
     currentScreen().buffer.lineAt(currentScreen().cursorState.row).setCharacter(
         currentScreen().cursorState.column,
         text,
