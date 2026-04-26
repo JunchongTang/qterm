@@ -28,6 +28,8 @@ struct QTermModeState
     bool alternateScreenActive = false;
     MouseTracking mouseTracking = MouseTracking::Disabled;
     MouseEncoding mouseEncoding = MouseEncoding::Default;
+    // OSC 8 hyperlink: 0 = none active; positive = index into core URL table
+    int activeHyperlinkId = 0;
 };
 
 } // namespace QTerm

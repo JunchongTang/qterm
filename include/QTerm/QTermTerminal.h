@@ -41,6 +41,9 @@ public:
     QTermSurfaceModel *surfaceModel() noexcept;
     const QTermModeState &modeState() const noexcept;
 
+    // OSC 8: resolve a hyperlink id (from a style run) to its URL
+    Q_INVOKABLE QString hyperlinkUrl(int id) const;
+
     Q_INVOKABLE void clear();
     Q_INVOKABLE void feedText(const QString &text);
     Q_INVOKABLE void setTerminalSize(int columns, int rows);

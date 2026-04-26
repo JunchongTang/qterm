@@ -28,6 +28,7 @@ public:
     void setBellHandler(const std::function<void()> &handler);
     void setWindowTitleHandler(const std::function<void(const QString &)> &handler);
     void setOutboundHandler(const std::function<void(const QByteArray &)> &handler);
+    void setRegisterHyperlinkHandler(const std::function<int(const QString &)> &handler);
 
     void print(const QString &text);
     void lineFeed();
@@ -66,6 +67,8 @@ public:
     void cursorPreviousLine(int count);
     void designateCharacterSet(QChar intermediate, QChar final);
     void setKeypadMode(bool application);
+    // OSC 8: url=empty to close the link
+    void setHyperlink(const QString &url);
 
 private:
     QTermScreenState &currentScreen() noexcept;
@@ -83,6 +86,7 @@ private:
     std::function<void()> m_bellHandler;
     std::function<void(const QString &)> m_windowTitleHandler;
     std::function<void(const QByteArray &)> m_outboundHandler;
+    std::function<int(const QString &)> m_registerHyperlinkHandler;
 };
 
 } // namespace QTerm

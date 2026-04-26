@@ -67,6 +67,27 @@ QByteArray QTermCore::encodePaste(const QString &text) const
     return QTermInputEncoder::encodePaste(m_modeState, text);
 }
 
+QString QTermCore::hyperlinkUrl(int id) const
+{
+    return m_hyperlinkUrls.value(id, QString());
+}
+
+int QTermCore::registerHyperlinkUrl(const QString &url)
+{
+    if (url.isEmpty()) {
+        return 0;
+    }
+    // Reuse existing id if the same URL was already registered
+    for (auto it = m_hyperlinkUrls.constBegin(); it != m_hyperlinkUrls.constEnd(); ++it) {
+        if (it.value() == url) {
+            return it.key();
+        }
+    }
+    const int id = m_nextHyperlinkId++;
+    m_hyperlinkUrls.insert(id, url);
+    return id;
+}
+
 void QTermCore::clear()
 {
     m_primaryScreen.clear();
@@ -96,6 +117,9 @@ void QTermCore::writePlainText(const QString &text)
     });
     executor.setOutboundHandler([this](const QByteArray &data) {
         emit outboundData(data);
+    });
+    executor.setRegisterHyperlinkHandler([this](const QString &url) {
+        return registerHyperlinkUrl(url);
     });
     const MouseTracking prevMouseTracking = m_modeState.mouseTracking;
     const bool prevAlternate = m_modeState.alternateScreenActive;

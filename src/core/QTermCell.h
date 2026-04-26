@@ -17,6 +17,9 @@ struct QTermCellAttributes
     int backgroundIndex = -1;
     int foregroundRgb = -1;
     int backgroundRgb = -1;
+    // OSC 8 hyperlink: 0 means no link; positive int is an index into the
+    // core's hyperlink URL table.
+    int hyperlinkId = 0;
 };
 
 struct QTermCell
