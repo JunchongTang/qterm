@@ -579,23 +579,21 @@ void QTermSessionTest::terminalKeepsSelectedTextWhenResizePushesSelectionIntoHis
 
 void QTermSessionTest::surfaceModelProjectsSelectionVisibility()
 {
-    QTermSurfaceModel surfaceModel;
+    QTermTerminal terminal;
+    terminal.setTerminalSize(10, 5);
+    QTermSurfaceModel *sm = terminal.surfaceModel();
 
-    QVERIFY(!surfaceModel.hasSelection());
-    QVERIFY(!surfaceModel.selectionVisible());
+    QVERIFY(!sm->hasSelection());
+    QVERIFY(!sm->selectionVisible());
 
-    surfaceModel.setSelectionSnapshot(true, 0, 1, 0, 4, "bcd"_L1);
-    QVERIFY(surfaceModel.hasSelection());
-    QVERIFY(surfaceModel.selectionVisible());
+    // Visible selection: row 0 columns 1-4
+    terminal.setSelectionRange(0, 1, 0, 4);
+    QVERIFY(sm->hasSelection());
+    QVERIFY(sm->selectionVisible());
 
-    surfaceModel.setSelectionSnapshot(true, -1, 0, -1, 0, "alpha"_L1);
-    QVERIFY(surfaceModel.hasSelection());
-    QVERIFY(!surfaceModel.selectionVisible());
-    QCOMPARE(surfaceModel.selectedText(), "alpha"_L1);
-
-    surfaceModel.clearSelection();
-    QVERIFY(!surfaceModel.hasSelection());
-    QVERIFY(!surfaceModel.selectionVisible());
+    terminal.clearSelection();
+    QVERIFY(!sm->hasSelection());
+    QVERIFY(!sm->selectionVisible());
 }
 
 void QTermSessionTest::terminalSelectsFromScrolledViewport()

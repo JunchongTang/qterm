@@ -10,7 +10,6 @@
 
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermSurfaceModel.h>
-#include <QTerm/QTermModeState.h>
 
 namespace QTerm {
 
@@ -46,7 +45,11 @@ public:
     int shellZone() const noexcept;
     int lastExitCode() const noexcept;
     QTermSurfaceModel *surfaceModel() noexcept;
-    const QTermModeState &modeState() const noexcept;
+
+    // Mouse protocol state (for view-layer event routing)
+    bool isMouseProtocolActive() const noexcept;
+    bool isHoverTrackingActive() const noexcept;
+    bool isButtonTrackingActive() const noexcept;
 
     // OSC 8: resolve a hyperlink id (from a style run) to its URL
     Q_INVOKABLE QString hyperlinkUrl(int id) const;
@@ -65,9 +68,10 @@ public:
     Q_INVOKABLE void sendMouse(int row, int column, int button, int modifiers, bool isPress, bool isMotion = false);
 
     void setSession(QTermSession *session);
-
-public slots:
+    // Initial title can be set by embedding application; thereafter updated by OSC 0/2
     void setTitle(const QString &title);
+
+private slots:
     void setCurrentDirectory(const QString &url);
 
 signals:
@@ -83,6 +87,7 @@ signals:
     void outboundData(const QByteArray &data);
 
 private:
+    static void syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core, int viewportTopProjectionRow);
     int maxViewportTopProjectionRow() const noexcept;
     void clampViewportToBuffer();
     void syncSurfaceViewport();

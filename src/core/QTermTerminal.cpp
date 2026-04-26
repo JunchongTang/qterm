@@ -11,8 +11,10 @@
 namespace QTerm {
 
 namespace {
+} // namespace
 
-void syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core, int viewportTopProjectionRow)
+// static
+void QTermTerminal::syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core, int viewportTopProjectionRow)
 {
     const QTermBuffer &buffer = core->buffer();
     const QTermCursorState cursorState = core->cursorState();
@@ -24,8 +26,6 @@ void syncSurfaceCursor(QTermSurfaceModel &surfaceModel, QTermCore *core, int vie
                            core->modeState().cursorVisible && cursorInViewport,
                            static_cast<int>(core->modeState().cursorShape));
 }
-
-} // namespace
 
 QTermTerminal::QTermTerminal(QObject *parent)
     : QObject(parent)
@@ -135,14 +135,25 @@ int QTermTerminal::lastExitCode() const noexcept
     return m_core->lastExitCode();
 }
 
+bool QTermTerminal::isMouseProtocolActive() const noexcept
+{
+    return m_core->modeState().mouseTracking != MouseTracking::Disabled;
+}
+
+bool QTermTerminal::isHoverTrackingActive() const noexcept
+{
+    return m_core->modeState().mouseTracking == MouseTracking::AnyEvent;
+}
+
+bool QTermTerminal::isButtonTrackingActive() const noexcept
+{
+    const MouseTracking mt = m_core->modeState().mouseTracking;
+    return mt == MouseTracking::Button || mt == MouseTracking::AnyEvent;
+}
+
 QTermSurfaceModel *QTermTerminal::surfaceModel() noexcept
 {
     return &m_surfaceModel;
-}
-
-const QTermModeState &QTermTerminal::modeState() const noexcept
-{
-    return m_core->modeState();
 }
 
 QString QTermTerminal::hyperlinkUrl(int id) const
