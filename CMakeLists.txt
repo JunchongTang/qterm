@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Quick Qml QuickControls2 Test)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Quick Qml QuickControls2 Widgets Test)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -24,6 +24,7 @@ add_subdirectory(src)
 
 if(QTERM_BUILD_EXAMPLES)
     add_subdirectory(examples/quick-demo)
+    add_subdirectory(examples/widget-demo)
 endif()
 
 if(QTERM_BUILD_TESTS)

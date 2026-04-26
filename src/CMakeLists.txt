@@ -29,6 +29,8 @@ qt_add_library(qterm STATIC
     quick/QTermViewController.h
     quick/QTermViewController.cpp
     quick/QTermQuickPaintedItem.cpp
+    widget/QTermWidget.cpp
+    ../include/QTerm/QTermWidget.h
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp
@@ -50,7 +52,8 @@ target_link_libraries(qterm
     PUBLIC
         Qt6::Core
         Qt6::Gui
-    Qt6::Quick
+        Qt6::Quick
+        Qt6::Widgets
 )
 
 target_compile_features(qterm PUBLIC cxx_std_17)
