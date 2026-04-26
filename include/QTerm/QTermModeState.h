@@ -18,6 +18,8 @@ struct QTermModeState
 {
     bool cursorVisible = true;
     bool applicationCursorKeys = false;
+    bool applicationKeypad = false;
+    bool autoWrap = true;
     bool bracketedPaste = false;
     bool alternateScreenActive = false;
     MouseMode mouseMode = MouseMode::Disabled;

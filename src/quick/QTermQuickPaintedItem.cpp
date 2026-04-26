@@ -553,8 +553,10 @@ void QTermQuickPaintedItem::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Cmd+C / Ctrl+C 优先检查选区复制
-    if (event->matches(QKeySequence::Copy)) {
+    // Cmd+C (macOS) / Ctrl+C (other platforms) 优先检查选区复制。
+    // 在 macOS 上只有 Cmd+C 触发复制（MetaModifier），Ctrl+C 要发送 ^C 给 PTY。
+    const bool isCopyShortcut = (event->modifiers() & Qt::MetaModifier) && event->key() == Qt::Key_C;
+    if (isCopyShortcut) {
         QTermSurfaceModel *surfaceModel = m_terminal->surfaceModel();
         const QString text = surfaceModel ? surfaceModel->selectedText() : QString();
         emit copyRequested(text);
@@ -566,6 +568,8 @@ void QTermQuickPaintedItem::keyPressEvent(QKeyEvent *event)
     if (m_terminal->scrollOffset() > 0)
         m_terminal->scrollToBottom();
 
+    // 将 (key, text) 传给 encoder。macOS 下 Ctrl+字母 的 text 可能为空，
+    // QTermInputEncoder::encodeKey 会在 default 分支中合成控制字符。
     m_terminal->sendKey(event->key(), event->text());
     event->accept();
 }

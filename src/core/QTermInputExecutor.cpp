@@ -7,6 +7,52 @@ namespace {
 
 constexpr int kTabWidth = 8;
 
+// DEC Special Character and Line Drawing Set (activated by ESC ( 0, deactivated by ESC ( B).
+// Maps ASCII 0x60-0x7e to Unicode equivalents used for box-drawing and symbols.
+static QChar applyLineDrawing(QChar ch)
+{
+    // clang-format off
+    static const char16_t kMap[] = {
+        u'\u25c6', // 0x60 ` → ◆
+        u'\u2592', // 0x61 a → ▒
+        u'\u2409', // 0x62 b → ␉
+        u'\u240c', // 0x63 c → ␌
+        u'\u240d', // 0x64 d → ␍
+        u'\u240a', // 0x65 e → ␊
+        u'\u00b0', // 0x66 f → °
+        u'\u00b1', // 0x67 g → ±
+        u'\u2424', // 0x68 h → ␤
+        u'\u240b', // 0x69 i → ␋
+        u'\u2518', // 0x6a j → ┘
+        u'\u2510', // 0x6b k → ┐
+        u'\u250c', // 0x6c l → ┌
+        u'\u2514', // 0x6d m → └
+        u'\u253c', // 0x6e n → ┼
+        u'\u23ba', // 0x6f o → ⎺
+        u'\u23bb', // 0x70 p → ⎻
+        u'\u2500', // 0x71 q → ─
+        u'\u23bc', // 0x72 r → ⎼
+        u'\u23bd', // 0x73 s → ⎽
+        u'\u251c', // 0x74 t → ├
+        u'\u2524', // 0x75 u → ┤
+        u'\u2534', // 0x76 v → ┴
+        u'\u252c', // 0x77 w → ┬
+        u'\u2502', // 0x78 x → │
+        u'\u2264', // 0x79 y → ≤
+        u'\u2265', // 0x7a z → ≥
+        u'\u03c0', // 0x7b { → π
+        u'\u2260', // 0x7c | → ≠
+        u'\u00a3', // 0x7d } → £
+        u'\u00b7', // 0x7e ~ → ·
+    };
+    // clang-format on
+    const int index = ch.unicode() - 0x60;
+    if (index >= 0 && index < static_cast<int>(std::size(kMap))) {
+        return QChar(kMap[index]);
+    }
+    return ch;
+}
+
 int clampColorComponent(int value)
 {
     return qBound(0, value, 255);
@@ -171,6 +217,19 @@ void QTermInputExecutor::setOutboundHandler(const std::function<void(const QByte
 
 void QTermInputExecutor::print(const QString &text)
 {
+    // DEC line drawing translation: if active and the character is in the
+    // special range 0x60-0x7e, remap to the corresponding Unicode symbol.
+    if (currentScreen().lineDrawingMode && text.size() == 1) {
+        const ushort code = text.front().unicode();
+        if (code >= 0x60 && code <= 0x7e) {
+            const QChar mapped = applyLineDrawing(text.front());
+            if (mapped != text.front()) {
+                print(QString(mapped));
+                return;
+            }
+        }
+    }
+
     const int width = displayWidth(text);
 
     if (width == 0) {
@@ -185,12 +244,24 @@ void QTermInputExecutor::print(const QString &text)
     }
 
     if (currentScreen().wrapPending) {
-        wrapToNextLine();
+        if (m_modeState.autoWrap) {
+            wrapToNextLine();
+        } else {
+            // Auto-wrap disabled: overwrite at last column, reset pending state.
+            currentScreen().wrapPending = false;
+            setCursorState(QTermCursorState{currentScreen().cursorState.row,
+                                           currentScreen().buffer.columns() - 1});
+        }
     }
 
     if (width > 1 && currentScreen().cursorState.column == currentScreen().buffer.columns() - 1) {
-        currentScreen().wrapPending = true;
-        wrapToNextLine();
+        if (m_modeState.autoWrap) {
+            currentScreen().wrapPending = true;
+            wrapToNextLine();
+        } else {
+            // Cannot fit a 2-wide character at the last column without wrapping; skip it.
+            return;
+        }
     }
 
     // If a carriageReturn() preceded this write without an intervening lineFeed,
@@ -222,7 +293,9 @@ void QTermInputExecutor::print(const QString &text)
         currentScreen().currentAttributes);
 
     if (currentScreen().cursorState.column + width >= currentScreen().buffer.columns()) {
-        currentScreen().wrapPending = true;
+        if (m_modeState.autoWrap) {
+            currentScreen().wrapPending = true;
+        }
         setCursorState(QTermCursorState{currentScreen().cursorState.row, currentScreen().buffer.columns() - 1});
         return;
     }
@@ -350,6 +423,10 @@ void QTermInputExecutor::eraseInDisplay(int mode)
         break;
     case 2:
         currentScreen().buffer.clearVisible();
+        break;
+    case 3:
+        // Erase scrollback (history) only; visible screen is untouched.
+        currentScreen().buffer.clearHistory();
         break;
     case 0:
     default:
@@ -537,7 +614,11 @@ void QTermInputExecutor::setScrollRegion(int top, int bottom)
         currentScreen().scrollBottom = normalizedBottom;
     }
 
-    setCursorState(QTermCursorState{currentScreen().scrollTop, 0});
+    // DECSTBM always moves the cursor to the home position (0, 0) and clears
+    // any pending wrap state, regardless of where the scroll region starts.
+    currentScreen().wrapPending = false;
+    currentScreen().breakPredecessorWrapOnWrite = false;
+    setCursorState(QTermCursorState{0, 0});
 }
 
 void QTermInputExecutor::saveCursor()
@@ -569,6 +650,10 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         switch (parameter) {
         case 1:
             m_modeState.applicationCursorKeys = enabled;
+            break;
+        case 7:
+            // DECAWM — Auto-Wrap Mode
+            m_modeState.autoWrap = enabled;
             break;
         case 25:
             m_modeState.cursorVisible = enabled;
@@ -669,12 +754,12 @@ void QTermInputExecutor::advanceToNextRow()
         return;
     }
 
-    if (currentScreen().cursorState.row == currentScreen().buffer.rows() - 1) {
-        currentScreen().buffer.scrollUp();
-        return;
+    // Cursor is not at the scroll-region bottom.  Advance one row if we are
+    // not already at the last row of the screen; otherwise stay put.
+    // (A cursor below the scroll region must NOT trigger a scroll.)
+    if (currentScreen().cursorState.row < currentScreen().buffer.rows() - 1) {
+        setCursorState(QTermCursorState{currentScreen().cursorState.row + 1, currentScreen().cursorState.column});
     }
-
-    setCursorState(QTermCursorState{currentScreen().cursorState.row + 1, currentScreen().cursorState.column});
 }
 
 void QTermInputExecutor::enterAlternateScreen(bool saveCursor, bool clearScreen)
@@ -729,6 +814,65 @@ void QTermInputExecutor::secondaryDeviceAttributes()
         return;
     }
     m_outboundHandler(QByteArray("\x1b[>0;0;0c"));
+}
+
+void QTermInputExecutor::reverseIndex()
+{
+    // ESC M — Reverse Index: move cursor up one row. If the cursor is already
+    // at the top of the scroll region, insert a blank line there instead.
+    currentScreen().wrapPending = false;
+    if (currentScreen().cursorState.row == currentScreen().scrollTop) {
+        currentScreen().buffer.insertLines(currentScreen().scrollTop, 1,
+                                           currentScreen().scrollTop,
+                                           currentScreen().scrollBottom);
+    } else {
+        setCursorState(QTermCursorState{currentScreen().cursorState.row - 1,
+                                       currentScreen().cursorState.column});
+    }
+}
+
+void QTermInputExecutor::designateCharacterSet(QChar intermediate, QChar final)
+{
+    // Only G0 designation (ESC ( x) affects the current screen.
+    // ESC ( 0 → DEC line drawing; ESC ( B → ASCII (normal).
+    if (intermediate == u'(') {
+        currentScreen().lineDrawingMode = (final == u'0');
+    }
+    // G1 (ESC ) x) and others are accepted but currently ignored.
+}
+
+void QTermInputExecutor::reset()
+{
+    // ESC c — RIS (Reset to Initial State): full terminal reset.
+    // Clears both screens, resets all modes, and positions the cursor at home.
+    m_primaryScreen.clear();
+    m_alternateScreen.clear();
+    m_modeState = QTermModeState();
+}
+
+void QTermInputExecutor::cursorNextLine(int count)
+{
+    // CNL: move cursor down n rows and to column 0.
+    currentScreen().wrapPending = false;
+    const int newRow = qMin(currentScreen().buffer.rows() - 1,
+                            currentScreen().cursorState.row + qMax(1, count));
+    currentScreen().buffer.lineAt(currentScreen().cursorState.row).setWrappedToNextLine(false);
+    currentScreen().breakPredecessorWrapOnWrite = true;
+    setCursorState(QTermCursorState{newRow, 0});
+}
+
+void QTermInputExecutor::cursorPreviousLine(int count)
+{
+    // CPL: move cursor up n rows and to column 0.
+    currentScreen().wrapPending = false;
+    const int newRow = qMax(0, currentScreen().cursorState.row - qMax(1, count));
+    currentScreen().breakPredecessorWrapOnWrite = true;
+    setCursorState(QTermCursorState{newRow, 0});
+}
+
+void QTermInputExecutor::setKeypadMode(bool application)
+{
+    m_modeState.applicationKeypad = application;
 }
 
 } // namespace QTerm

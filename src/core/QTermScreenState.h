@@ -28,6 +28,7 @@ struct QTermScreenState
         savedCursorState.reset();
         scrollTop = 0;
         scrollBottom = buffer.rows() - 1;
+        lineDrawingMode = false;
     }
 
     void resize(int columns, int rows)
@@ -53,6 +54,7 @@ struct QTermScreenState
     std::optional<QTermSavedCursorState> savedCursorState;
     int scrollTop = 0;
     int scrollBottom = 23;
+    bool lineDrawingMode = false;
 };
 
 } // namespace QTerm

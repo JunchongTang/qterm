@@ -23,6 +23,7 @@ public:
 
     QTermCursorState resize(int columns, int rows, const QTermCursorState &cursorState);
     void clear();
+    void clearHistory();
     void clearVisible();
     void clearVisibleFrom(int row, int column);
     void clearVisibleTo(int row, int column);

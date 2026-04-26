@@ -231,6 +231,11 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
     return reflowedCursor;
 }
 
+void QTermBuffer::clearHistory()
+{
+    m_historyLines.clear();
+}
+
 void QTermBuffer::clear()
 {
     m_historyLines.clear();
