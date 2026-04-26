@@ -505,6 +505,7 @@ void QTermViewController::reconnectSurfaceModel()
     });
     m_surfaceSelectionConnection = connect(surfaceModel, &QTermSurfaceModel::selectionChanged, this, [this]() {
         emit repaintNeeded();
+        emit selectionChanged();
     });
     m_surfaceVisibleRunsConnection = connect(surfaceModel, &QTermSurfaceModel::visibleLineRunsChanged, this, [this]() {
         emit repaintNeeded();

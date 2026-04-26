@@ -83,6 +83,7 @@ signals:
     void focusRequested();          // Widget 应调用 forceActiveFocus()
     void repaintNeeded();           // surface 内容或滚动变化 → Widget 调用 update()
     void cursorUpdateNeeded();      // 光标位置/可见性变化 → Widget 更新 delegate 几何
+    void selectionChanged();        // 选区变化 → SG Widget 仅更新 selection geometry
 
 private:
     void reconnectSurfaceModel();

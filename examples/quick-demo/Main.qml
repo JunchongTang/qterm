@@ -12,6 +12,7 @@ ApplicationWindow {
     required property var clipboardBridge
     required property var themeHelper
     property bool isDarkTheme: true
+    property bool useSGRenderer: false
     property color terminalBgColor: root.isDarkTheme ? "#0b1016" : "#fafafa"
     property real bellFlashOpacity: 0.0
     property real cursorBlinkOpacity: 1.0
@@ -31,7 +32,7 @@ ApplicationWindow {
         : "Selection none"
     readonly property string activityText: root.lastBackendError.length > 0
         ? "Error: " + root.lastBackendError
-        : root.statusNote + "  Bell " + root.bellCount + "  Copy " + root.copyCount
+        : "[" + (root.useSGRenderer ? "QSG" : "Painted") + "]  " + root.statusNote + "  Bell " + root.bellCount + "  Copy " + root.copyCount
 
     width: 1120
     height: 760
@@ -155,13 +156,20 @@ ApplicationWindow {
 
     menuBar: TermMenuBar {
         isDark: root.isDarkTheme
+        isSGRenderer: root.useSGRenderer
         onDarkThemeRequested: {
-            root.themeHelper.applyDarkTheme(terminalView)
+            root.themeHelper.applyDarkTheme(terminalView.item)
             root.isDarkTheme = true
         }
         onLightThemeRequested: {
-            root.themeHelper.applyLightTheme(terminalView)
+            root.themeHelper.applyLightTheme(terminalView.item)
             root.isDarkTheme = false
+        }
+        onSgRendererRequested: {
+            root.useSGRenderer = true
+        }
+        onPaintedRendererRequested: {
+            root.useSGRenderer = false
         }
     }
 
@@ -226,33 +234,78 @@ ApplicationWindow {
                 opacity: root.bellFlashOpacity
             }
 
-            QTermQuickPaintedItem {
+            // ── Renderer components ───────────────────────────────────────────
+
+            Component {
+                id: paintedRendererComponent
+                QTermQuickPaintedItem {
+                    anchors.fill: parent
+                    anchors.margins: 26
+                    focus: true
+                    terminal: root.terminal
+                    fontFamily: root.terminalFontFamily
+                    fontPixelSize: root.terminalFontPixelSize
+                    cursorOpacity: root.cursorBlinkOpacity
+
+                    onWheelScrolled: scrollOffset => {
+                        root.statusNote = scrollOffset > 0
+                            ? "Scrolled " + scrollOffset + " rows above bottom"
+                            : "Returned to bottom"
+                    }
+                    onCopyRequested: text => {
+                        root.clipboardBridge.copyText(text)
+                        root.copyCount += 1
+                        root.statusNote = text.length > 0 ? "Copied selection" : "Copy requested"
+                    }
+                    onHyperlinkActivated: url => {
+                        root.statusNote = "Opening: " + url
+                        Qt.openUrlExternally(url)
+                    }
+                }
+            }
+
+            Component {
+                id: sgRendererComponent
+                QTermQuickItem {
+                    anchors.fill: parent
+                    anchors.margins: 26
+                    focus: true
+                    terminal: root.terminal
+                    fontFamily: root.terminalFontFamily
+                    fontPixelSize: root.terminalFontPixelSize
+                    cursorOpacity: root.cursorBlinkOpacity
+
+                    onWheelScrolled: angleDelta => {
+                        root.statusNote = angleDelta > 0
+                            ? "Scrolled above bottom (QSG)"
+                            : "Returned to bottom (QSG)"
+                    }
+                    onCopyRequested: {
+                        const text = root.terminal.surfaceModel.selectedText
+                        root.clipboardBridge.copyText(text)
+                        root.copyCount += 1
+                        root.statusNote = text.length > 0 ? "Copied selection (QSG)" : "Copy requested (QSG)"
+                    }
+                    onHyperlinkActivated: url => {
+                        root.statusNote = "Opening: " + url
+                        Qt.openUrlExternally(url)
+                    }
+                }
+            }
+
+            Loader {
                 id: terminalView
 
                 anchors.fill: parent
-                anchors.margins: 26
                 focus: true
-                terminal: root.terminal
-                fontFamily: root.terminalFontFamily
-                fontPixelSize: root.terminalFontPixelSize
-                cursorOpacity: root.cursorBlinkOpacity
+                sourceComponent: root.useSGRenderer ? sgRendererComponent : paintedRendererComponent
 
-                onWheelScrolled: scrollOffset => {
-                    root.statusNote = scrollOffset > 0
-                        ? "Scrolled " + scrollOffset + " rows above bottom"
-                        : "Returned to bottom"
-                }
-
-                onCopyRequested: text => {
-                    root.clipboardBridge.copyText(text)
-                    root.copyCount += 1
-                    root.statusNote = text.length > 0 ? "Copied selection" : "Copy requested"
-                }
-
-                onHyperlinkActivated: url => {
-                    console.log("Hyperlink activated:", url)
-                    root.statusNote = "Opening: " + url
-                    Qt.openUrlExternally(url)
+                onLoaded: {
+                    // Re-apply theme after renderer swap
+                    if (root.isDarkTheme)
+                        root.themeHelper.applyDarkTheme(item)
+                    else
+                        root.themeHelper.applyLightTheme(item)
                 }
             }
 
@@ -266,13 +319,13 @@ ApplicationWindow {
                 orientation: Qt.Vertical
                 policy: root.terminal.maxScrollOffset > 0 ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                 active: hovered || pressed || root.terminal.maxScrollOffset > 0
-                size: terminalView.scrollSize
-                position: terminalView.scrollPosition
+                size: terminalView.item ? terminalView.item.scrollSize : 1.0
+                position: terminalView.item ? terminalView.item.scrollPosition : 0.0
                 hoverEnabled: true
 
                 onPositionChanged: {
-                    if (pressed)
-                        terminalView.scrollPosition = position
+                    if (pressed && terminalView.item)
+                        terminalView.item.scrollPosition = position
                 }
 
                 contentItem: Rectangle {

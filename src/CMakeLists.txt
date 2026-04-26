@@ -1,6 +1,7 @@
 qt_add_library(qterm STATIC
     ../include/QTerm/QTermLocalPtyBackend.h
     ../include/QTerm/QTermQuickPaintedItem.h
+    ../include/QTerm/QTermQuickItem.h
     ../include/QTerm/QTermSurfaceModel.h
     ../include/QTerm/QTermSession.h
     ../include/QTerm/QTermSessionBackend.h
@@ -36,6 +37,7 @@ qt_add_library(qterm STATIC
     quick/QTermViewController.h
     quick/QTermViewController.cpp
     quick/QTermQuickPaintedItem.cpp
+    quick/QTermQuickItem.cpp
     widget/QTermWidget.cpp
     session/local/QTermLocalPtyBackend.cpp
     session/QTermSession.cpp
