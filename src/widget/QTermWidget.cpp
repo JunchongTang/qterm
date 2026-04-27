@@ -16,6 +16,8 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include <limits>
+
 namespace QTerm {
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -31,7 +33,27 @@ QTermWidget::QTermWidget(QWidget *parent)
     setMouseTracking(false); // updated dynamically by updateMouseAcceptance()
 
     connect(m_controller, &QTermViewController::repaintNeeded, this, [this]() {
+        m_dirtyRows.clear();
         update();
+    });
+    connect(m_controller, &QTermViewController::contentRowsDirty, this, [this](QVector<int> rows) {
+        const qreal cellH = m_controller->cellHeight();
+        if (cellH <= 0.0) {
+            m_dirtyRows.clear();
+            update();
+            return;
+        }
+        for (int r : rows) {
+            if (!m_dirtyRows.contains(r))
+                m_dirtyRows.append(r);
+        }
+        qreal yMin = std::numeric_limits<qreal>::max();
+        qreal yMax = 0.0;
+        for (int r : std::as_const(m_dirtyRows)) {
+            yMin = qMin(yMin, r * cellH);
+            yMax = qMax(yMax, (r + 1) * cellH);
+        }
+        update(QRect(0, int(yMin), width(), int(yMax - yMin)));
     });
     connect(m_controller, &QTermViewController::mouseAcceptanceChanged,
             this, &QTermWidget::updateMouseAcceptance);
@@ -201,7 +223,7 @@ QSize QTermWidget::sizeHint() const
 
 // ── paintEvent ────────────────────────────────────────────────────────────────
 
-void QTermWidget::paintEvent(QPaintEvent * /*event*/)
+void QTermWidget::paintEvent(QPaintEvent *event)
 {
     QTermTerminal *terminal = m_controller->terminal();
     QTermSurfaceModel *surfaceModel = terminal ? terminal->surfaceModel() : nullptr;
@@ -209,8 +231,13 @@ void QTermWidget::paintEvent(QPaintEvent * /*event*/)
     QFont baseFont(m_controller->fontFamily());
     baseFont.setPixelSize(m_controller->fontPixelSize());
 
+    const QRectF fullBounds(rect());
+    const QRectF eventRect(event->rect());
+    const bool isPartial = eventRect.isValid() && eventRect != fullBounds;
+
     QTermPaintRequest req;
-    req.bounds        = QRectF(rect());
+    req.bounds        = fullBounds;
+    req.clipBounds    = isPartial ? eventRect : QRectF();
     req.surfaceModel  = surfaceModel;
     req.cellWidth     = m_controller->cellWidth();
     req.cellHeight    = m_controller->cellHeight();
@@ -227,6 +254,8 @@ void QTermWidget::paintEvent(QPaintEvent * /*event*/)
 
     QPainter painter(this);
     qtermPaintTerminal(&painter, req);
+
+    m_dirtyRows.clear();
 }
 
 // ── resizeEvent ───────────────────────────────────────────────────────────────
