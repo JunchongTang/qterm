@@ -3,6 +3,7 @@ qt_add_library(qterm STATIC
     ../include/QTerm/QTermSerialBackend.h
     ../include/QTerm/QTermSerialPortInfo.h
     ../include/QTerm/QTermSerialPortScanner.h
+    ../include/QTerm/QTermTelnetBackend.h
     ../include/QTerm/QTermQuickPaintedItem.h
     ../include/QTerm/QTermQuickItem.h
     ../include/QTerm/QTermSurfaceModel.h
@@ -47,6 +48,7 @@ qt_add_library(qterm STATIC
     session/serial/QTermSerialBackend.cpp
     session/serial/QTermSerialPortInfo.cpp
     session/serial/QTermSerialPortScanner.cpp
+    session/telnet/QTermTelnetBackend.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp
 )
@@ -84,6 +86,7 @@ target_link_libraries(qterm
         Qt6::Gui
         Qt6::Quick
         Qt6::Widgets
+        Qt6::Network
         Qt6::SerialPort
 )
 
