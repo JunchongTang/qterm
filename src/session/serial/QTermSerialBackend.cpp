@@ -40,13 +40,25 @@ void    QTermSerialBackend::setPortName(const QString &p) { m_portName = p; }
 // ── Line parameters ───────────────────────────────────────────────────────────
 
 int  QTermSerialBackend::baudRate() const noexcept { return m_baudRate; }
-void QTermSerialBackend::setBaudRate(int b)        { m_baudRate = b; }
+void QTermSerialBackend::setBaudRate(int b)
+{
+    m_baudRate = b;
+    emit baudRateChanged();
+}
 
 int  QTermSerialBackend::dataBits() const noexcept { return m_dataBits; }
-void QTermSerialBackend::setDataBits(int d)        { m_dataBits = d; }
+void QTermSerialBackend::setDataBits(int d)
+{
+    m_dataBits = d;
+    emit dataBitsChanged();
+}
 
-QChar QTermSerialBackend::parity() const noexcept { return m_parity; }
-void  QTermSerialBackend::setParity(QChar p)       { m_parity = p; }
+QString QTermSerialBackend::parity() const { return m_parity; }
+void    QTermSerialBackend::setParity(const QString &p)
+{
+    m_parity = p;
+    emit parityChanged();
+}
 
 int  QTermSerialBackend::stopBits() const noexcept { return m_stopBits; }
 void QTermSerialBackend::setStopBits(int s)        { m_stopBits = s; }
@@ -111,13 +123,13 @@ void QTermSerialBackend::applySettings()
     default: m_serial->setDataBits(QSerialPort::Data8); break;
     }
 
-    if (m_parity == QLatin1Char('E'))
+    if (m_parity == QLatin1String("E"))
         m_serial->setParity(QSerialPort::EvenParity);
-    else if (m_parity == QLatin1Char('O'))
+    else if (m_parity == QLatin1String("O"))
         m_serial->setParity(QSerialPort::OddParity);
-    else if (m_parity == QLatin1Char('M'))
+    else if (m_parity == QLatin1String("M"))
         m_serial->setParity(QSerialPort::MarkParity);
-    else if (m_parity == QLatin1Char('S'))
+    else if (m_parity == QLatin1String("S"))
         m_serial->setParity(QSerialPort::SpaceParity);
     else
         m_serial->setParity(QSerialPort::NoParity);

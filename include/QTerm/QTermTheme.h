@@ -26,7 +26,7 @@ class QTermThemeLoader;
 class QTermTheme
 {
     Q_GADGET
-    QML_VALUE_TYPE(TermTheme)
+    QML_VALUE_TYPE(termTheme)
     QML_CONSTRUCTIBLE_VALUE
 
     Q_PROPERTY(QString name        READ name        WRITE setName)
