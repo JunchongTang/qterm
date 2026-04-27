@@ -379,8 +379,50 @@ void QTermTerminal::clampViewportToBuffer()
 
 void QTermTerminal::syncSurfaceViewport()
 {
-    m_surfaceModel.setVisibleLines(m_core->buffer().viewportLineTexts(m_viewportTopProjectionRow, rows()));
-    m_surfaceModel.setVisibleLineRuns(m_core->buffer().viewportLineRuns(m_viewportTopProjectionRow, rows()));
+    QTermBuffer &buf = m_core->buffer();
+    m_surfaceModel.setVisibleLines(buf.viewportLineTexts(m_viewportTopProjectionRow, rows()));
+
+    if (buf.allRowsDirty()) {
+        m_surfaceModel.setVisibleLineRuns(buf.viewportLineRuns(m_viewportTopProjectionRow, rows()));
+        buf.clearDirtyRows();
+        return;
+    }
+
+    // Incremental update: only rebuild runs for dirty visible rows.
+    // m_dirtyRows tracks visible rows (0-based from buffer's visible region).
+    // We need to map them to the viewport's projection-row space.
+    // When the viewport is pinned to the bottom, projection row for visible row v
+    // is buf.visibleRowOffset() + v. When the user has scrolled up into history
+    // the viewport may show history rows; dirty tracking only covers visible rows,
+    // so we only update those viewport slots that overlap the visible region.
+    const QVector<bool> &dirty = buf.dirtyRows();
+    const int visOffset = buf.visibleRowOffset();
+    const int rowCount = rows();
+    QVector<int> dirtyViewportRows;
+    QVariantList dirtyRowRuns;
+
+    for (int visRow = 0; visRow < dirty.size() && visRow < rowCount; ++visRow) {
+        if (!dirty.at(visRow)) {
+            continue;
+        }
+        // Viewport slot for this visible row:
+        const int viewportSlot = visOffset + visRow - m_viewportTopProjectionRow;
+        if (viewportSlot < 0 || viewportSlot >= rowCount) {
+            continue;
+        }
+        const int projRow = visOffset + visRow;
+        dirtyViewportRows.append(viewportSlot);
+        if (projRow < buf.projectionRowCount()) {
+            dirtyRowRuns.append(QVariant::fromValue(buf.projectionLineAt(projRow).styleRuns()));
+        } else {
+            dirtyRowRuns.append(QVariant::fromValue(QVariantList()));
+        }
+    }
+
+    if (!dirtyViewportRows.isEmpty()) {
+        m_surfaceModel.setVisibleLineRunsPartial(dirtyViewportRows, dirtyRowRuns);
+    }
+    buf.clearDirtyRows();
 }
 
 } // namespace QTerm

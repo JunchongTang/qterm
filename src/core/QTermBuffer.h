@@ -42,13 +42,27 @@ public:
     QVariantList visibleLineRuns() const;
     QString debugPlainText() const;
 
+    // ── Dirty-row tracking ────────────────────────────────────────────────────
+    // Returns the set of *visible* row indices that have been modified since the
+    // last call to clearDirtyRows().  m_allRowsDirty is a fast-path flag set
+    // when the entire viewport should be repainted (scroll, resize, clear).
+    const QVector<bool> &dirtyRows() const noexcept { return m_dirtyRows; }
+    bool allRowsDirty() const noexcept { return m_allRowsDirty; }
+    void clearDirtyRows();
+
 private:
     void appendEmptyVisibleLine();
+    void markDirtyRow(int visibleRow);
+    void markAllRowsDirty();
 
     int m_columns = 80;
     int m_rows = 24;
     QVector<QTermLine> m_historyLines;
     QVector<QTermLine> m_visibleLines;
+
+    // m_dirtyRows[i] is true if visible row i was touched since clearDirtyRows().
+    QVector<bool> m_dirtyRows;
+    bool m_allRowsDirty = true; // start dirty so first paint is full
 };
 
 } // namespace QTerm

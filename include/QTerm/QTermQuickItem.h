@@ -6,6 +6,7 @@
 #include <QQmlComponent>
 #include <QQuickItem>
 #include <QString>
+#include <QVector>
 
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermTheme.h>
@@ -138,6 +139,7 @@ private:
     void scheduleContentDirty();
     void scheduleSelectionDirty();
     void scheduleCursorDirty();
+    void scheduleRowsDirty(QVector<int> rows);
 
     QTermViewController *m_controller = nullptr;
     QTermTheme m_theme;
@@ -159,6 +161,8 @@ private:
     bool m_selectionDirty = true;
     bool m_cursorDirty = true;
     bool m_hasFocus = false;
+    // Rows that need incremental rebuild (only used when !m_contentDirty).
+    QVector<int> m_dirtyRowSet;
 };
 
 } // namespace QTerm

@@ -67,6 +67,11 @@ const QTermBuffer &QTermCore::buffer() const noexcept
     return activeScreen().buffer;
 }
 
+QTermBuffer &QTermCore::buffer() noexcept
+{
+    return m_modeState.alternateScreenActive ? m_alternateScreen.buffer : m_primaryScreen.buffer;
+}
+
 const QTermModeState &QTermCore::modeState() const noexcept
 {
     return m_modeState;

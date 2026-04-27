@@ -520,6 +520,9 @@ void QTermViewController::reconnectSurfaceModel()
     m_surfaceVisibleRunsConnection = connect(surfaceModel, &QTermSurfaceModel::visibleLineRunsChanged, this, [this]() {
         emit repaintNeeded();
     });
+    m_surfacePartialRunsConnection = connect(surfaceModel, &QTermSurfaceModel::visibleLineRunsChangedPartial, this, [this](QVector<int> rows) {
+        emit contentRowsDirty(rows);
+    });
     m_surfaceDestroyedConnection = connect(surfaceModel, &QObject::destroyed, this, [this]() {
         disconnectSurfaceModel();
         emit repaintNeeded();
@@ -532,6 +535,7 @@ void QTermViewController::disconnectSurfaceModel()
     QObject::disconnect(m_surfaceCursorConnection);
     QObject::disconnect(m_surfaceSelectionConnection);
     QObject::disconnect(m_surfaceVisibleRunsConnection);
+    QObject::disconnect(m_surfacePartialRunsConnection);
     QObject::disconnect(m_surfaceDestroyedConnection);
 }
 
