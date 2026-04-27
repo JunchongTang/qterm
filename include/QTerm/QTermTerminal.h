@@ -107,6 +107,7 @@ private:
     QMetaObject::Connection m_sizeToSessionResizeConnection;
     QStringDecoder m_sessionUtf8Decoder = QStringDecoder(QStringDecoder::Utf8);
     int m_viewportTopProjectionRow = 0;
+    int m_lastSyncedViewportTop = -1; // -1 forces full sync on first call
     bool m_viewportPinnedToBottom = true;
 };
 

@@ -119,6 +119,9 @@ int qtermRunColumns(const QVariantMap &run)
 // cursorStyle values: 0 = Block, 1 = Underline, 2 = Bar.
 struct QTermPaintRequest {
     QRectF bounds;
+    // When non-null, only rows intersecting this rect are repainted.
+    // The caller is responsible for setting the painter clip accordingly.
+    QRectF clipBounds;
     QTerm::QTermSurfaceModel *surfaceModel = nullptr;
     qreal cellWidth = 1.0;
     qreal cellHeight = 1.0;
@@ -142,7 +145,10 @@ struct QTermPaintRequest {
 
 void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
 {
-    painter->fillRect(req.bounds, req.background);
+    const bool hasClip = req.clipBounds.isValid() && req.clipBounds != req.bounds;
+    const QRectF paintArea = hasClip ? req.clipBounds : req.bounds;
+
+    painter->fillRect(paintArea, req.background);
 
     QTerm::QTermSurfaceModel *sm = req.surfaceModel;
     if (!sm) return;
@@ -158,6 +164,11 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
 
     for (int row = 0; row < lineCount; ++row) {
         const qreal y = row * cellH;
+
+        // Skip rows that lie entirely outside the paint area.
+        if (hasClip && (y + cellH <= paintArea.top() || y >= paintArea.bottom()))
+            continue;
+
         const QVariantList lineRuns = visibleRuns.at(row).toList();
         qreal x = 0.0;
 
