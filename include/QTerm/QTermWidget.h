@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QPointer>
 #include <QString>
+#include <QVector>
 #include <QWidget>
 
 #include <QTerm/QTermTerminal.h>
@@ -121,6 +122,9 @@ private:
     QColor      m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal       m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle     = Block;
+
+    // Incremental dirty-row set; non-empty only between contentRowsDirty and paint.
+    QVector<int> m_dirtyRows;
 };
 
 } // namespace QTerm
