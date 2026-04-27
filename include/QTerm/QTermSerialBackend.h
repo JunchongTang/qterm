@@ -3,6 +3,8 @@
 
 #include <QString>
 
+#include <QtQml/qqmlregistration.h>
+
 #include <QTerm/QTermSessionBackend.h>
 #include <QTerm/QTermSerialPortInfo.h>
 
@@ -20,9 +22,16 @@ namespace QTerm {
 //   // wire up to QTermSession the same way as QTermLocalPtyBackend
 //
 // resize() is accepted but ignored — serial devices have no terminal geometry.
-class QTermSerialBackend final : public QTermSessionBackend
+class QTermSerialBackend : public QTermSessionBackend
 {
     Q_OBJECT
+    QML_ELEMENT
+    Q_PROPERTY(QString portName READ portName WRITE setPortName NOTIFY portNameChanged)
+    Q_PROPERTY(int baudRate READ baudRate WRITE setBaudRate NOTIFY baudRateChanged)
+    Q_PROPERTY(int dataBits READ dataBits WRITE setDataBits NOTIFY dataBitsChanged)
+    Q_PROPERTY(QString parity READ parity WRITE setParity NOTIFY parityChanged)
+    Q_PROPERTY(int stopBits READ stopBits WRITE setStopBits NOTIFY stopBitsChanged)
+    Q_PROPERTY(QString flowControl READ flowControl WRITE setFlowControl NOTIFY flowControlChanged)
 
 public:
     explicit QTermSerialBackend(QObject *parent = nullptr);
@@ -41,8 +50,8 @@ public:
     void setDataBits(int dataBits);
 
     // "N" / "E" / "O" / "M" / "S"  (None/Even/Odd/Mark/Space)
-    QChar parity() const noexcept;
-    void  setParity(QChar parity);
+    QString parity() const;
+    void    setParity(const QString &parity);
 
     // 1 / 2 (1.5 not exposed — rarely used)
     int  stopBits() const noexcept;
@@ -58,16 +67,24 @@ public:
     void writeData(const QByteArray &data) override;
     void resize(int columns, int rows) override; // no-op for serial
 
+signals:
+    void portNameChanged();
+    void baudRateChanged();
+    void dataBitsChanged();
+    void parityChanged();
+    void stopBitsChanged();
+    void flowControlChanged();
+
 private:
     void applySettings();
 
-    QSerialPort *m_serial      = nullptr;
-    QString      m_portName;
-    int          m_baudRate    = 9600;
-    int          m_dataBits    = 8;
-    QChar        m_parity      = QLatin1Char('N');
-    int          m_stopBits    = 1;
-    QString      m_flowControl = QStringLiteral("none");
+    QSerialPort *m_serial = nullptr;
+    QString m_portName;
+    int m_baudRate = 9600;
+    int m_dataBits = 8;
+    QString m_parity = QStringLiteral("N");
+    int m_stopBits = 1;
+    QString m_flowControl = QStringLiteral("none");
 };
 
 } // namespace QTerm

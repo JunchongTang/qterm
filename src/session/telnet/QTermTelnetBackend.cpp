@@ -44,10 +44,18 @@ QTermTelnetBackend::~QTermTelnetBackend()
 // ── Connection parameters ─────────────────────────────────────────────────────
 
 QString QTermTelnetBackend::host() const { return m_host; }
-void    QTermTelnetBackend::setHost(const QString &h) { m_host = h; }
+void    QTermTelnetBackend::setHost(const QString &h)
+{
+    m_host = h;
+    emit hostChanged();
+}
 
 quint16 QTermTelnetBackend::port() const noexcept { return m_port; }
-void    QTermTelnetBackend::setPort(quint16 p) { m_port = p; }
+void    QTermTelnetBackend::setPort(quint16 p)
+{
+    m_port = p;
+    emit portChanged();
+}
 
 // ── QTermSessionBackend interface ─────────────────────────────────────────────
 

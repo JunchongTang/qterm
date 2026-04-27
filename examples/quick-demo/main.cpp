@@ -1,19 +1,12 @@
 #include <QGuiApplication>
 #include <QClipboard>
-#include <QFileInfo>
-#include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
-#include <QVariant>
-#include <qqml.h>
+#include <QQmlContext>
+#include <QQuickStyle>
 
-#include <QTerm/QTermLocalPtyBackend.h>
 #include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermQuickItem.h>
-#include <QTerm/QTermSession.h>
-#include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermThemePack.h>
-
-#include <QTerm/QTermSurfaceModel.h>
 
 namespace {
 
@@ -26,16 +19,14 @@ public:
 
     Q_INVOKABLE void copyText(const QString &text)
     {
-        if (QGuiApplication::clipboard()) {
+        if (QGuiApplication::clipboard())
             QGuiApplication::clipboard()->setText(text);
-        }
     }
 
     Q_INVOKABLE QString clipboardText() const
     {
-        if (QGuiApplication::clipboard()) {
+        if (QGuiApplication::clipboard())
             return QGuiApplication::clipboard()->text();
-        }
         return {};
     }
 };
@@ -71,44 +62,23 @@ public:
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     QQmlApplicationEngine engine;
 
-    QTerm::QTermTerminal terminal;
-    QTerm::QTermSession session;
-    QTerm::QTermLocalPtyBackend backend;
     DemoClipboardBridge clipboardBridge;
     DemoThemeHelper themeHelper;
-    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-    environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
-    const QString shellProgram = environment.value(QStringLiteral("SHELL"), QStringLiteral("/bin/zsh"));
-    const QString shellName = QFileInfo(shellProgram).fileName();
 
-    backend.setProgram(shellProgram);
-    if (shellName == QStringLiteral("bash") || shellName == QStringLiteral("zsh")) {
-        backend.setArguments({QStringLiteral("-il")});
-    } else {
-        backend.setArguments({QStringLiteral("-i")});
-    }
-    backend.setProcessEnvironment(environment);
+    engine.rootContext()->setContextProperty(QStringLiteral("clipboardBridge"), &clipboardBridge);
+    engine.rootContext()->setContextProperty(QStringLiteral("themeHelper"), &themeHelper);
 
-    session.setBackend(&backend);
-    terminal.setSession(&session);
-    terminal.setTitle(QStringLiteral("QTerm Local PTY Demo"));
-    session.open();
-
-    engine.setInitialProperties({
-        {QStringLiteral("terminal"), QVariant::fromValue(&terminal)},
-        {QStringLiteral("clipboardBridge"), QVariant::fromValue(&clipboardBridge)},
-        {QStringLiteral("themeHelper"), QVariant::fromValue(&themeHelper)}
-    });
     engine.loadFromModule("QTermDemo", "Main");
 
-    if (engine.rootObjects().isEmpty()) {
+    if (engine.rootObjects().isEmpty())
         return -1;
-    }
 
     return app.exec();
 }
 
 #include "main.moc"
+

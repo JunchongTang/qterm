@@ -96,16 +96,19 @@ QProcessEnvironment QTermLocalPtyBackend::processEnvironment() const
 void QTermLocalPtyBackend::setProgram(const QString &program)
 {
     m_program = program;
+    emit programChanged();
 }
 
 void QTermLocalPtyBackend::setArguments(const QStringList &arguments)
 {
     m_arguments = arguments;
+    emit argumentsChanged();
 }
 
 void QTermLocalPtyBackend::setWorkingDirectory(const QString &workingDirectory)
 {
     m_workingDirectory = workingDirectory;
+    emit workingDirectoryChanged();
 }
 
 void QTermLocalPtyBackend::setProcessEnvironment(const QProcessEnvironment &environment)

@@ -5,13 +5,16 @@
 #include <QObject>
 #include <QPointer>
 
+#include <QtQml/qqmlregistration.h>
+
 #include <QTerm/QTermSessionBackend.h>
 
 namespace QTerm {
 
-class QTermSession final : public QObject
+class QTermSession : public QObject
 {
     Q_OBJECT
+    QML_ELEMENT
     Q_PROPERTY(QTerm::QTermSessionBackend *backend READ backend WRITE setBackend NOTIFY backendChanged)
     Q_PROPERTY(QTerm::QTermSessionBackend::State state READ state NOTIFY stateChanged)
 

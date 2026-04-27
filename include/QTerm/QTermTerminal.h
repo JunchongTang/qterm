@@ -8,6 +8,8 @@
 #include <QString>
 #include <QStringDecoder>
 
+#include <QtQml/qqmlregistration.h>
+
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermSurfaceModel.h>
 
@@ -16,9 +18,10 @@ namespace QTerm {
 class QTermCore;
 class QTermSelectionModel;
 
-class QTermTerminal final : public QObject
+class QTermTerminal : public QObject
 {
     Q_OBJECT
+    QML_ELEMENT
     Q_PROPERTY(int rows READ rows NOTIFY sizeChanged)
     Q_PROPERTY(int columns READ columns NOTIFY sizeChanged)
     Q_PROPERTY(int scrollOffset READ scrollOffset NOTIFY viewportChanged)

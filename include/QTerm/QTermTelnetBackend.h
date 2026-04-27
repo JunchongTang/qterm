@@ -4,6 +4,8 @@
 #include <QByteArray>
 #include <QString>
 
+#include <QtQml/qqmlregistration.h>
+
 #include <QTerm/QTermSessionBackend.h>
 
 class QTcpSocket;
@@ -25,9 +27,12 @@ namespace QTerm {
 //   b->setPort(23);
 //   b->open();
 //   // wire to QTermSession the same way as QTermLocalPtyBackend
-class QTermTelnetBackend final : public QTermSessionBackend
+class QTermTelnetBackend : public QTermSessionBackend
 {
     Q_OBJECT
+    QML_ELEMENT
+    Q_PROPERTY(QString host READ host WRITE setHost NOTIFY hostChanged)
+    Q_PROPERTY(quint16 port READ port WRITE setPort NOTIFY portChanged)
 
 public:
     explicit QTermTelnetBackend(QObject *parent = nullptr);
@@ -47,6 +52,10 @@ public:
 
     // Sends an IAC SB NAWS subnegotiation to inform the server of the new size.
     void resize(int columns, int rows) override;
+
+signals:
+    void hostChanged();
+    void portChanged();
 
 private:
     // IAC parser states

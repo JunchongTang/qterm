@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QString>
 
+#include <QtQml/qqmlregistration.h>
+
 namespace QTerm {
 
 class QTermSessionBackend : public QObject

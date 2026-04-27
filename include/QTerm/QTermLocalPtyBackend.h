@@ -5,6 +5,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <QtQml/qqmlregistration.h>
+
 #include <QTerm/QTermSessionBackend.h>
 
 class QSocketNotifier;
@@ -12,9 +14,13 @@ class QTimer;
 
 namespace QTerm {
 
-class QTermLocalPtyBackend final : public QTermSessionBackend
+class QTermLocalPtyBackend : public QTermSessionBackend
 {
     Q_OBJECT
+    QML_ELEMENT
+    Q_PROPERTY(QString program READ program WRITE setProgram NOTIFY programChanged)
+    Q_PROPERTY(QStringList arguments READ arguments WRITE setArguments NOTIFY argumentsChanged)
+    Q_PROPERTY(QString workingDirectory READ workingDirectory WRITE setWorkingDirectory NOTIFY workingDirectoryChanged)
 
 public:
     explicit QTermLocalPtyBackend(QObject *parent = nullptr);
@@ -34,6 +40,11 @@ public:
     void close() override;
     void writeData(const QByteArray &data) override;
     void resize(int columns, int rows) override;
+
+signals:
+    void programChanged();
+    void argumentsChanged();
+    void workingDirectoryChanged();
 
 private:
     void applyPendingResize();
