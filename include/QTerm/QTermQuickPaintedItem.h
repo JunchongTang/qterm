@@ -6,6 +6,7 @@
 #include <QQmlComponent>
 #include <QQuickPaintedItem>
 #include <QString>
+#include <QVector>
 
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermTheme.h>
@@ -150,6 +151,10 @@ private:
     // ── 光标 delegate ─────────────────────────────────────────────────────────
     QQmlComponent *m_cursorDelegate     = nullptr;
     QQuickItem    *m_cursorDelegateItem = nullptr;
+
+    // ── 增量脏行集合（行号，0-based visible row） ────────────────────────────
+    // Non-empty only when contentRowsDirty was fired without a full repaint.
+    QVector<int> m_dirtyRows;
 };
 
 } // namespace QTerm

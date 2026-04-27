@@ -15,6 +15,8 @@
 #include <QTimer>
 #include <QWheelEvent>
 
+#include <limits>
+
 namespace QTerm {
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -34,7 +36,31 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     });
 
     connect(m_controller, &QTermViewController::repaintNeeded, this, [this]() {
+        m_dirtyRows.clear();
         update();
+    });
+    connect(m_controller, &QTermViewController::contentRowsDirty, this, [this](QVector<int> rows) {
+        if (m_dirtyRows.isEmpty() && rows.isEmpty()) return;
+        // If a full update is already pending (m_dirtyRows is cleared = full mode),
+        // just let it ride.  Otherwise accumulate rows and schedule a partial update.
+        const qreal cellH = m_controller->cellHeight();
+        if (cellH <= 0.0) {
+            m_dirtyRows.clear();
+            update();
+            return;
+        }
+        for (int r : rows) {
+            if (!m_dirtyRows.contains(r))
+                m_dirtyRows.append(r);
+        }
+        // Compute the union of dirty row rects and call the partial-update overload.
+        qreal yMin = std::numeric_limits<qreal>::max();
+        qreal yMax = 0.0;
+        for (int r : std::as_const(m_dirtyRows)) {
+            yMin = qMin(yMin, r * cellH);
+            yMax = qMax(yMax, (r + 1) * cellH);
+        }
+        update(QRect(0, int(yMin), int(width()), int(yMax - yMin)));
     });
     connect(m_controller, &QTermViewController::cursorUpdateNeeded, this, [this]() {
         updateCursorDelegateGeometry();
@@ -296,8 +322,19 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     QFont baseFont(m_controller->fontFamily());
     baseFont.setPixelSize(m_controller->fontPixelSize());
 
+    // Determine if this is a partial (incremental) paint pass.
+    // Qt sets the painter clip to the dirty rect when update(QRect) was called.
+    const QRectF fullBounds = boundingRect();
+    const QRectF clipRect = painter->hasClipping()
+        ? painter->clipBoundingRect()
+        : fullBounds;
+    const bool isPartial = painter->hasClipping()
+        && clipRect.isValid()
+        && clipRect != fullBounds;
+
     QTermPaintRequest req;
-    req.bounds        = boundingRect();
+    req.bounds        = fullBounds;
+    req.clipBounds    = isPartial ? clipRect : QRectF();
     req.surfaceModel  = surfaceModel;
     req.cellWidth     = m_controller->cellWidth();
     req.cellHeight    = m_controller->cellHeight();
@@ -307,8 +344,6 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.selection     = m_selectionColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
-    // Cursor shape comes from the terminal's surface model (DECSCUSR) when available,
-    // falling back to the QML-set cursorStyle property.
     req.cursorStyle   = surfaceModel
         ? surfaceModel->cursorShape()
         : static_cast<int>(m_cursorStyle);
@@ -317,6 +352,8 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.palette16     = m_theme.palette16();
 
     qtermPaintTerminal(painter, req);
+
+    m_dirtyRows.clear();
 }
 
 // ── componentComplete ─────────────────────────────────────────────────────────

@@ -382,19 +382,19 @@ void QTermTerminal::syncSurfaceViewport()
     QTermBuffer &buf = m_core->buffer();
     m_surfaceModel.setVisibleLines(buf.viewportLineTexts(m_viewportTopProjectionRow, rows()));
 
-    if (buf.allRowsDirty()) {
+    // If the viewport offset changed since last sync, or the buffer is fully dirty,
+    // do a full rebuild — the incremental dirty-row set only covers buffer-write
+    // changes and is meaningless when we are showing a different slice of history.
+    const bool viewportMoved = (m_viewportTopProjectionRow != m_lastSyncedViewportTop);
+    m_lastSyncedViewportTop = m_viewportTopProjectionRow;
+
+    if (buf.allRowsDirty() || viewportMoved) {
         m_surfaceModel.setVisibleLineRuns(buf.viewportLineRuns(m_viewportTopProjectionRow, rows()));
         buf.clearDirtyRows();
         return;
     }
 
     // Incremental update: only rebuild runs for dirty visible rows.
-    // m_dirtyRows tracks visible rows (0-based from buffer's visible region).
-    // We need to map them to the viewport's projection-row space.
-    // When the viewport is pinned to the bottom, projection row for visible row v
-    // is buf.visibleRowOffset() + v. When the user has scrolled up into history
-    // the viewport may show history rows; dirty tracking only covers visible rows,
-    // so we only update those viewport slots that overlap the visible region.
     const QVector<bool> &dirty = buf.dirtyRows();
     const int visOffset = buf.visibleRowOffset();
     const int rowCount = rows();
@@ -405,7 +405,6 @@ void QTermTerminal::syncSurfaceViewport()
         if (!dirty.at(visRow)) {
             continue;
         }
-        // Viewport slot for this visible row:
         const int viewportSlot = visOffset + visRow - m_viewportTopProjectionRow;
         if (viewportSlot < 0 || viewportSlot >= rowCount) {
             continue;
