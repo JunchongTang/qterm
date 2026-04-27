@@ -32,17 +32,15 @@ Item {
 
     // ── Layout ────────────────────────────────────────────────────────────────
 
-    Column {
-        anchors.fill: parent
-        spacing: 0
+    // ── Tab bar ───────────────────────────────────────────────────────────────
 
-        // ── Tab bar ───────────────────────────────────────────────────────────
-
-        Rectangle {
-            id: tabBar
-            width: parent.width
-            height: 42
-            color: "#0d1117"
+    Rectangle {
+        id: tabBar
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 42
+        color: "#0d1117"
 
             Row {
                 id: tabButtonRow
@@ -158,47 +156,48 @@ Item {
             }
         }
 
-        // ── Content area ──────────────────────────────────────────────────────
+    // ── Content area ───────────────────────────────────────────────────────
 
-        Item {
-            id: tabStack
-            width: parent.width
-            height: parent.height - tabBar.height
+    Item {
+        id: tabStack
+        anchors.top: tabBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
 
-            // Empty state
-            Column {
-                anchors.centerIn: parent
-                spacing: 16
-                visible: root.tabs.length === 0
+        // Empty state
+        Column {
+            anchors.centerIn: parent
+            spacing: 16
+            visible: root.tabs.length === 0
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("No open sessions")
+                color: "#8b949e"
+                font.pixelSize: 18
+            }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 160
+                height: 38
+                radius: 8
+                color: emptyBtnMouse.containsMouse ? "#1f6feb" : "#388bfd"
 
                 Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr("No open sessions")
-                    color: "#8b949e"
-                    font.pixelSize: 18
+                    anchors.centerIn: parent
+                    text: qsTr("New Session")
+                    color: "#ffffff"
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
                 }
 
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 160
-                    height: 38
-                    radius: 8
-                    color: emptyBtnMouse.containsMouse ? "#1f6feb" : "#388bfd"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("New Session")
-                        color: "#ffffff"
-                        font.pixelSize: 14
-                        font.weight: Font.Medium
-                    }
-
-                    MouseArea {
-                        id: emptyBtnMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: newSessionDialog.open()
-                    }
+                MouseArea {
+                    id: emptyBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: newSessionDialog.open()
                 }
             }
         }

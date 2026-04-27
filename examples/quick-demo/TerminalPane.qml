@@ -73,6 +73,7 @@ Item {
         id: sgRendererComponent
 
         QTermQuickItem {
+            anchors.fill: parent
             focus: true
             terminal: root.terminal
             fontFamily: root.fontFamily
@@ -91,6 +92,7 @@ Item {
         id: paintedRendererComponent
 
         QTermQuickPaintedItem {
+            anchors.fill: parent
             focus: true
             terminal: root.terminal
             fontFamily: root.fontFamily
@@ -111,6 +113,33 @@ Item {
 
         onLoaded: {
             themeHelper.applyDarkTheme(rendererLoader.item)
+        }
+    }
+
+    // ── Scrollbar ─────────────────────────────────────────────────────────────
+
+    ScrollBar {
+        id: termScrollBar
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        orientation: Qt.Vertical
+        policy: ScrollBar.AlwaysOn
+
+        // size and position are driven by the terminal's scroll state.
+        // When the scrollbar is being dragged, we write back to the terminal.
+        size: rendererLoader.item ? rendererLoader.item.scrollSize : 1.0
+
+        Binding {
+            target: termScrollBar
+            property: "position"
+            value: rendererLoader.item ? rendererLoader.item.scrollPosition : 0.0
+            when: !termScrollBar.pressed
+        }
+
+        onPositionChanged: {
+            if (pressed && rendererLoader.item)
+                rendererLoader.item.scrollPosition = position
         }
     }
 
