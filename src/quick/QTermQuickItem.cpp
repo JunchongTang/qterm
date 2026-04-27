@@ -356,6 +356,9 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     connect(m_controller, &QTermViewController::repaintNeeded, this, [this]() {
         scheduleContentDirty();
     });
+    connect(m_controller, &QTermViewController::contentRowsDirty, this, [this](QVector<int> rows) {
+        scheduleRowsDirty(rows);
+    });
     connect(m_controller, &QTermViewController::cursorUpdateNeeded, this, [this]() {
         scheduleCursorDirty();
         updateCursorDelegateGeometry();
@@ -393,12 +396,14 @@ void QTermQuickItem::scheduleFullDirty()
 {
     m_fullDirty = true;
     m_contentDirty = m_selectionDirty = m_cursorDirty = true;
+    m_dirtyRowSet.clear();
     update();
 }
 
 void QTermQuickItem::scheduleContentDirty()
 {
     m_contentDirty = true;
+    m_dirtyRowSet.clear();
     update();
 }
 
@@ -411,6 +416,21 @@ void QTermQuickItem::scheduleSelectionDirty()
 void QTermQuickItem::scheduleCursorDirty()
 {
     m_cursorDirty = true;
+    update();
+}
+
+void QTermQuickItem::scheduleRowsDirty(QVector<int> rows)
+{
+    if (m_contentDirty || m_fullDirty) {
+        // Already doing a full repaint; no need to track individual rows.
+        update();
+        return;
+    }
+    for (int r : rows) {
+        if (!m_dirtyRowSet.contains(r)) {
+            m_dirtyRowSet.append(r);
+        }
+    }
     update();
 }
 
@@ -721,6 +741,7 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         // No surface model: tear down the node tree.
         delete old;
         m_fullDirty = m_contentDirty = m_selectionDirty = m_cursorDirty = false;
+        m_dirtyRowSet.clear();
         return nullptr;
     }
 
@@ -763,9 +784,16 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
 
     const bool rowCountChanged = (root->textNodes.size() != rows);
     const bool needTextRebuild = m_fullDirty || m_contentDirty || rowCountChanged;
+    const bool hasPartialRows = !m_dirtyRowSet.isEmpty() && !needTextRebuild;
 
     // ── Background fills ─────────────────────────────────────────────────────
     if (m_fullDirty || m_contentDirty) {
+        rebuildBgFills(root->bgFillNode, sm->visibleLineRuns(), rows,
+                       cellW, cellH, width(), height(),
+                       m_backgroundColor, m_foregroundColor, m_theme.palette16());
+    } else if (hasPartialRows) {
+        // Rebuild bg fully even for partial updates: the geometry buffer is
+        // a flat array of all rows so partial edits are not simpler than full.
         rebuildBgFills(root->bgFillNode, sm->visibleLineRuns(), rows,
                        cellW, cellH, width(), height(),
                        m_backgroundColor, m_foregroundColor, m_theme.palette16());
@@ -783,6 +811,16 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
                                 cellW, cellH, baseFont, topOffset,
                                 m_foregroundColor, m_theme.hyperlinkTint(),
                                 m_theme.palette16());
+        }
+    } else if (hasPartialRows) {
+        const QVariantList lineRuns = sm->visibleLineRuns();
+        for (int row : std::as_const(m_dirtyRowSet)) {
+            if (row >= 0 && row < rows) {
+                populateRowTextNode(root->textNodes[row], row, lineRuns,
+                                    cellW, cellH, baseFont, topOffset,
+                                    m_foregroundColor, m_theme.hyperlinkTint(),
+                                    m_theme.palette16());
+            }
         }
     }
 
@@ -802,6 +840,7 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
 
     // ── Clear dirty flags ─────────────────────────────────────────────────────
     m_fullDirty = m_contentDirty = m_selectionDirty = m_cursorDirty = false;
+    m_dirtyRowSet.clear();
 
     return root;
 }

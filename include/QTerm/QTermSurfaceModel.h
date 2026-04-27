@@ -60,6 +60,7 @@ signals:
     void selectionChanged();
     void visibleLinesChanged();
     void visibleLineRunsChanged();
+    void visibleLineRunsChangedPartial(QVector<int> changedRows);
     void plainTextChanged();
 
 private:
@@ -72,6 +73,7 @@ private:
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
     void setVisibleLines(const QStringList &visibleLines);
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
+    void setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs);
 
     int m_rows = 24;
     int m_columns = 80;

@@ -239,4 +239,27 @@ void QTermSurfaceModel::setVisibleLineRuns(const QVariantList &visibleLineRuns)
     emit visibleLineRunsChanged();
 }
 
+void QTermSurfaceModel::setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs)
+{
+    Q_ASSERT(rows.size() == runs.size());
+    QVector<int> changedRows;
+    changedRows.reserve(rows.size());
+
+    for (int i = 0; i < rows.size(); ++i) {
+        const int row = rows.at(i);
+        if (row < 0 || row >= m_visibleLineRuns.size()) {
+            continue;
+        }
+        if (m_visibleLineRuns.at(row) == runs.at(i)) {
+            continue;
+        }
+        m_visibleLineRuns[row] = runs.at(i);
+        changedRows.append(row);
+    }
+
+    if (!changedRows.isEmpty()) {
+        emit visibleLineRunsChangedPartial(changedRows);
+    }
+}
+
 } // namespace QTerm

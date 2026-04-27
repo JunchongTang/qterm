@@ -30,6 +30,7 @@ public:
     QString debugPlainText() const;
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
+    QTermBuffer &buffer() noexcept;
     const QTermModeState &modeState() const noexcept;
     QByteArray encodeKey(int key, const QString &text = QString()) const;
     QByteArray encodePaste(const QString &text) const;

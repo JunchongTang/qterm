@@ -108,6 +108,8 @@ QVector<LogicalLineProjection> snapshotLogicalLines(const QVector<QTermLine> &hi
 QTermBuffer::QTermBuffer(int columns, int rows)
     : m_columns(columns)
     , m_rows(rows)
+    , m_dirtyRows(rows, false)
+    , m_allRowsDirty(true)
 {
     m_visibleLines.reserve(rows);
     for (int row = 0; row < rows; ++row) {
@@ -236,6 +238,7 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
         appendEmptyVisibleLine();
     }
 
+    markAllRowsDirty();
     reflowedCursor.row = qBound(0, reflowedCursor.row - historyCount, qMax(0, rows - 1));
     reflowedCursor.column = qBound(0, reflowedCursor.column, qMax(0, columns - 1));
     return reflowedCursor;
@@ -254,6 +257,7 @@ void QTermBuffer::clear()
     for (int row = 0; row < m_rows; ++row) {
         appendEmptyVisibleLine();
     }
+    markAllRowsDirty();
 }
 
 void QTermBuffer::clearVisible()
@@ -261,6 +265,7 @@ void QTermBuffer::clearVisible()
     for (QTermLine &line : m_visibleLines) {
         line.clear();
     }
+    markAllRowsDirty();
 }
 
 void QTermBuffer::clearVisibleFrom(int row, int column)
@@ -270,8 +275,10 @@ void QTermBuffer::clearVisibleFrom(int row, int column)
     }
 
     m_visibleLines[row].clearToEnd(column);
+    markDirtyRow(row);
     for (int index = row + 1; index < m_visibleLines.size(); ++index) {
         m_visibleLines[index].clear();
+        markDirtyRow(index);
     }
 }
 
@@ -283,8 +290,10 @@ void QTermBuffer::clearVisibleTo(int row, int column)
 
     for (int index = 0; index < row; ++index) {
         m_visibleLines[index].clear();
+        markDirtyRow(index);
     }
     m_visibleLines[row].clearToColumn(column);
+    markDirtyRow(row);
 }
 
 int QTermBuffer::severPredecessorWrapChain(int visibleRow)
@@ -315,6 +324,7 @@ int QTermBuffer::severPredecessorWrapChain(int visibleRow)
             }
             line.clear();  // clears content and sets wrappedToNextLine = false
             chainStartVisibleRow = projectionRow - m_historyLines.size();
+            markDirtyRow(chainStartVisibleRow);
         }
         --projectionRow;
     }
@@ -325,6 +335,7 @@ void QTermBuffer::scrollUp()
 {
     m_historyLines.append(m_visibleLines.takeFirst());
     appendEmptyVisibleLine();
+    markAllRowsDirty();
 }
 
 void QTermBuffer::insertLines(int row, int count, int scrollTop, int scrollBottom)
@@ -338,6 +349,7 @@ void QTermBuffer::insertLines(int row, int count, int scrollTop, int scrollBotto
         m_visibleLines.insert(row, QTermLine(m_columns));
         m_visibleLines.removeAt(scrollBottom + 1);
     }
+    markAllRowsDirty();
 }
 
 void QTermBuffer::deleteLines(int row, int count, int scrollTop, int scrollBottom)
@@ -351,10 +363,12 @@ void QTermBuffer::deleteLines(int row, int count, int scrollTop, int scrollBotto
         m_visibleLines.removeAt(row);
         m_visibleLines.insert(scrollBottom, QTermLine(m_columns));
     }
+    markAllRowsDirty();
 }
 
 QTermLine &QTermBuffer::lineAt(int row)
 {
+    markDirtyRow(row);
     return m_visibleLines[row];
 }
 
@@ -448,6 +462,32 @@ QString QTermBuffer::debugPlainText() const
 void QTermBuffer::appendEmptyVisibleLine()
 {
     m_visibleLines.append(QTermLine(m_columns));
+}
+
+void QTermBuffer::markDirtyRow(int visibleRow)
+{
+    if (m_allRowsDirty) {
+        return;
+    }
+    if (visibleRow >= 0 && visibleRow < m_dirtyRows.size()) {
+        m_dirtyRows[visibleRow] = true;
+    }
+}
+
+void QTermBuffer::markAllRowsDirty()
+{
+    m_allRowsDirty = true;
+    m_dirtyRows.fill(false);
+}
+
+void QTermBuffer::clearDirtyRows()
+{
+    m_allRowsDirty = false;
+    if (m_dirtyRows.size() != m_rows) {
+        m_dirtyRows.assign(m_rows, false);
+    } else {
+        m_dirtyRows.fill(false);
+    }
 }
 
 } // namespace QTerm
