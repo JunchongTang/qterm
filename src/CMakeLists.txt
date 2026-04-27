@@ -1,5 +1,8 @@
 qt_add_library(qterm STATIC
     ../include/QTerm/QTermLocalPtyBackend.h
+    ../include/QTerm/QTermSerialBackend.h
+    ../include/QTerm/QTermSerialPortInfo.h
+    ../include/QTerm/QTermSerialPortScanner.h
     ../include/QTerm/QTermQuickPaintedItem.h
     ../include/QTerm/QTermQuickItem.h
     ../include/QTerm/QTermSurfaceModel.h
@@ -41,6 +44,9 @@ qt_add_library(qterm STATIC
     quick/QTermQuickItem.cpp
     widget/QTermWidget.cpp
     session/local/QTermLocalPtyBackend.cpp
+    session/serial/QTermSerialBackend.cpp
+    session/serial/QTermSerialPortInfo.cpp
+    session/serial/QTermSerialPortScanner.cpp
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp
 )
@@ -78,6 +84,7 @@ target_link_libraries(qterm
         Qt6::Gui
         Qt6::Quick
         Qt6::Widgets
+        Qt6::SerialPort
 )
 
 target_compile_features(qterm PUBLIC cxx_std_17)
