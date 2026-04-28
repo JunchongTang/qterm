@@ -34,17 +34,29 @@ struct QTermScreenState
 
     void resize(int columns, int rows)
     {
+        const int oldRows = buffer.rows();
+        // If the scroll region covered the full screen before resize, keep it
+        // covering the full screen afterwards. qBound alone would leave
+        // scrollBottom at its old value when the terminal grows (e.g. 23 stays
+        // 23 even though the buffer now has 43 rows), causing content to scroll
+        // inside the original 24-row region while the lower half stays blank.
+        const bool fullScreenRegion = (scrollTop == 0 && scrollBottom == oldRows - 1);
         cursorState = buffer.resize(columns, rows, cursorState);
         cursorOnWrapTarget = false;  // Reflow repositions cursor; invalidate auto-wrap tracking.
         if (savedCursorState.has_value()) {
             savedCursorState->cursorState.row = qBound(0, savedCursorState->cursorState.row, rows - 1);
             savedCursorState->cursorState.column = qBound(0, savedCursorState->cursorState.column, columns - 1);
         }
-        scrollTop = qBound(0, scrollTop, rows - 1);
-        scrollBottom = qBound(0, scrollBottom, rows - 1);
-        if (scrollBottom < scrollTop) {
+        if (fullScreenRegion) {
             scrollTop = 0;
             scrollBottom = rows - 1;
+        } else {
+            scrollTop = qBound(0, scrollTop, rows - 1);
+            scrollBottom = qBound(0, scrollBottom, rows - 1);
+            if (scrollBottom < scrollTop) {
+                scrollTop = 0;
+                scrollBottom = rows - 1;
+            }
         }
     }
 
