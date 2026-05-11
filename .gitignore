@@ -57,3 +57,4 @@ build
 .qmlls.ini
 gittool
 .vscode
+.cache
