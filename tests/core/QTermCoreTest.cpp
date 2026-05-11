@@ -692,7 +692,7 @@ void QTermCoreTest::preservesTreeListingAcrossRepeatedResizeCycles()
         QString::fromUtf8(u8"    └── StatusBar.qml"),
         QString(),
         QString::fromUtf8(u8"10 directories, 28 files"),
-        QString::fromUtf8(u8"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo")
+        QString::fromUtf8(u8"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo")
     };
     const QString inputTranscript = lines.join(QStringLiteral("\r\n"));
     const QString projectedTranscript = lines.join(QStringLiteral("\n"));

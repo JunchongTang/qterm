@@ -660,7 +660,7 @@ void QTermSessionTest::terminalPreservesAllPromptLinesAcrossRepeatedWidthOscilla
     // A prompt typical of zsh with a path component, without ANSI codes to
     // keep assertions simple.  Length = 51 chars, fits in 80 cols (no wrap),
     // but wraps into 2 rows when width is ≤ 50 cols.
-    const QString prompt = u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm"_s;
+    const QString prompt = u"➜  dev@workstation /home/dev/workspace/terminal-app"_s;
 
     // Feed 4 completed prompt lines (Enter pressed 4 times) + the 5th active prompt.
     QString transcript;
@@ -725,7 +725,7 @@ void QTermSessionTest::terminalPreservesAllPromptLinesWhenResizeDebouncedBeforeR
     terminal.setTerminalSize(80, 24);
 
     // Prompt length = 51 chars — wraps at widths <= 50.
-    const QString prompt = u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm"_s;
+    const QString prompt = u"➜  dev@workstation /home/dev/workspace/terminal-app"_s;
 
     QString transcript;
     for (int i = 0; i < 4; ++i) {
@@ -780,13 +780,12 @@ void QTermSessionTest::terminalPreservesZshStyledPromptAcrossWidthOscillation()
     // bug report, including ANSI color codes exactly as a real zsh would emit.
     //
     // Real zsh prompt (the one in BUGS.md):
-    //   "➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo"
+    //   "➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo"
     //
     // After SIGWINCH, zsh sends a redraw sequence like:
     //   \r + ESC[K + (prompt with color codes)
     //
-    // The plain-text length of the prompt is 80 chars (fills an 80-col terminal
-    // exactly), so at any width < 80 it wraps.
+    // The plain-text length of the prompt is 77 chars, so at any width < 77 it wraps.
 
     QTermTerminal terminal;
     terminal.setTerminalSize(120, 24);
@@ -795,11 +794,11 @@ void QTermSessionTest::terminalPreservesZshStyledPromptAcrossWidthOscillation()
     // Color codes: \x1b[1;32m (bold green), \x1b[1;34m (bold blue), \x1b[0m (reset).
     // Plain-text visible length = 80 chars.
     const QString coloredPrompt =
-        u"\x1b[1;32m➜ \x1b[0m \x1b[1;34mtangjc@MBP\x1b[0m "
-        u"/Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo"_s;
+        u"\x1b[1;32m➜ \x1b[0m \x1b[1;34mdev@workstation\x1b[0m "
+        u"/home/dev/workspace/terminal-app/build/examples/quick-demo"_s;
     // Plain text equivalent (what appears on screen, ANSI codes stripped for assertion).
     const QString plainPrompt =
-        u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo"_s;
+        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo"_s;
 
     // Simulate 5 Enter presses: 4 completed lines + 1 active prompt.
     for (int i = 0; i < 4; ++i) {
@@ -852,7 +851,7 @@ void QTermSessionTest::terminalPreservesPromptLinesWhenShellUsesAbsoluteColumnMo
     QTermTerminal terminal;
     terminal.setTerminalSize(80, 24);
 
-    const QString prompt = u"➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm"_s;  // 51 chars
+    const QString prompt = u"➜  dev@workstation /home/dev/workspace/terminal-app"_s;  // 51 chars
 
     QString transcript;
     for (int i = 0; i < 4; ++i) {

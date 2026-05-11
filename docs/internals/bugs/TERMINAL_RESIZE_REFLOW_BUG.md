@@ -2,17 +2,17 @@
 ## 问题描述
 
 首先启动示例程序 quick-demo，它展示了一个简单的终端实现。打开之后我按下5次enter键，让它显示出多行 promat，用来测试反复调整窗口宽度的重排正确性。
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
 
 
 然后我调整窗口宽度，从默认的窗口宽度 1120 调整到 50，变窄挤出去大多字符，然后恢复宽度到 1120。反复操作3-5次。就会有一些行丢失了，5行变成了2行。如下：
 
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
-➜  tangjc@MBP /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
+➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo
 
 
 ## 问题分析1（来自GPT4.1）

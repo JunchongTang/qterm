@@ -72,7 +72,7 @@ int main(int argc, char **argv)
         ts << "(( ${+functions[p10k]} )) && p10k finalize 2>/dev/null; true\n";
         ts << "unset ZSH_THEME POWERLEVEL9K_TRANSIENT_PROMPT\n";
         // Simple, long prompt so it wraps at narrow width (~23 cols).
-        ts << "PS1='%F{cyan}➜%f  %n@%m /Users/tangjc/1-proj/2-mygithub/qterm/build/examples/quick-demo %# '\n";
+        ts << "PS1='%F{cyan}➜%f  %n@%m /home/dev/workspace/terminal-app/build/examples/quick-demo %# '\n";
         ts << "PS2='> '\n";
         ts << "PROMPT_EOL_MARK=''\n";
     }
