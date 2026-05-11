@@ -102,29 +102,25 @@
 
 ## Phase 4：Qt Quick 第一前端
 
-状态：进行中
+状态：已完成
 
 目标：
 
 * 增加 QTermSurfaceModel。
-* 增加 QTermQuickPaintedItem 与增量渲染路径。
+* 增加 QTermQuickItem（QSG 场景图增量渲染）与增量渲染路径。
 * 支持选区可视化、光标渲染和基础剪贴板能力。
 
 已完成：
 
 * QTermSurfaceModel 已建立，并已收敛为展示层。
-* 当前 quick demo 已具备可见行投影、样式 runs、光标、复制、双击选词、三击选逻辑行、offscreen selection 状态显示。
-* quick demo 已支持 scrollback viewport 浏览与历史选择。
-
-未完成：
-
-* QTermQuickPaintedItem 尚未实现。
-* 目前前端仍是 demo 级实现，尚未进入真正的 QSG 增量渲染与脏行更新模型。
+* **QTermQuickItem（QSG）已实现**：场景图节点树（bgFillNode、selectionNode、textGroupNode、cursorNode）、脏行增量更新、`visibleLineRunsChangedPartial` 局部重绘路径。
+* quick demo 已具备可见行投影、样式 runs、光标、复制、双击选词、三击选逻辑行、offscreen selection 状态显示、scrollback viewport 浏览与历史选择。
+* **OSC 8 超链接**可渲染（下划线着色）与点击交互。
 
 退出标准：
 
-* Qt Quick demo 能显示实时终端内容。
-* 脏行更新可触发局部重绘。
+* Qt Quick demo 能显示实时终端内容。✅
+* 脏行更新可触发局部重绘。✅
 
 ## Phase 5：本地 PTY 集成
 
@@ -154,13 +150,13 @@
 
 ## Phase 6：协议扩展
 
-状态：进行中
+状态：已完成
 
 目标：
 
 * 覆盖 macOS Terminal.app 所需的全量协议能力，包括 DEC 私有模式、鼠标追踪、键盘编码、OSC 序列和超链接。
 
-协议实现的完整维度分析与当前状态见 [docs/PROTOCOL_STATUS.md](docs/PROTOCOL_STATUS.md)。
+协议实现的完整维度分析与当前状态见 [docs/internals/protocol-status.md](docs/internals/protocol-status.md)。
 
 已完成（核心里程碑）：
 
@@ -169,33 +165,35 @@
 * **鼠标追踪已完整实现**：X10 / Button / AnyEvent 事件类型，SGR 编码格式，正确路由到 PTY。
 * **OSC 8 超链接**可渲染与点击交互。
 
-未完成（P3 级）：
-
-* OSC 52 读请求（安全评估后再决定）。
-
 退出标准：
 
-* vim、less、htop 和交互式 shell 等常见 CLI 工具行为基本可接受。✅（已达到）
-* mouse tracking 在 tmux / htop 中可用。✅（已达到）
-* OSC 8 超链接可渲染与交互。✅（已达到）
+* vim、less、htop 和交互式 shell 等常见 CLI 工具行为基本可接受。✅
+* mouse tracking 在 tmux / htop 中可用。✅
+* OSC 8 超链接可渲染与交互。✅
 
 ## Phase 7：更多会话后端
 
-状态：未开始
+状态：已完成
 
 目标：
 
 * 增加串口 backend。
-* 增加 SSH backend。
+* 增加 Telnet backend。
 * 所有传输方式继续统一在同一个 session abstraction 之后。
+
+已完成：
+
+* **QTermSerialBackend**：基于 QtSerialPort，支持波特率、数据位、校验位、停止位、流控配置；`QTermSerialPortScanner` 提供可用串口枚举，已注册为 QML singleton。
+* **QTermTelnetBackend**：基于 QTcpSocket，支持 Telnet 协商（IAC 序列过滤），已可连接远程主机。
+* multi-tab QML demo 支持 PTY / 串口 / Telnet 三种会话类型的新建对话框。
 
 退出标准：
 
-* 同一个 QTerm core 与 Qt Quick 前端可同时驱动 PTY、串口与 SSH 会话。
+* 同一个 QTerm core 与前端可同时驱动 PTY、串口与 Telnet 会话。✅
 
 ## Phase 8：API 稳定化与适配层
 
-状态：进行中
+状态：已完成
 
 目标：
 
@@ -205,16 +203,17 @@
 
 已完成：
 
-* `QTermSurfaceModel` 所有内部写方法（`setSize`、`setCursor`、`setSelectionController`、`setSelectionSnapshot`、`setVisibleLines`、`setVisibleLineRuns`、`setPlainText`）移入 `private`，`QTermTerminal` 为 `friend class`，外部不可直接调用。
+* `QTermSurfaceModel` 所有内部写方法移入 `private`，`QTermTerminal` 为 `friend class`，外部不可直接调用。
 * `QTermTerminal` 移除 `modeState()` 公开方法，替换为语义化查询：`isMouseProtocolActive()`、`isHoverTrackingActive()`、`isButtonTrackingActive()`。
 * `QTermModeState.h` 不再被 `QTermTerminal.h` 包含，切断外部头文件对 VT 内部 struct 的依赖。
-* `setCurrentDirectory` 改为 `private slot`（仅内部 core 信号触发）；`setTitle` 保留公开（允许应用层设置初始标题）。
-* `QTermViewController` 改用新的 Terminal 语义方法，不再直接读取 `modeState()` struct。
+* `setCurrentDirectory` 改为 `private slot`；`setTitle` 保留公开。
+* **`QTermWidget`（QWidget 适配层）已完整实现**：共享 `QTermViewController`，支持全部输入事件、IME、光标渲染、调色板、滚动 API、主题、`sizeHint`；通过 `QPainter` + `qtermPaintTerminal` 绘制，与 QSG 渲染器无关。
+* **widget-demo** 已可运行并验证 QWidget 路径。
 
 退出标准：
 
-* 公开头文件已经过兼容性审视。✅（已完成核心审查）
-* QWidget 只是适配层，而不是第二套核心实现。（待做）
+* 公开头文件已经过兼容性审视。✅
+* QWidget 只是适配层，而不是第二套核心实现。✅
 
 ## 跨阶段测试矩阵
 
@@ -241,14 +240,11 @@
 
 ## 当前下一步
 
-1. **Phase 6 收尾 — OSC 8 超链接渲染**
-   解析器已能接收 OSC 8，需要在 `QTermCell` 中增加 URL 字段，在 `QTermQuickPaintedItem` 绘制下划线并处理点击跳转。
+1. **SSH backend**
+   基于 libssh2 或平台 `ssh` 命令行实现 SSH 会话 backend，加入 multi-tab demo 的新建对话框。
 
-2. **Phase 3 收尾 — reflow golden tests 补全**
-   当前 reflow 已覆盖 ASCII、CJK、宽字符、wrap 边界基础场景，仍需补充 combining text 多轮循环、复杂 prompt 拼接、scrollback 与可见屏拼接边界的 golden tests，把 Phase 3 状态从"进行中"推进到"已完成"。
+2. **测试矩阵补全**
+   重点补充 reflow golden tests（combining text 多轮循环、复杂 prompt 拼接、scrollback 与可见屏拼接边界）以及前端 Qt Quick smoke tests。
 
-3. **Phase 4 收尾 — QSG 增量渲染**
-   当前前端基于 `QQuickPaintedItem` 全量重绘，后续迁移到 `QSGSimpleTextureNode` 脏行更新模型以支持大窗口高帧率场景。
-
-4. **Phase 7 — 更多会话后端**
-   串口 backend、SSH backend，统一在同一 session abstraction 之后。
+3. **稳定性打磨**
+   复杂真实 shell 工作负载（大量输出、快速 resize、tmux 嵌套）下的边界问题持续修复。

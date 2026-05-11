@@ -2,7 +2,7 @@
 
 本文档覆盖 QTerm 各核心功能的手工验证步骤。每个测试用例给出**前提条件、操作步骤、期望结果**，以及失败时的常见原因。
 
-自动化单元测试参见 [tests/](../tests/)；tmux 专项测试参见 [docs/TESTING_TMUX.md](TESTING_TMUX.md)。
+自动化单元测试参见 [tests/](../../tests/)；tmux 专项测试参见 [manual-testing-tmux.md](manual-testing-tmux.md)。
 
 ---
 
@@ -199,7 +199,7 @@ htop
 
 ## 3. tmux 综合测试
 
-详见 [docs/TESTING_TMUX.md](TESTING_TMUX.md)。
+详见 [manual-testing-tmux.md](manual-testing-tmux.md)。
 
 核心检查项（快速版）：
 
