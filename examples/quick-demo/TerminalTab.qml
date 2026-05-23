@@ -38,8 +38,8 @@ Item {
     // ── Backend component templates ───────────────────────────────────────────
 
     Component {
-        id: ptyBackendComponent
-        QTermLocalPtyBackend { }
+        id: localShellBackendComponent
+        QTermLocalShellBackend { }
     }
 
     Component {
@@ -90,7 +90,7 @@ Item {
                 port: config.port || 23
             })
         }
-        // Default: local PTY
+        // Default: local shell (PTY on Unix, ConPTY on Windows)
         const props = {}
         if (config.program)
             props.program = config.program
@@ -98,6 +98,6 @@ Item {
             props.arguments = config.arguments
         if (config.workingDirectory)
             props.workingDirectory = config.workingDirectory
-        return ptyBackendComponent.createObject(root, props)
+        return localShellBackendComponent.createObject(root, props)
     }
 }

@@ -1,14 +1,15 @@
-#include <QTerm/QTermLocalPtyBackend.h>
+// Unix/macOS implementation of QTermLocalShellBackend using forkpty(3).
+// This file is only compiled on non-Windows platforms (see src/CMakeLists.txt).
+
+#include <QTerm/QTermLocalShellBackend.h>
 
 #include <QCoreApplication>
-#include <QFileInfo>
+#include <QFile>
 #include <QSocketNotifier>
 #include <QTimer>
 
 #include <cerrno>
 #include <cstring>
-
-#if defined(Q_OS_UNIX)
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/ioctl.h>
@@ -21,7 +22,6 @@
 #else
 #include <pty.h>
 #endif
-#endif
 
 namespace {
 
@@ -30,14 +30,10 @@ constexpr int kResizeDebounceIntervalMs = 60;
 
 QString childExitMessage(int status)
 {
-    if (WIFSIGNALED(status)) {
+    if (WIFSIGNALED(status))
         return QStringLiteral("PTY child exited on signal %1.").arg(WTERMSIG(status));
-    }
-
-    if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+    if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
         return QStringLiteral("PTY child exited with code %1.").arg(WEXITSTATUS(status));
-    }
-
     return QString();
 }
 
@@ -45,7 +41,7 @@ QString childExitMessage(int status)
 
 namespace QTerm {
 
-QTermLocalPtyBackend::QTermLocalPtyBackend(QObject *parent)
+QTermLocalShellBackend::QTermLocalShellBackend(QObject *parent)
     : QTermSessionBackend(parent)
     , m_readNotifier(new QSocketNotifier(QSocketNotifier::Read, this))
     , m_resizeDebounceTimer(new QTimer(this))
@@ -68,66 +64,46 @@ QTermLocalPtyBackend::QTermLocalPtyBackend(QObject *parent)
     });
 }
 
-QTermLocalPtyBackend::~QTermLocalPtyBackend()
+QTermLocalShellBackend::~QTermLocalShellBackend()
 {
     close();
 }
 
-QString QTermLocalPtyBackend::program() const
-{
-    return m_program;
-}
+QString QTermLocalShellBackend::program() const { return m_program; }
+QStringList QTermLocalShellBackend::arguments() const { return m_arguments; }
+QString QTermLocalShellBackend::workingDirectory() const { return m_workingDirectory; }
+QProcessEnvironment QTermLocalShellBackend::processEnvironment() const { return m_environment; }
 
-QStringList QTermLocalPtyBackend::arguments() const
-{
-    return m_arguments;
-}
-
-QString QTermLocalPtyBackend::workingDirectory() const
-{
-    return m_workingDirectory;
-}
-
-QProcessEnvironment QTermLocalPtyBackend::processEnvironment() const
-{
-    return m_environment;
-}
-
-void QTermLocalPtyBackend::setProgram(const QString &program)
+void QTermLocalShellBackend::setProgram(const QString &program)
 {
     m_program = program;
     emit programChanged();
 }
 
-void QTermLocalPtyBackend::setArguments(const QStringList &arguments)
+void QTermLocalShellBackend::setArguments(const QStringList &arguments)
 {
     m_arguments = arguments;
     emit argumentsChanged();
 }
 
-void QTermLocalPtyBackend::setWorkingDirectory(const QString &workingDirectory)
+void QTermLocalShellBackend::setWorkingDirectory(const QString &workingDirectory)
 {
     m_workingDirectory = workingDirectory;
     emit workingDirectoryChanged();
 }
 
-void QTermLocalPtyBackend::setProcessEnvironment(const QProcessEnvironment &environment)
+void QTermLocalShellBackend::setProcessEnvironment(const QProcessEnvironment &environment)
 {
     m_environment = environment;
 }
 
-void QTermLocalPtyBackend::open()
+void QTermLocalShellBackend::open()
 {
-    if (state() == Open || state() == Opening) {
+    if (state() == Open || state() == Opening)
         return;
-    }
 
     close();
 
-#if !defined(Q_OS_UNIX)
-    emitErrorOccurred(QStringLiteral("QTermLocalPtyBackend requires a Unix PTY platform."));
-    return;
-#else
     const QString executable = resolvedProgram();
     if (executable.isEmpty()) {
         emitErrorOccurred(QStringLiteral("No PTY program was configured."));
@@ -168,15 +144,13 @@ void QTermLocalPtyBackend::open()
         QVector<QByteArray> argvStorage;
         argvStorage.reserve(arguments.size() + 1);
         argvStorage.append(executableUtf8);
-        for (const QString &argument : arguments) {
+        for (const QString &argument : arguments)
             argvStorage.append(argument.toLocal8Bit());
-        }
 
         QVector<char *> argv;
         argv.reserve(argvStorage.size() + 1);
-        for (QByteArray &entry : argvStorage) {
+        for (QByteArray &entry : argvStorage)
             argv.append(entry.data());
-        }
         argv.append(nullptr);
 
         ::execvp(executableUtf8.constData(), argv.data());
@@ -187,39 +161,28 @@ void QTermLocalPtyBackend::open()
     m_masterFd = masterFd;
     m_childPid = childPid;
     const int flags = ::fcntl(m_masterFd, F_GETFL, 0);
-    if (flags >= 0) {
+    if (flags >= 0)
         ::fcntl(m_masterFd, F_SETFL, flags | O_NONBLOCK);
-    }
 
     m_readNotifier->setSocket(m_masterFd);
     m_readNotifier->setEnabled(true);
     m_childExitPollTimer->start();
     setState(Open);
-#endif
 }
 
-void QTermLocalPtyBackend::close()
+void QTermLocalShellBackend::close()
 {
-#if !defined(Q_OS_UNIX)
-    if (state() != Closed) {
-        setState(Closed);
-    }
-    return;
-#else
     if (m_masterFd < 0 && m_childPid < 0) {
-        if (state() != Closed) {
+        if (state() != Closed)
             setState(Closed);
-        }
         return;
     }
 
-    if (state() != Closed) {
+    if (state() != Closed)
         setState(Closing);
-    }
 
-    if (m_childPid > 0) {
+    if (m_childPid > 0)
         ::kill(static_cast<pid_t>(m_childPid), SIGHUP);
-    }
 
     closeMasterFd();
     pollChildExit();
@@ -231,18 +194,12 @@ void QTermLocalPtyBackend::close()
 
     stopRuntimeWatchers();
     setState(Closed);
-#endif
 }
 
-void QTermLocalPtyBackend::writeData(const QByteArray &data)
+void QTermLocalShellBackend::writeData(const QByteArray &data)
 {
-#if !defined(Q_OS_UNIX)
-    Q_UNUSED(data);
-    return;
-#else
-    if (m_masterFd < 0 || data.isEmpty()) {
+    if (m_masterFd < 0 || data.isEmpty())
         return;
-    }
 
     const char *cursor = data.constData();
     qsizetype remaining = data.size();
@@ -254,57 +211,41 @@ void QTermLocalPtyBackend::writeData(const QByteArray &data)
             continue;
         }
 
-        if (written < 0 && errno == EINTR) {
+        if (written < 0 && errno == EINTR)
             continue;
-        }
 
-        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
             break;
-        }
 
         emitErrorOccurred(QStringLiteral("PTY write failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         close();
         return;
     }
-#endif
 }
 
-void QTermLocalPtyBackend::resize(int columns, int rows)
+void QTermLocalShellBackend::resize(int columns, int rows)
 {
     m_columns = qMax(1, columns);
     m_rows = qMax(1, rows);
-
-    // Apply TIOCSWINSZ immediately so the shell always sees the correct size.
-    // Debouncing is handled upstream (QTermQuickPaintedItem::geometryChange)
-    // which coalesces rapid drag-resize events before calling session.resize(),
-    // so SIGWINCH is only delivered once the user stops dragging.
-    // Having a second debounce here would mean TIOCSWINSZ fires 60 ms after the
-    // window first shows, which is long enough for the user to start a
-    // full-screen app like top(1) that queries TIOCGWINSZ at startup and ends
-    // up with the stale 80x24 initial PTY size.
     applyPendingResize();
 }
 
-void QTermLocalPtyBackend::applyPendingResize()
-{
-#if defined(Q_OS_UNIX)
-    if (m_masterFd < 0) {
-        return;
-    }
+// ── Private helpers ───────────────────────────────────────────────────────────
 
+void QTermLocalShellBackend::applyPendingResize()
+{
+    if (m_masterFd < 0)
+        return;
     struct winsize winsizeData = {};
     winsizeData.ws_col = static_cast<unsigned short>(m_columns);
     winsizeData.ws_row = static_cast<unsigned short>(m_rows);
     ::ioctl(m_masterFd, TIOCSWINSZ, &winsizeData);
-#endif
 }
 
-void QTermLocalPtyBackend::handleReadable()
+void QTermLocalShellBackend::handleReadable()
 {
-#if defined(Q_OS_UNIX)
-    if (m_masterFd < 0) {
+    if (m_masterFd < 0)
         return;
-    }
 
     QByteArray chunk(65536, Qt::Uninitialized);
     QByteArray batch;
@@ -324,13 +265,11 @@ void QTermLocalPtyBackend::handleReadable()
             return;
         }
 
-        if (errno == EINTR) {
+        if (errno == EINTR)
             continue;
-        }
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             break;
-        }
 
         if (errno == EIO) {
             if (!batch.isEmpty())
@@ -349,12 +288,10 @@ void QTermLocalPtyBackend::handleReadable()
 
     if (!batch.isEmpty())
         emitDataReceived(batch);
-#endif
 }
 
-void QTermLocalPtyBackend::pollChildExit()
+void QTermLocalShellBackend::pollChildExit()
 {
-#if defined(Q_OS_UNIX)
     if (m_childPid < 0) {
         stopRuntimeWatchers();
         return;
@@ -362,9 +299,8 @@ void QTermLocalPtyBackend::pollChildExit()
 
     int status = 0;
     const pid_t waitResult = ::waitpid(static_cast<pid_t>(m_childPid), &status, WNOHANG);
-    if (waitResult == 0) {
+    if (waitResult == 0)
         return;
-    }
 
     stopRuntimeWatchers();
     m_childPid = -1;
@@ -381,70 +317,54 @@ void QTermLocalPtyBackend::pollChildExit()
     }
 
     setState(Closed);
-#endif
 }
 
-void QTermLocalPtyBackend::closeMasterFd()
+void QTermLocalShellBackend::closeMasterFd()
 {
-#if defined(Q_OS_UNIX)
-    if (m_masterFd < 0) {
+    if (m_masterFd < 0)
         return;
-    }
-
     m_readNotifier->setEnabled(false);
     m_readNotifier->setSocket(-1);
     ::close(m_masterFd);
     m_masterFd = -1;
-#endif
 }
 
-void QTermLocalPtyBackend::stopRuntimeWatchers()
+void QTermLocalShellBackend::stopRuntimeWatchers()
 {
     m_readNotifier->setEnabled(false);
     m_resizeDebounceTimer->stop();
     m_childExitPollTimer->stop();
 }
 
-QString QTermLocalPtyBackend::resolvedProgram() const
+QString QTermLocalShellBackend::resolvedProgram() const
 {
-    if (!m_program.isEmpty()) {
+    if (!m_program.isEmpty())
         return m_program;
-    }
-
     const QString shell = qEnvironmentVariable("SHELL");
     return shell.isEmpty() ? QStringLiteral("/bin/sh") : shell;
 }
 
-QStringList QTermLocalPtyBackend::resolvedArguments() const
+QStringList QTermLocalShellBackend::resolvedArguments() const
 {
-    if (!m_arguments.isEmpty()) {
+    if (!m_arguments.isEmpty())
         return m_arguments;
-    }
-
-    if (m_program.isEmpty()) {
+    if (m_program.isEmpty())
         return {QStringLiteral("-i")};
-    }
-
     return {};
 }
 
-QProcessEnvironment QTermLocalPtyBackend::resolvedEnvironment() const
+QProcessEnvironment QTermLocalShellBackend::resolvedEnvironment() const
 {
     QProcessEnvironment environment = m_environment;
-    if (environment.isEmpty()) {
+    if (environment.isEmpty())
         environment = QProcessEnvironment::systemEnvironment();
-    }
-
-    if (!environment.contains(QStringLiteral("TERM"))) {
+    if (!environment.contains(QStringLiteral("TERM")))
         environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
-    }
-
     return environment;
 }
 
-void QTermLocalPtyBackend::applyEnvironmentOverrides() const
+void QTermLocalShellBackend::applyEnvironmentOverrides() const
 {
-#if defined(Q_OS_UNIX)
     const QProcessEnvironment environment = resolvedEnvironment();
     const QStringList keys = environment.keys();
     for (const QString &key : keys) {
@@ -452,7 +372,6 @@ void QTermLocalPtyBackend::applyEnvironmentOverrides() const
         const QByteArray valueUtf8 = environment.value(key).toLocal8Bit();
         ::setenv(keyUtf8.constData(), valueUtf8.constData(), 1);
     }
-#endif
 }
 
 } // namespace QTerm

@@ -26,7 +26,7 @@ namespace QTerm {
 //   b->setHost("192.168.1.1");
 //   b->setPort(23);
 //   b->open();
-//   // wire to QTermSession the same way as QTermLocalPtyBackend
+//   // wire to QTermSession the same way as QTermLocalShellBackend
 class QTermTelnetBackend : public QTermSessionBackend
 {
     Q_OBJECT

@@ -19,7 +19,7 @@ namespace QTerm {
 //   backend.setPortName("/dev/tty.usbserial-0001");
 //   backend.setBaudRate(115200);
 //   backend.open();
-//   // wire up to QTermSession the same way as QTermLocalPtyBackend
+//   // wire up to QTermSession the same way as QTermLocalShellBackend
 //
 // resize() is accepted but ignored — serial devices have no terminal geometry.
 class QTermSerialBackend : public QTermSessionBackend

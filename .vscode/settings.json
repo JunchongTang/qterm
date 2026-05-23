@@ -1,7 +1,0 @@
-{
-    "cmake.generator": "Ninja",
-    "cmake.configureSettings": {
-        "CMAKE_MAKE_PROGRAM": "/Users/tangjc/Qt/Tools/Ninja/ninja",
-        "CMAKE_PREFIX_PATH": "/Users/tangjc/Qt/6.8.6/macos"
-    }
-}

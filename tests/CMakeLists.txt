@@ -6,8 +6,8 @@ qt_add_executable(qterm_session_tests
     session/QTermSessionTest.cpp
 )
 
-qt_add_executable(qterm_local_pty_tests
-    session/QTermLocalPtyBackendTest.cpp
+qt_add_executable(qterm_local_shell_tests
+    session/QTermLocalShellBackendTest.cpp
 )
 
 qt_add_executable(qterm_quick_item_tests
@@ -33,7 +33,7 @@ target_link_libraries(qterm_session_tests
         QTerm::qterm
 )
 
-target_link_libraries(qterm_local_pty_tests
+target_link_libraries(qterm_local_shell_tests
     PRIVATE
         Qt6::Core
         Qt6::Test
@@ -64,5 +64,5 @@ target_link_libraries(qterm_resize_visual_test
 
 add_test(NAME qterm_core_tests COMMAND qterm_core_tests)
 add_test(NAME qterm_session_tests COMMAND qterm_session_tests)
-add_test(NAME qterm_local_pty_tests COMMAND qterm_local_pty_tests)
+add_test(NAME qterm_local_shell_tests COMMAND qterm_local_shell_tests)
 add_test(NAME qterm_quick_item_tests COMMAND qterm_quick_item_tests)

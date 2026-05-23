@@ -2,11 +2,11 @@
 
 #include <QRegularExpression>
 
-#include <QTerm/QTermLocalPtyBackend.h>
+#include <QTerm/QTermLocalShellBackend.h>
 
 namespace QTerm {
 
-class QTermLocalPtyBackendTest : public QObject
+class QTermLocalShellBackendTest : public QObject
 {
     Q_OBJECT
 
@@ -14,14 +14,17 @@ private slots:
     void openReadsConfiguredInitialSize();
     void roundTripsInteractiveInput();
     void appliesLatestResizeAfterOpen();
+    void opensAndConnectsOnWindows();
 };
 
-void QTermLocalPtyBackendTest::openReadsConfiguredInitialSize()
+// ── Unix tests ────────────────────────────────────────────────────────────────
+
+void QTermLocalShellBackendTest::openReadsConfiguredInitialSize()
 {
 #if !defined(Q_OS_UNIX)
-    QSKIP("Local PTY backend requires Unix.");
+    QSKIP("Unix PTY size test skipped on non-Unix.");
 #else
-    QTermLocalPtyBackend backend;
+    QTermLocalShellBackend backend;
     QByteArray output;
 
     backend.setProgram(QStringLiteral("/bin/sh"));
@@ -39,12 +42,12 @@ void QTermLocalPtyBackendTest::openReadsConfiguredInitialSize()
 #endif
 }
 
-void QTermLocalPtyBackendTest::roundTripsInteractiveInput()
+void QTermLocalShellBackendTest::roundTripsInteractiveInput()
 {
 #if !defined(Q_OS_UNIX)
-    QSKIP("Local PTY backend requires Unix.");
+    QSKIP("Unix PTY interactive test skipped on non-Unix.");
 #else
-    QTermLocalPtyBackend backend;
+    QTermLocalShellBackend backend;
     QByteArray output;
     const QString script = QStringLiteral("printf 'ready\\n'; IFS= read line; printf 'reply:%s\\n' \"$line\"");
 
@@ -66,15 +69,13 @@ void QTermLocalPtyBackendTest::roundTripsInteractiveInput()
 #endif
 }
 
-void QTermLocalPtyBackendTest::appliesLatestResizeAfterOpen()
+void QTermLocalShellBackendTest::appliesLatestResizeAfterOpen()
 {
 #if !defined(Q_OS_UNIX)
-    QSKIP("Local PTY backend requires Unix.");
+    QSKIP("Unix PTY resize test skipped on non-Unix.");
 #else
-    QTermLocalPtyBackend backend;
+    QTermLocalShellBackend backend;
     QByteArray output;
-    // After open(), two consecutive resize() calls are applied immediately.
-    // The second sleep gives the shell time to see the final PTY size.
     const QString script = QStringLiteral("sleep 0.3; stty size");
 
     backend.setProgram(QStringLiteral("/bin/sh"));
@@ -93,8 +94,34 @@ void QTermLocalPtyBackendTest::appliesLatestResizeAfterOpen()
 #endif
 }
 
+// ── Windows test ──────────────────────────────────────────────────────────────
+
+void QTermLocalShellBackendTest::opensAndConnectsOnWindows()
+{
+#if !defined(Q_OS_WIN)
+    QSKIP("Windows ConPTY test skipped on non-Windows.");
+#else
+    QTermLocalShellBackend backend;
+    QByteArray output;
+
+    // Run a one-shot command via cmd.exe and verify we receive output.
+    backend.setProgram(QStringLiteral("cmd.exe"));
+    backend.setArguments({QStringLiteral("/c"), QStringLiteral("echo qterm-ok")});
+
+    connect(&backend, &QTermSessionBackend::dataReceived, this, [&output](const QByteArray &data) {
+        output.append(data);
+    });
+
+    backend.open();
+    QCOMPARE(backend.state(), QTermSessionBackend::Open);
+
+    QTRY_VERIFY_WITH_TIMEOUT(output.contains("qterm-ok"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(backend.state(), QTermSessionBackend::Closed, 5000);
+#endif
+}
+
 } // namespace QTerm
 
-QTEST_MAIN(QTerm::QTermLocalPtyBackendTest)
+QTEST_MAIN(QTerm::QTermLocalShellBackendTest)
 
-#include "QTermLocalPtyBackendTest.moc"
+#include "QTermLocalShellBackendTest.moc"

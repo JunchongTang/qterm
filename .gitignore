@@ -56,5 +56,5 @@ build
 .vscode/settings.json
 .qmlls.ini
 gittool
-.vscode
+.vscode/settings.json
 .cache
