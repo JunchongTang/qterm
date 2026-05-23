@@ -111,7 +111,13 @@ private:
     QTimer *m_selectionAutoScrollTimer = nullptr;
     QTimer *m_clickResetTimer        = nullptr;
 
+#if defined(Q_OS_WIN)
+    QString m_fontFamily    = QStringLiteral("Consolas");
+#elif defined(Q_OS_MACOS)
     QString m_fontFamily    = QStringLiteral("Menlo");
+#else
+    QString m_fontFamily    = QStringLiteral("Monospace");
+#endif
     int     m_fontPixelSize = 18;
     qreal   m_cellWidth     = 1.0;
     qreal   m_cellHeight    = 1.0;

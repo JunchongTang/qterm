@@ -1,5 +1,7 @@
 qt_add_library(qterm STATIC
-    ../include/QTerm/QTermLocalPtyBackend.h
+    ../include/QTerm/QTermLocalShellBackend.h
+    ../include/QTerm/QTermLocalShellScanner.h
+    ../include/QTerm/QTermShellInfo.h
     ../include/QTerm/QTermSerialBackend.h
     ../include/QTerm/QTermSerialPortInfo.h
     ../include/QTerm/QTermSerialPortScanner.h
@@ -44,7 +46,7 @@ qt_add_library(qterm STATIC
     quick/QTermQuickPaintedItem.cpp
     quick/QTermQuickItem.cpp
     widget/QTermWidget.cpp
-    session/local/QTermLocalPtyBackend.cpp
+    session/local/QTermLocalShellScanner.cpp
     session/serial/QTermSerialBackend.cpp
     session/serial/QTermSerialPortInfo.cpp
     session/serial/QTermSerialPortScanner.cpp
@@ -59,6 +61,12 @@ qt_add_qml_module(qterm
     # All QML types are declared via QML_ELEMENT / QML_UNCREATABLE / QML_VALUE_TYPE
     # macros in their respective public headers — no QML_FILES needed here.
 )
+
+if(WIN32)
+    target_sources(qterm PRIVATE session/local/QTermLocalShellBackend_win.cpp)
+else()
+    target_sources(qterm PRIVATE session/local/QTermLocalShellBackend_unix.cpp)
+endif()
 
 if(APPLE)
     target_sources(qterm PRIVATE quick/QTermMacOSUtils.mm)

@@ -16,7 +16,9 @@ Item {
     property bool useSGRenderer: true
     property real cursorBlinkOpacity: 1.0
     property real bellFlashOpacity: 0.0
-    property string fontFamily: "Menlo"
+    property string fontFamily: Qt.platform.os === "windows" ? "Consolas"
+                                : Qt.platform.os === "osx"     ? "Menlo"
+                                :                                "Monospace"
     property int fontPixelSize: 16
 
     signal copyRequested(string text)

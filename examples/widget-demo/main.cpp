@@ -13,7 +13,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include <QTerm/QTermLocalPtyBackend.h>
+#include <QTerm/QTermLocalShellBackend.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermThemePack.h>
@@ -187,8 +187,9 @@ int main(int argc, char *argv[])
 
     QTerm::QTermTerminal terminal;
     QTerm::QTermSession session;
-    QTerm::QTermLocalPtyBackend backend;
+    QTerm::QTermLocalShellBackend backend;
 
+#if !defined(Q_OS_WIN)
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
     const QString shellProgram = env.value(QStringLiteral("SHELL"), QStringLiteral("/bin/zsh"));
@@ -200,6 +201,8 @@ int main(int argc, char *argv[])
     else
         backend.setArguments({QStringLiteral("-i")});
     backend.setProcessEnvironment(env);
+    // On Windows: program defaults to %ComSpec% (cmd.exe) with no extra arguments.
+#endif
 
     session.setBackend(&backend);
     terminal.setSession(&session);
