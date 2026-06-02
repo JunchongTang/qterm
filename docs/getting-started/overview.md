@@ -41,7 +41,7 @@ PA -down-> SE
 
 SE -up-> PA : dataReceived(bytes)
 PA -up-> CO : parser events
-CO -up-> SU : sizeChanged / debugPlainTextChanged
+CO -up-> SU : sizeChanged / dumpPlainTextChanged
 SU -up-> FE : viewportChanged → repaint
 
 @enduml

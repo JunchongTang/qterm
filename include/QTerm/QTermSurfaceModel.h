@@ -49,7 +49,7 @@ public:
     QString selectedText() const;
     QStringList visibleLines() const;
     QVariantList visibleLineRuns() const;
-    QString plainText() const;  // on-demand; delegates to terminal debugPlainText()
+    QString plainText() const;  // on-demand; delegates to terminal dumpPlainText()
 
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);

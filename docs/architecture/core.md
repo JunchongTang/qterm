@@ -18,7 +18,7 @@ QTermScreenState（屏幕状态）
   ↓
 QTermBuffer（内容存储）
   ↓
-QTermCore::sizeChanged / debugPlainTextChanged（信号）
+QTermCore::sizeChanged / dumpPlainTextChanged（信号）
 ```
 
 ### 三个核心对象
@@ -302,7 +302,7 @@ OSC 8 定义格式：`OSC 8 ; params ; URL ST text OSC 8 ; ; ST`
    characterAttributes({0}) → currentAttributes 重置为默认
 
 5. Core 发出信号
-   debugPlainTextChanged() → 触发 Surface 刷新
+   dumpPlainTextChanged() → 触发 Surface 刷新
    → 前端重绘 "Red text" 为红色
 ```
 

@@ -54,7 +54,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
         }
     });
 
-    connect(m_core, &QTermCore::debugPlainTextChanged, this, [this]() {
+    connect(m_core, &QTermCore::dumpPlainTextChanged, this, [this]() {
         const int previousScrollOffset = scrollOffset();
         clampViewportToBuffer();
         m_selectionModel->setViewport(m_viewportTopProjectionRow);
@@ -159,9 +159,14 @@ QString QTermTerminal::hyperlinkUrl(int id) const
     return m_core->hyperlinkUrl(id);
 }
 
-QString QTermTerminal::debugPlainText() const
+QString QTermTerminal::dumpPlainText() const
 {
-    return m_core->debugPlainText();
+    return m_core->dumpPlainText();
+}
+
+QByteArray QTermTerminal::dumpAnsi(int maxLines) const
+{
+    return m_core->dumpAnsi(maxLines);
 }
 
 void QTermTerminal::clear()

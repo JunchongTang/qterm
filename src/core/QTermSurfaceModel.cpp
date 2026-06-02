@@ -130,7 +130,7 @@ QString QTermSurfaceModel::plainText() const
     if (!m_selectionController) {
         return {};
     }
-    return m_selectionController->debugPlainText();
+    return m_selectionController->dumpPlainText();
 }
 
 void QTermSurfaceModel::setSize(int columns, int rows)

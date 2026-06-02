@@ -430,7 +430,7 @@ QVariantList QTermBuffer::visibleLineRuns() const
     return viewportLineRuns(visibleRowOffset(), m_visibleLines.size());
 }
 
-QString QTermBuffer::debugPlainText() const
+QString QTermBuffer::dumpPlainText() const
 {
     QVector<QTermLine> projection;
     projection.reserve(m_historyLines.size() + m_visibleLines.size());
@@ -457,6 +457,132 @@ QString QTermBuffer::debugPlainText() const
     }
 
     return text;
+}
+
+namespace {
+
+// Encode an attribute transition from `prev` to `cur` as a single CSI ... m
+// sequence. Returns empty string when no change. When prev is null (start of
+// dump), we encode the full state explicitly so the receiver doesn't inherit
+// stray styles from before the feed.
+QByteArray sgrTransition(const QTermCellAttributes *prev,
+                         const QTermCellAttributes &cur)
+{
+    QTermCellAttributes def;          // all-default baseline
+    const QTermCellAttributes &p = prev ? *prev : def;
+
+    QList<QByteArray> codes;
+
+    auto needBool = [&](bool pv, bool cv, const char *onCode, const char *offCode) {
+        if (pv != cv)
+            codes << (cv ? QByteArray(onCode) : QByteArray(offCode));
+    };
+    // SGR 22 disables BOTH bold and dim—emit it once if either turned off.
+    if ((p.bold && !cur.bold) || (p.dim && !cur.dim))
+        codes << "22";
+    if (!p.bold && cur.bold) codes << "1";
+    if (!p.dim && cur.dim)   codes << "2";
+    needBool(p.italic,        cur.italic,        "3", "23");
+    needBool(p.underline,     cur.underline,     "4", "24");
+    needBool(p.inverse,       cur.inverse,       "7", "27");
+    needBool(p.strikethrough, cur.strikethrough, "9", "29");
+
+    auto encodeColor = [&codes](int idx, int rgb, int sgrBase, int sgr256Base,
+                                int sgrBright, int sgrDefault) {
+        if (idx < 0 && rgb < 0) {
+            codes << QByteArray::number(sgrDefault);
+        } else if (rgb >= 0) {
+            const int r = (rgb >> 16) & 0xFF;
+            const int g = (rgb >> 8) & 0xFF;
+            const int b = rgb & 0xFF;
+            codes << (QByteArray::number(sgr256Base) + ";2;"
+                      + QByteArray::number(r) + ";"
+                      + QByteArray::number(g) + ";"
+                      + QByteArray::number(b));
+        } else if (idx >= 0 && idx <= 7) {
+            codes << QByteArray::number(sgrBase + idx);
+        } else if (idx >= 8 && idx <= 15) {
+            codes << QByteArray::number(sgrBright + (idx - 8));
+        } else {
+            codes << (QByteArray::number(sgr256Base) + ";5;"
+                      + QByteArray::number(idx));
+        }
+    };
+
+    if (cur.foregroundIndex != p.foregroundIndex || cur.foregroundRgb != p.foregroundRgb)
+        encodeColor(cur.foregroundIndex, cur.foregroundRgb, 30, 38, 90, 39);
+    if (cur.backgroundIndex != p.backgroundIndex || cur.backgroundRgb != p.backgroundRgb)
+        encodeColor(cur.backgroundIndex, cur.backgroundRgb, 40, 48, 100, 49);
+
+    if (codes.isEmpty())
+        return {};
+    QByteArray out("\x1b[");
+    for (int i = 0; i < codes.size(); ++i) {
+        if (i > 0) out.append(';');
+        out.append(codes.at(i));
+    }
+    out.append('m');
+    return out;
+}
+
+} // namespace
+
+QByteArray QTermBuffer::dumpAnsi(int maxLines) const
+{
+    // 把 scrollback + visible 一起拼成 projection list；保留指针避免拷贝大 line。
+    QVector<const QTermLine *> projection;
+    projection.reserve(m_historyLines.size() + m_visibleLines.size());
+    for (const QTermLine &l : m_historyLines) projection.append(&l);
+    for (const QTermLine &l : m_visibleLines) projection.append(&l);
+
+    int lastRelevantIndex = -1;
+    for (int i = 0; i < projection.size(); ++i) {
+        if (!projection.at(i)->plainText().isEmpty())
+            lastRelevantIndex = i;
+    }
+    if (lastRelevantIndex < 0)
+        return {};
+
+    int firstIndex = 0;
+    if (maxLines > 0 && (lastRelevantIndex + 1) > maxLines)
+        firstIndex = (lastRelevantIndex + 1) - maxLines;
+
+    QByteArray out;
+    QTermCellAttributes prevAttrs;
+    bool havePrev = false;
+    for (int i = firstIndex; i <= lastRelevantIndex; ++i) {
+        const QTermLine &line = *projection.at(i);
+        const int cols = line.columns();
+        // 行末空白裁掉——找最后一个真正写过的列。
+        int lineEnd = -1;
+        for (int c = 0; c < cols; ++c) {
+            const QTermCell &cell = line.cellAt(c);
+            if (!cell.text.isEmpty() && cell.text != QStringLiteral(" "))
+                lineEnd = c;
+        }
+        for (int c = 0; c <= lineEnd; ++c) {
+            const QTermCell &cell = line.cellAt(c);
+            // 宽字符的第二列已被前一格的 text（含两列宽字）覆盖，跳过。
+            if (cell.continuation)
+                continue;
+            out.append(sgrTransition(havePrev ? &prevAttrs : nullptr, cell.attributes));
+            prevAttrs = cell.attributes;
+            havePrev = true;
+            if (cell.text.isEmpty())
+                out.append(' ');             // 空格补位
+            else
+                out.append(cell.text.toUtf8());
+        }
+        // 软换行（line wrap）不发 \r\n，让 feedText 自己继续接；
+        // 末行也不发 \r\n，免得多一行空行。
+        const bool isLast = (i == lastRelevantIndex);
+        if (!isLast && !line.wrappedToNextLine())
+            out.append("\r\n", 2);
+    }
+    // 收尾 reset，免得后续真实输出继承我们的 SGR 状态。
+    if (havePrev)
+        out.append("\x1b[0m", 4);
+    return out;
 }
 
 void QTermBuffer::appendEmptyVisibleLine()

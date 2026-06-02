@@ -403,7 +403,7 @@ void TerminalWidget::keyPressEvent(QKeyEvent *event) {
 
 ## 调试：查看原始字节
 
-如果需要调试键盘编码，可以启用 debugPlainText 查看原始发送的字节：
+如果需要调试键盘编码，可以启用 dumpPlainText 查看原始发送的字节：
 
 ```cpp
 // 在 QTermCore 中

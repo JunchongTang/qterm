@@ -671,7 +671,7 @@ void QTermSessionTest::terminalPreservesAllPromptLinesAcrossRepeatedWidthOscilla
     terminal.feedText(transcript);
 
     // Helper: collect the full buffer text (history + visible) from the model.
-    // plainText() on QTermSurfaceModel reflects debugPlainText() of the core,
+    // plainText() on QTermSurfaceModel reflects dumpPlainText() of the core,
     // which includes both history and visible lines.
     auto bufferText = [&]() {
         return terminal.surfaceModel()->plainText();
