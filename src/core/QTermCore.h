@@ -27,7 +27,9 @@ public:
     int shellZone() const noexcept;
     // OSC 133: exit code of the last command (-1 = not yet known)
     int lastExitCode() const noexcept;
-    QString debugPlainText() const;
+    QString dumpPlainText() const;
+    // Same intent as QTermBuffer::dumpAnsi; delegates to the active screen.
+    QByteArray dumpAnsi(int maxLines = 5000) const;
     QTermCursorState cursorState() const noexcept;
     const QTermBuffer &buffer() const noexcept;
     QTermBuffer &buffer() noexcept;
@@ -53,7 +55,7 @@ signals:
     void currentDirectoryChanged(const QString &url);
     void shellZoneChanged();
     void clipboardWriteRequested(const QString &text);
-    void debugPlainTextChanged();
+    void dumpPlainTextChanged();
     void cursorStateChanged();
     void modeStateChanged();
     void outboundData(const QByteArray &data);

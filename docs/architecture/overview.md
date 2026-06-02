@@ -52,7 +52,7 @@ PA -down-> SE : outboundData(bytes)
 
 SE -up-> PA : dataReceived(bytes)
 PA -up-> CO : 解析事件回调
-CO -up-> SU : sizeChanged / debugPlainTextChanged\n（Qt 信号）
+CO -up-> SU : sizeChanged / dumpPlainTextChanged\n（Qt 信号）
 SU -up-> FE : viewportChanged → 重绘
 @enduml
 ```
@@ -149,7 +149,7 @@ Backend::dataReceived(bytes)
         └─→ QTermTerminal（解码 UTF-8，交给 QTermCore）
               └─→ QTermTextParser（状态机）
                     └─→ QTermInputExecutor（修改 QTermCore 状态）
-                          └─→ QTermCore::debugPlainTextChanged / sizeChanged / …
+                          └─→ QTermCore::dumpPlainTextChanged / sizeChanged / …
                                 └─→ QTermTerminal::viewportChanged
                                       └─→ QTermViewController → 重绘
 ```

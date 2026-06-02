@@ -40,7 +40,12 @@ public:
     QVariantList viewportLineRuns(int topProjectionRow, int rowCount) const;
     QStringList visibleLineTexts() const;
     QVariantList visibleLineRuns() const;
-    QString debugPlainText() const;
+    QString dumpPlainText() const;
+    // Dump current buffer (scrollback + visible) as UTF-8 bytes annotated with
+    // SGR (CSI ...m) sequences for each style transition. Re-feeding the output
+    // into a fresh terminal via feedText() reproduces the same visual state.
+    // `maxLines` caps how many tail lines are emitted (0 = no cap).
+    QByteArray dumpAnsi(int maxLines = 5000) const;
 
     // ── Dirty-row tracking ────────────────────────────────────────────────────
     // Returns the set of *visible* row indices that have been modified since the
