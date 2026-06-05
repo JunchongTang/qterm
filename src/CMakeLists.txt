@@ -1,3 +1,5 @@
+option(QTERM_WITH_WIDGETS "Build QTermWidget (QWidget-based terminal)" ON)
+
 qt_add_library(qterm STATIC
     ../include/QTerm/QTermLocalShellBackend.h
     ../include/QTerm/QTermLocalShellScanner.h
@@ -15,7 +17,6 @@ qt_add_library(qterm STATIC
     ../include/QTerm/QTermTheme.h
     ../include/QTerm/QTermThemePack.h
     ../include/QTerm/QTermThemeLoader.h
-    ../include/QTerm/QTermWidget.h
     QTermTheme.cpp
     QTermThemePack.cpp
     QTermThemeLoader.cpp
@@ -45,7 +46,6 @@ qt_add_library(qterm STATIC
     quick/QTermQmlForeignTypes.cpp
     quick/QTermQuickPaintedItem.cpp
     quick/QTermQuickItem.cpp
-    widget/QTermWidget.cpp
     session/local/QTermLocalShellScanner.cpp
     session/serial/QTermSerialBackend.cpp
     session/serial/QTermSerialPortInfo.cpp
@@ -54,6 +54,14 @@ qt_add_library(qterm STATIC
     session/QTermSession.cpp
     session/QTermSessionBackend.cpp
 )
+
+# QTermWidget 是 QWidget 版本——纯 QML app 不用它，关掉可以省 QtWidgets。
+if(QTERM_WITH_WIDGETS)
+    target_sources(qterm PRIVATE
+        ../include/QTerm/QTermWidget.h
+        widget/QTermWidget.cpp
+    )
+endif()
 
 qt_add_qml_module(qterm
     URI QTerm
@@ -93,9 +101,11 @@ target_link_libraries(qterm
         Qt6::Core
         Qt6::Gui
         Qt6::Quick
-        Qt6::Widgets
         Qt6::Network
         Qt6::SerialPort
 )
+if(QTERM_WITH_WIDGETS)
+    target_link_libraries(qterm PUBLIC Qt6::Widgets)
+endif()
 
 target_compile_features(qterm PUBLIC cxx_std_17)
