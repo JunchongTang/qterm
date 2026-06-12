@@ -183,7 +183,7 @@ void recreateTextRowNodes(QTermSGRootNode *root, QQuickWindow *win,
 void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
                          qreal cellW, qreal cellH,
                          const QFont &baseFont, const qreal topOffset,
-                         const QColor &termFg, const QColor &hyperlinkTint,
+                         const QColor &termFg, const QColor &termBg, const QColor &hyperlinkTint,
                          const QColor *palette16)
 {
     tn->clear();
@@ -209,7 +209,7 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
             runFont.setUnderline(run.value(QStringLiteral("underline")).toBool() || hasHyperlink);
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
 
-            QColor fg = qtermEffectiveForeground(run, termFg, palette16);
+            QColor fg = qtermEffectiveForeground(run, termFg, termBg, palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
@@ -809,8 +809,8 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         for (int row = 0; row < rows; ++row) {
             populateRowTextNode(root->textNodes[row], row, lineRuns,
                                 cellW, cellH, baseFont, topOffset,
-                                m_foregroundColor, m_theme.hyperlinkTint(),
-                                m_theme.palette16());
+                                m_foregroundColor, m_backgroundColor,
+                                m_theme.hyperlinkTint(), m_theme.palette16());
         }
     } else if (hasPartialRows) {
         const QVariantList lineRuns = sm->visibleLineRuns();
@@ -818,8 +818,8 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
             if (row >= 0 && row < rows) {
                 populateRowTextNode(root->textNodes[row], row, lineRuns,
                                     cellW, cellH, baseFont, topOffset,
-                                    m_foregroundColor, m_theme.hyperlinkTint(),
-                                    m_theme.palette16());
+                                    m_foregroundColor, m_backgroundColor,
+                                    m_theme.hyperlinkTint(), m_theme.palette16());
             }
         }
     }
