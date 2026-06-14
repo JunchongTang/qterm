@@ -35,7 +35,7 @@ signals:
     void backendChanged();
     void stateChanged();
     void dataReceived(const QByteArray &data);
-    void errorOccurred(const QString &message);
+    void errorOccurred(int kind, const QString &message);
 
 private:
     void disconnectBackend();

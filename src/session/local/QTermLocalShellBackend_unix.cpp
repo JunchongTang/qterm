@@ -106,13 +106,13 @@ void QTermLocalShellBackend::open()
 
     const QString executable = resolvedProgram();
     if (executable.isEmpty()) {
-        emitErrorOccurred(QStringLiteral("No PTY program was configured."));
+        emitErrorOccurred(SpawnFailed, QStringLiteral("No PTY program was configured."));
         return;
     }
 
     const QByteArray executableUtf8 = QFile::encodeName(executable);
     if (::access(executableUtf8.constData(), X_OK) != 0) {
-        emitErrorOccurred(QStringLiteral("PTY program is not executable: %1").arg(executable));
+        emitErrorOccurred(SpawnFailed, QStringLiteral("PTY program is not executable: %1").arg(executable));
         return;
     }
 
@@ -125,7 +125,7 @@ void QTermLocalShellBackend::open()
     int masterFd = -1;
     const pid_t childPid = ::forkpty(&masterFd, nullptr, nullptr, &winsizeData);
     if (childPid < 0) {
-        emitErrorOccurred(QStringLiteral("forkpty failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
+        emitErrorOccurred(SpawnFailed, QStringLiteral("forkpty failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         return;
     }
 
@@ -217,7 +217,7 @@ void QTermLocalShellBackend::writeData(const QByteArray &data)
         if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
             break;
 
-        emitErrorOccurred(QStringLiteral("PTY write failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
+        emitErrorOccurred(ConnectionLost, QStringLiteral("PTY write failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         close();
         return;
     }
@@ -281,7 +281,7 @@ void QTermLocalShellBackend::handleReadable()
 
         if (!batch.isEmpty())
             emitDataReceived(batch);
-        emitErrorOccurred(QStringLiteral("PTY read failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
+        emitErrorOccurred(ConnectionLost, QStringLiteral("PTY read failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         close();
         return;
     }
@@ -312,7 +312,7 @@ void QTermLocalShellBackend::pollChildExit()
 
     const QString exitMessage = childExitMessage(status);
     if (!exitMessage.isEmpty()) {
-        emitErrorOccurred(exitMessage);
+        emitErrorOccurred(ConnectionLost, exitMessage);
         return;
     }
 
