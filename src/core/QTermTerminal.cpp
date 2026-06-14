@@ -1,5 +1,9 @@
 #include <QTerm/QTermTerminal.h>
 
+#include <limits>
+
+#include <QVariantMap>
+
 #include "QTermCore.h"
 #include "QTermSelectionModel.h"
 #include "QTermInputEncoder.h"
@@ -61,6 +65,7 @@ QTermTerminal::QTermTerminal(QObject *parent)
         m_selectionModel->refreshSelectionText(m_core->buffer());
         syncSurfaceSelection();
         syncSurfaceViewport();
+        refreshSearch();  // new output shifted projection rows: re-find (no scroll)
         syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
         if (scrollOffset() != previousScrollOffset) {
             emit viewportChanged();
@@ -250,6 +255,7 @@ void QTermTerminal::scrollByLines(int deltaRows)
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
     syncSurfaceViewport();
+    syncSurfaceSearch();
     syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
     if (scrollOffset() != previousScrollOffset) {
         emit viewportChanged();
@@ -265,10 +271,186 @@ void QTermTerminal::scrollToBottom()
     m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
     syncSurfaceViewport();
+    syncSurfaceSearch();
     syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
     if (scrollOffset() != previousScrollOffset) {
         emit viewportChanged();
     }
+}
+
+// ── In-buffer search ───────────────────────────────────────────────────────
+
+int QTermTerminal::searchMatchCount() const noexcept
+{
+    return int(m_searchMatches.size());
+}
+
+int QTermTerminal::searchCurrentIndex() const noexcept
+{
+    return m_searchCurrent < 0 ? 0 : m_searchCurrent + 1; // 1-based; 0 = none
+}
+
+int QTermTerminal::search(const QString &query, bool caseSensitive)
+{
+    m_searchQuery = query;
+    m_searchCaseSensitive = caseSensitive;
+    m_searchMatches.clear();
+    m_searchCurrent = -1;
+
+    if (!query.isEmpty()) {
+        const Qt::CaseSensitivity cs = caseSensitive ? Qt::CaseSensitive
+                                                     : Qt::CaseInsensitive;
+        const QTermBuffer &buffer = m_core->buffer();
+        const int total = buffer.projectionRowCount();
+        for (int row = 0; row < total; ++row) {
+            const QString text = buffer.projectionLineAt(row).plainText();
+            int from = 0;
+            for (;;) {
+                const int idx = text.indexOf(query, from, cs);
+                if (idx < 0)
+                    break;
+                // Column == char index (exact for ASCII; wide-char column
+                // precision is a future refinement).
+                m_searchMatches.append({ row, idx, int(query.size()) });
+                from = idx + int(query.size());
+            }
+        }
+        // Pick the match nearest the current viewport top as the starting one.
+        if (!m_searchMatches.isEmpty()) {
+            m_searchCurrent = 0;
+            int best = std::numeric_limits<int>::max();
+            for (int i = 0; i < m_searchMatches.size(); ++i) {
+                const int d = qAbs(m_searchMatches[i].projectionRow
+                                   - m_viewportTopProjectionRow);
+                if (d < best) {
+                    best = d;
+                    m_searchCurrent = i;
+                }
+            }
+        }
+    }
+
+    scrollMatchIntoView();
+    syncSurfaceSearch();
+    emit searchChanged();
+    return int(m_searchMatches.size());
+}
+
+void QTermTerminal::refreshSearch()
+{
+    if (m_searchQuery.isEmpty())
+        return;
+    const int prevCount = int(m_searchMatches.size());
+    const int prevCurrent = m_searchCurrent;
+
+    m_searchMatches.clear();
+    const Qt::CaseSensitivity cs = m_searchCaseSensitive ? Qt::CaseSensitive
+                                                         : Qt::CaseInsensitive;
+    const QTermBuffer &buffer = m_core->buffer();
+    const int total = buffer.projectionRowCount();
+    for (int row = 0; row < total; ++row) {
+        const QString text = buffer.projectionLineAt(row).plainText();
+        int from = 0;
+        for (;;) {
+            const int idx = text.indexOf(m_searchQuery, from, cs);
+            if (idx < 0)
+                break;
+            m_searchMatches.append({ row, idx, int(m_searchQuery.size()) });
+            from = idx + int(m_searchQuery.size());
+        }
+    }
+    // Keep the current index where possible (clamp); no scroll — output is
+    // flowing, jumping the viewport would fight the user.
+    if (m_searchMatches.isEmpty())
+        m_searchCurrent = -1;
+    else
+        m_searchCurrent = qBound(0, prevCurrent, int(m_searchMatches.size()) - 1);
+
+    syncSurfaceSearch();
+    if (int(m_searchMatches.size()) != prevCount || m_searchCurrent != prevCurrent)
+        emit searchChanged();
+}
+
+void QTermTerminal::findNext()
+{
+    if (m_searchMatches.isEmpty())
+        return;
+    m_searchCurrent = (m_searchCurrent + 1) % m_searchMatches.size();
+    scrollMatchIntoView();
+    syncSurfaceSearch();
+    emit searchChanged();
+}
+
+void QTermTerminal::findPrevious()
+{
+    if (m_searchMatches.isEmpty())
+        return;
+    m_searchCurrent = (m_searchCurrent - 1 + int(m_searchMatches.size()))
+                      % int(m_searchMatches.size());
+    scrollMatchIntoView();
+    syncSurfaceSearch();
+    emit searchChanged();
+}
+
+void QTermTerminal::clearSearch()
+{
+    if (m_searchMatches.isEmpty() && m_searchQuery.isEmpty())
+        return;
+    m_searchQuery.clear();
+    m_searchMatches.clear();
+    m_searchCurrent = -1;
+    syncSurfaceSearch();
+    emit searchChanged();
+}
+
+void QTermTerminal::scrollMatchIntoView()
+{
+    if (m_searchCurrent < 0 || m_searchCurrent >= m_searchMatches.size())
+        return;
+    const int matchRow = m_searchMatches[m_searchCurrent].projectionRow;
+    const int top = m_viewportTopProjectionRow;
+    const int bottom = top + rows() - 1;
+    if (matchRow >= top && matchRow <= bottom)
+        return; // already visible
+
+    // Center the match in the viewport, clamped to the buffer.
+    const int desiredTop = qBound(0, matchRow - rows() / 2,
+                                  maxViewportTopProjectionRow());
+    if (desiredTop == m_viewportTopProjectionRow)
+        return;
+    const int previousScrollOffset = scrollOffset();
+    m_viewportTopProjectionRow = desiredTop;
+    m_viewportPinnedToBottom = m_viewportTopProjectionRow == maxViewportTopProjectionRow();
+    m_selectionModel->setViewport(m_viewportTopProjectionRow);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
+    syncSurfaceSelection();
+    syncSurfaceViewport();
+    syncSurfaceSearch();
+    syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
+    if (scrollOffset() != previousScrollOffset)
+        emit viewportChanged();
+}
+
+void QTermTerminal::syncSurfaceSearch()
+{
+    // Project matches (projection rows) onto the current viewport and hand the
+    // visible ones to the surface model in viewport-row coordinates.
+    QVariantList highlights;
+    const int top = m_viewportTopProjectionRow;
+    const int viewRows = rows();
+    for (int i = 0; i < m_searchMatches.size(); ++i) {
+        const SearchMatch &m = m_searchMatches[i];
+        const int viewRow = m.projectionRow - top;
+        if (viewRow < 0 || viewRow >= viewRows)
+            continue;
+        QVariantMap h;
+        h.insert(QStringLiteral("row"), viewRow);
+        h.insert(QStringLiteral("startColumn"), m.startColumn);
+        h.insert(QStringLiteral("endColumn"), m.startColumn + m.length);
+        h.insert(QStringLiteral("current"), i == m_searchCurrent);
+        highlights.append(h);
+    }
+    m_surfaceModel.setSearchHighlights(highlights);
 }
 
 void QTermTerminal::sendKey(int key, const QString &text)

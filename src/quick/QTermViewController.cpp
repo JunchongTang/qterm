@@ -517,6 +517,12 @@ void QTermViewController::reconnectSurfaceModel()
         emit repaintNeeded();
         emit selectionChanged();
     });
+    // Search highlights are background-fill rectangles like the selection;
+    // relay through the same dirty path (the view rebuilds both together).
+    m_surfaceSearchConnection = connect(surfaceModel, &QTermSurfaceModel::searchHighlightsChanged, this, [this]() {
+        emit repaintNeeded();
+        emit selectionChanged();
+    });
     m_surfaceVisibleRunsConnection = connect(surfaceModel, &QTermSurfaceModel::visibleLineRunsChanged, this, [this]() {
         emit repaintNeeded();
     });
@@ -534,6 +540,7 @@ void QTermViewController::disconnectSurfaceModel()
     QObject::disconnect(m_surfaceSizeConnection);
     QObject::disconnect(m_surfaceCursorConnection);
     QObject::disconnect(m_surfaceSelectionConnection);
+    QObject::disconnect(m_surfaceSearchConnection);
     QObject::disconnect(m_surfaceVisibleRunsConnection);
     QObject::disconnect(m_surfacePartialRunsConnection);
     QObject::disconnect(m_surfaceDestroyedConnection);

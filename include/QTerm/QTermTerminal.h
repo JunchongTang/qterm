@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVector>
 #include <QStringDecoder>
 
 #include <QtQml/qqmlregistration.h>
@@ -33,6 +34,9 @@ class QTermTerminal : public QObject
     Q_PROPERTY(int shellZone READ shellZone NOTIFY shellZoneChanged)
     Q_PROPERTY(int lastExitCode READ lastExitCode NOTIFY shellZoneChanged)
     Q_PROPERTY(QTerm::QTermSurfaceModel *surfaceModel READ surfaceModel CONSTANT)
+    // In-buffer search status (for the host's ⌘F bar: "m / n", empty state).
+    Q_PROPERTY(int searchMatchCount READ searchMatchCount NOTIFY searchChanged)
+    Q_PROPERTY(int searchCurrentIndex READ searchCurrentIndex NOTIFY searchChanged) // 1-based; 0 = none
 
 public:
     explicit QTermTerminal(QObject *parent = nullptr);
@@ -72,6 +76,17 @@ public:
     Q_INVOKABLE void selectLogicalLineAt(int row);
     Q_INVOKABLE void scrollByLines(int deltaRows);
     Q_INVOKABLE void scrollToBottom();
+
+    // ── In-buffer search ───────────────────────────────────────────────────────
+    // Scan the whole buffer (history + screen) for `query` and remember the
+    // matches. Returns the match count; picks the match nearest the current
+    // viewport as the current one and scrolls it into view. Matches are kept in
+    // projection-row coordinates and re-projected to the viewport for rendering,
+    // so they stay anchored to content while scrolling.
+    Q_INVOKABLE int search(const QString &query, bool caseSensitive = false);
+    Q_INVOKABLE void findNext();
+    Q_INVOKABLE void findPrevious();
+    Q_INVOKABLE void clearSearch();
     Q_INVOKABLE void sendKey(int key, const QString &text = QString());
     Q_INVOKABLE void sendPaste(const QString &text);
     Q_INVOKABLE void sendMouse(int row, int column, int button, int modifiers, bool isPress, bool isMotion = false);
@@ -87,6 +102,7 @@ signals:
     void bell();
     void sizeChanged();
     void viewportChanged();
+    void searchChanged();
     void sessionChanged();
     void titleChanged();
     void currentDirectoryChanged();
@@ -101,6 +117,30 @@ private:
     void clampViewportToBuffer();
     void syncSurfaceViewport();
     void syncSurfaceSelection();
+
+    int searchMatchCount() const noexcept;
+    int searchCurrentIndex() const noexcept;
+    // Project stored matches (projection-row coords) onto the current viewport
+    // and push to the surface model; called on every viewport change + on search.
+    void syncSurfaceSearch();
+    // Scroll so the current match's projection row is visible.
+    void scrollMatchIntoView();
+
+    // A match in projection-row coordinates.
+    struct SearchMatch {
+        int projectionRow = 0;
+        int startColumn = 0;
+        int length = 0;
+    };
+    // Recompute matches against the (possibly mutated) buffer, preserving the
+    // active query; clamps current index; no scroll. Called when buffer changes
+    // while a search is active.
+    void refreshSearch();
+
+    QVector<SearchMatch> m_searchMatches;
+    int m_searchCurrent = -1;          // index into m_searchMatches; -1 = none
+    QString m_searchQuery;
+    bool m_searchCaseSensitive = false;
 
     QTermCore *m_core = nullptr;
     QPointer<QTermSession> m_session;

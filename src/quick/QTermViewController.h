@@ -100,6 +100,7 @@ private:
     QMetaObject::Connection m_surfaceSizeConnection;
     QMetaObject::Connection m_surfaceCursorConnection;
     QMetaObject::Connection m_surfaceSelectionConnection;
+    QMetaObject::Connection m_surfaceSearchConnection;
     QMetaObject::Connection m_surfaceVisibleRunsConnection;
     QMetaObject::Connection m_surfacePartialRunsConnection;
     QMetaObject::Connection m_surfaceDestroyedConnection;
