@@ -39,6 +39,8 @@ struct QTermSGRootNode : public QSGNode
 {
     QSGGeometryNode *bgFillNode = nullptr;
     QSGGeometryNode *selectionNode = nullptr;
+    QSGGeometryNode *searchNode = nullptr;         // all matches (dim)
+    QSGGeometryNode *searchCurrentNode = nullptr;  // current match (bright)
     QSGNode *textGroupNode = nullptr;
     QSGGeometryNode *cursorNode = nullptr;
     QVector<QSGTextNode *> textNodes; // parallel to visible rows, NOT OwnedByParent
@@ -290,6 +292,50 @@ void rebuildSelection(QSGGeometryNode *node, QTermSurfaceModel *sm,
 
 // ── Cursor geometry ───────────────────────────────────────────────────────────
 
+// Search-match highlight rectangles. currentOnly selects which set to draw:
+// false = all non-current matches; true = the current match. Two passes into
+// two nodes give the two tints with flat-color materials.
+void rebuildSearchHighlights(QSGGeometryNode *node, QTermSurfaceModel *sm,
+                             qreal cellW, qreal cellH, const QColor &color,
+                             bool currentOnly)
+{
+    auto *mat = static_cast<QSGFlatColorMaterial *>(node->material());
+    mat->setColor(color);
+
+    const QVariantList highlights = sm ? sm->searchHighlights() : QVariantList{};
+    if (highlights.isEmpty()) {
+        node->geometry()->allocate(0);
+        node->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
+        return;
+    }
+
+    // Count quads in this pass first (allocate exact).
+    int quadCount = 0;
+    for (const QVariant &v : highlights) {
+        const QVariantMap h = v.toMap();
+        if (h.value(QStringLiteral("current")).toBool() == currentOnly)
+            ++quadCount;
+    }
+    QSGGeometry *geom = node->geometry();
+    geom->allocate(quadCount * 6);
+    auto *vtx = geom->vertexDataAsPoint2D();
+    int vi = 0;
+    for (const QVariant &v : highlights) {
+        const QVariantMap h = v.toMap();
+        if (h.value(QStringLiteral("current")).toBool() != currentOnly)
+            continue;
+        const int row = h.value(QStringLiteral("row")).toInt();
+        const int startCol = h.value(QStringLiteral("startColumn")).toInt();
+        const int endCol = h.value(QStringLiteral("endColumn")).toInt();
+        const float x0 = float(startCol * cellW);
+        const float y0 = float(row * cellH);
+        const float x1 = float(endCol * cellW);
+        const float y1 = float(y0 + cellH);
+        appendQuadP2D(vtx, vi, x0, y0, x1, y1);
+    }
+    node->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
+}
+
 void rebuildCursor(QSGGeometryNode *node, QTermSurfaceModel *sm,
                    qreal cellW, qreal cellH,
                    const QColor &cursorColor, qreal cursorOpacity,
@@ -509,6 +555,26 @@ void QTermQuickItem::setSelectionColor(const QColor &selectionColor)
 {
     if (m_selectionColor == selectionColor) return;
     m_selectionColor = selectionColor;
+    scheduleSelectionDirty();
+    emit paletteChanged();
+}
+
+QColor QTermQuickItem::searchHighlightColor() const { return m_searchHighlightColor; }
+
+void QTermQuickItem::setSearchHighlightColor(const QColor &color)
+{
+    if (m_searchHighlightColor == color) return;
+    m_searchHighlightColor = color;
+    scheduleSelectionDirty();
+    emit paletteChanged();
+}
+
+QColor QTermQuickItem::searchCurrentColor() const { return m_searchCurrentColor; }
+
+void QTermQuickItem::setSearchCurrentColor(const QColor &color)
+{
+    if (m_searchCurrentColor == color) return;
+    m_searchCurrentColor = color;
     scheduleSelectionDirty();
     emit paletteChanged();
 }
@@ -758,6 +824,14 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         root->selectionNode->setFlag(QSGNode::OwnedByParent);
         root->appendChildNode(root->selectionNode);
 
+        root->searchNode = createFlatColorGeomNode(m_searchHighlightColor);
+        root->searchNode->setFlag(QSGNode::OwnedByParent);
+        root->appendChildNode(root->searchNode);
+
+        root->searchCurrentNode = createFlatColorGeomNode(m_searchCurrentColor);
+        root->searchCurrentNode->setFlag(QSGNode::OwnedByParent);
+        root->appendChildNode(root->searchCurrentNode);
+
         root->textGroupNode = new QSGNode;
         root->textGroupNode->setFlag(QSGNode::OwnedByParent);
         root->appendChildNode(root->textGroupNode);
@@ -827,6 +901,10 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     // ── Selection ─────────────────────────────────────────────────────────────
     if (m_fullDirty || m_selectionDirty) {
         rebuildSelection(root->selectionNode, sm, cellW, cellH, m_selectionColor);
+        rebuildSearchHighlights(root->searchNode, sm, cellW, cellH,
+                                m_searchHighlightColor, /*currentOnly=*/false);
+        rebuildSearchHighlights(root->searchCurrentNode, sm, cellW, cellH,
+                                m_searchCurrentColor, /*currentOnly=*/true);
     }
 
     // ── Cursor ────────────────────────────────────────────────────────────────

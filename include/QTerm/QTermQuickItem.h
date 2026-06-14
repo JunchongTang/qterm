@@ -42,6 +42,8 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchHighlightColor READ searchHighlightColor WRITE setSearchHighlightColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchCurrentColor READ searchCurrentColor WRITE setSearchCurrentColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermQuickItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
@@ -80,6 +82,11 @@ public:
 
     QColor selectionColor() const;
     void setSelectionColor(const QColor &selectionColor);
+
+    QColor searchHighlightColor() const;
+    void setSearchHighlightColor(const QColor &color);
+    QColor searchCurrentColor() const;
+    void setSearchCurrentColor(const QColor &color);
 
     QColor cursorColor() const;
     void setCursorColor(const QColor &cursorColor);
@@ -147,6 +154,8 @@ private:
     QColor m_foregroundColor{QStringLiteral("#dce7f3")};
     QColor m_backgroundColor{QStringLiteral("#0a0f15")};
     QColor m_selectionColor{0x46, 0x82, 0xc8, 0x80};
+    QColor m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};  // dim amber, all matches
+    QColor m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};    // bright amber, current match
     QColor m_cursorColor{QStringLiteral("#dce7f3")};
     qreal m_cursorOpacity = 0.8;
     CursorStyle m_cursorStyle = Block;

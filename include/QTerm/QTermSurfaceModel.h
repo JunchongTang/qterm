@@ -29,6 +29,9 @@ class QTermSurfaceModel final : public QObject
     Q_PROPERTY(QStringList visibleLines READ visibleLines NOTIFY visibleLinesChanged)
     Q_PROPERTY(QVariantList visibleLineRuns READ visibleLineRuns NOTIFY visibleLineRunsChanged)
     Q_PROPERTY(QString plainText READ plainText NOTIFY plainTextChanged)
+    // Search-match highlights for the current viewport: list of
+    // { row, startColumn, endColumn, current(bool) } in viewport-row coords.
+    Q_PROPERTY(QVariantList searchHighlights READ searchHighlights NOTIFY searchHighlightsChanged)
 
 public:
     explicit QTermSurfaceModel(QObject *parent = nullptr);
@@ -50,6 +53,7 @@ public:
     QStringList visibleLines() const;
     QVariantList visibleLineRuns() const;
     QString plainText() const;  // on-demand; delegates to terminal dumpPlainText()
+    QVariantList searchHighlights() const;
 
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
@@ -62,6 +66,7 @@ signals:
     void visibleLineRunsChanged();
     void visibleLineRunsChangedPartial(QVector<int> changedRows);
     void plainTextChanged();
+    void searchHighlightsChanged();
 
 private:
     friend class QTermTerminal;
@@ -74,6 +79,7 @@ private:
     void setVisibleLines(const QStringList &visibleLines);
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
     void setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs);
+    void setSearchHighlights(const QVariantList &highlights);
 
     int m_rows = 24;
     int m_columns = 80;
@@ -90,6 +96,7 @@ private:
     QString m_selectedText;
     QStringList m_visibleLines;
     QVariantList m_visibleLineRuns;
+    QVariantList m_searchHighlights;
 };
 
 } // namespace QTerm
