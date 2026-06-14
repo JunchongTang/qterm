@@ -19,11 +19,33 @@ QTermSerialBackend::QTermSerialBackend(QObject *parent)
     connect(m_serial, &QSerialPort::errorOccurred, this,
             [this](QSerialPort::SerialPortError err) {
         if (err == QSerialPort::NoError) return;
-        emitErrorOccurred(m_serial->errorString());
-        if (state() == Open || state() == Opening) {
-            m_serial->close();
-            setState(Error);
+        const bool wasUp = (state() == Open || state() == Opening);
+        // Map QSerialPort errors onto the typed ErrorKind. ResourceError means
+        // different things depending on timing: while the port is up it is the
+        // device being unplugged (DeviceRemoved, triggers wait-for-replug); at
+        // open time it is the device not being present (DeviceNotFound).
+        int kind = Other;
+        switch (err) {
+        case QSerialPort::DeviceNotFoundError:
+            kind = DeviceNotFound;
+            break;
+        case QSerialPort::PermissionError:
+            kind = PermissionDenied;
+            break;
+        case QSerialPort::ResourceError:
+            kind = wasUp ? DeviceRemoved : DeviceNotFound;
+            break;
+        case QSerialPort::OpenError:
+            kind = DeviceNotFound;
+            break;
+        case QSerialPort::TimeoutError:
+            kind = Timeout;
+            break;
+        default:
+            kind = Other;
+            break;
         }
+        emitErrorOccurred(kind, m_serial->errorString());  // sets Error state internally
     });
 }
 
@@ -73,7 +95,7 @@ void QTermSerialBackend::open()
     if (state() == Open || state() == Opening) return;
 
     if (m_portName.isEmpty()) {
-        emitErrorOccurred(QStringLiteral("No serial port specified."));
+        emitErrorOccurred(DeviceNotFound, QStringLiteral("No serial port specified."));
         setState(Error);
         return;
     }
@@ -83,7 +105,7 @@ void QTermSerialBackend::open()
     applySettings();
 
     if (!m_serial->open(QIODevice::ReadWrite)) {
-        emitErrorOccurred(m_serial->errorString());
+        emitErrorOccurred(DeviceNotFound, m_serial->errorString());
         setState(Error);
         return;
     }

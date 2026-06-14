@@ -27,10 +27,14 @@ void QTermSessionBackend::emitDataReceived(const QByteArray &data)
     emit dataReceived(data);
 }
 
-void QTermSessionBackend::emitErrorOccurred(const QString &message)
+void QTermSessionBackend::emitErrorOccurred(int kind, const QString &message)
 {
+    // Emit errorOccurred first (so consumers record the kind), then move to
+    // the Error state. This way a consumer reacting to stateChanged already
+    // has the kind available when it sees Error (reconnect policy branches
+    // on the kind).
+    emit errorOccurred(kind, message);
     setState(Error);
-    emit errorOccurred(message);
 }
 
 } // namespace QTerm

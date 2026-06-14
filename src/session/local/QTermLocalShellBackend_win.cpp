@@ -135,7 +135,7 @@ void QTermLocalShellBackend::open()
 
     const QString prog = resolvedProgram();
     if (prog.isEmpty()) {
-        emitErrorOccurred(QStringLiteral("No program configured for ConPTY session."));
+        emitErrorOccurred(SpawnFailed, QStringLiteral("No program configured for ConPTY session."));
         return;
     }
 
@@ -148,7 +148,7 @@ void QTermLocalShellBackend::open()
     HANDLE hPipeOutRead = nullptr, hPipeOutWrite = nullptr;
 
     if (!CreatePipe(&hPipeInRead, &hPipeInWrite, nullptr, 0)) {
-        emitErrorOccurred(QStringLiteral("CreatePipe (stdin) failed: error %1")
+        emitErrorOccurred(SpawnFailed, QStringLiteral("CreatePipe (stdin) failed: error %1")
             .arg(static_cast<unsigned long>(GetLastError())));
         setState(Closed);
         return;
@@ -157,7 +157,7 @@ void QTermLocalShellBackend::open()
     if (!CreatePipe(&hPipeOutRead, &hPipeOutWrite, nullptr, 0)) {
         CloseHandle(hPipeInRead);
         CloseHandle(hPipeInWrite);
-        emitErrorOccurred(QStringLiteral("CreatePipe (stdout) failed: error %1")
+        emitErrorOccurred(SpawnFailed, QStringLiteral("CreatePipe (stdout) failed: error %1")
             .arg(static_cast<unsigned long>(GetLastError())));
         setState(Closed);
         return;
@@ -174,7 +174,7 @@ void QTermLocalShellBackend::open()
     if (FAILED(hr)) {
         CloseHandle(hPipeInWrite);
         CloseHandle(hPipeOutRead);
-        emitErrorOccurred(QStringLiteral("CreatePseudoConsole failed: HRESULT 0x%1")
+        emitErrorOccurred(SpawnFailed, QStringLiteral("CreatePseudoConsole failed: HRESULT 0x%1")
             .arg(static_cast<unsigned long>(hr), 8, 16, QChar(u'0')));
         setState(Closed);
         return;
@@ -199,7 +199,7 @@ void QTermLocalShellBackend::open()
 
     if (!attrList || !InitializeProcThreadAttributeList(attrList, 1, 0, &attrListSize)) {
         cleanupOnError();
-        emitErrorOccurred(QStringLiteral("Failed to initialize process attribute list."));
+        emitErrorOccurred(SpawnFailed, QStringLiteral("Failed to initialize process attribute list."));
         return;
     }
 
@@ -208,7 +208,7 @@ void QTermLocalShellBackend::open()
             hPC, sizeof(HPCON), nullptr, nullptr)) {
         const DWORD err = GetLastError();
         cleanupOnError();
-        emitErrorOccurred(QStringLiteral("UpdateProcThreadAttribute failed: error %1")
+        emitErrorOccurred(SpawnFailed, QStringLiteral("UpdateProcThreadAttribute failed: error %1")
             .arg(static_cast<unsigned long>(err)));
         return;
     }
@@ -262,7 +262,7 @@ void QTermLocalShellBackend::open()
         ClosePseudoConsole(hPC);
         CloseHandle(hPipeInWrite);
         CloseHandle(hPipeOutRead);
-        emitErrorOccurred(QStringLiteral("CreateProcess failed: \"%1\" (error %2)")
+        emitErrorOccurred(SpawnFailed, QStringLiteral("CreateProcess failed: \"%1\" (error %2)")
             .arg(prog)
             .arg(static_cast<unsigned long>(err)));
         setState(Closed);
@@ -309,7 +309,7 @@ void QTermLocalShellBackend::writeData(const QByteArray &data)
     while (remaining > 0) {
         DWORD written = 0;
         if (!WriteFile(static_cast<HANDLE>(m_hPipeIn), cursor, remaining, &written, nullptr)) {
-            emitErrorOccurred(QStringLiteral("ConPTY write failed: error %1")
+            emitErrorOccurred(ConnectionLost, QStringLiteral("ConPTY write failed: error %1")
                 .arg(static_cast<unsigned long>(GetLastError())));
             close();
             return;
@@ -406,7 +406,7 @@ void QTermLocalShellBackend::pollProcessExit()
     doClose();
 
     if (exitCode != 0)
-        emitErrorOccurred(QStringLiteral("Process exited with code %1.").arg(exitCode));
+        emitErrorOccurred(ConnectionLost, QStringLiteral("Process exited with code %1.").arg(exitCode));
     else
         setState(Closed);
 }
