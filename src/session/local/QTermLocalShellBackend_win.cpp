@@ -13,6 +13,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <tlhelp32.h>   // CreateToolhelp32Snapshot — child-process probe (coarse)
 
 // MinGW distributions may not expose ConPTY declarations in Windows headers.
 // Provide guarded declarations so this backend can compile with Qt MinGW kits.
@@ -440,6 +441,60 @@ QString QTermLocalShellBackend::buildCommandLine() const
     for (const QString &arg : m_arguments)
         parts.append(quoteArg(arg));
     return parts.join(QLatin1Char(' '));
+}
+
+// ── Foreground process detection (Windows, coarse) ──────────────────────────
+// The Windows console layer has no Unix-style "foreground process group", so a
+// foreground/background command cannot be distinguished precisely. We use an
+// agreed approximation: walk the process snapshot and check whether the shell
+// (m_hProcess) has any child process — if so, treat it as a command running.
+// Queried purely on demand; no Job Object is attached on the spawn path.
+
+QTermSessionBackend::WorkState QTermLocalShellBackend::workState() const
+{
+    if (!m_hProcess)
+        return WorkUnknown;
+    const DWORD shellPid = ::GetProcessId(static_cast<HANDLE>(m_hProcess));
+    if (shellPid == 0)
+        return WorkUnknown;
+    HANDLE snap = ::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return WorkUnknown;
+    WorkState result = WorkIdle;
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    if (::Process32FirstW(snap, &pe)) {
+        do {
+            if (pe.th32ParentProcessID == shellPid) { result = WorkBusy; break; }
+        } while (::Process32NextW(snap, &pe));
+    }
+    ::CloseHandle(snap);
+    return result;
+}
+
+QString QTermLocalShellBackend::foregroundProcessName() const
+{
+    if (!m_hProcess)
+        return {};
+    const DWORD shellPid = ::GetProcessId(static_cast<HANDLE>(m_hProcess));
+    if (shellPid == 0)
+        return {};
+    HANDLE snap = ::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return {};
+    QString name;
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    if (::Process32FirstW(snap, &pe)) {
+        do {
+            if (pe.th32ParentProcessID == shellPid) {
+                name = QString::fromWCharArray(pe.szExeFile);   // first child's name (coarse)
+                break;
+            }
+        } while (::Process32NextW(snap, &pe));
+    }
+    ::CloseHandle(snap);
+    return name;
 }
 
 } // namespace QTerm

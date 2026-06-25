@@ -13,6 +13,10 @@ class QTermSessionBackend : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(State state READ state NOTIFY stateChanged)
+    // Read-only and on-demand (no NOTIFY): consumers query these via property()
+    // at the moment of closing; they are never used in a QML binding.
+    Q_PROPERTY(WorkState workState READ workState)
+    Q_PROPERTY(QString foregroundProcessName READ foregroundProcessName)
 
 public:
     enum State {
@@ -57,9 +61,34 @@ public:
     };
     Q_ENUM(ErrorKind)
 
+    // Whether the session currently has "in-progress foreground work" — i.e. the
+    // kind that closing would interrupt and that warrants a confirmation. This is
+    // a polymorphic seam: the base returns Unknown, and each subclass overrides it
+    // with the best precision it can achieve:
+    //   - Local shell: inspects the PTY foreground process group (Unix tcgetpgrp /
+    //     Windows child-process probe) — precise.
+    //   - Serial: no process concept -> Idle.
+    //   - Remote (SSH/Telnet/Mosh): the remote process is not observable from the
+    //     wire -> stays Unknown; the consumer falls back to OSC 133 shell
+    //     integration / a conservative proxy.
+    // Queried purely on demand (read at close time); no state is kept and no change
+    // signal is emitted.
+    enum WorkState {
+        WorkUnknown = 0,   // can't tell -> consumer decides (shellZone / proxy)
+        WorkIdle    = 1,   // definitely idle (e.g. local shell sitting at a prompt)
+        WorkBusy    = 2,   // definitely running a foreground process
+    };
+    Q_ENUM(WorkState)
+
     explicit QTermSessionBackend(QObject *parent = nullptr);
 
     State state() const noexcept;
+
+    // Default: unknown / no name. Subclasses override as described above. Consumers
+    // read these dynamically via QObject::property ("workState" /
+    // "foregroundProcessName"), hence the read-only, no-NOTIFY Q_PROPERTY above.
+    virtual WorkState workState() const { return WorkUnknown; }
+    virtual QString foregroundProcessName() const { return {}; }
 
     virtual void open() = 0;
     virtual void close() = 0;

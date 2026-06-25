@@ -45,6 +45,14 @@ public:
     void writeData(const QByteArray &data) override;
     void resize(int columns, int rows) override;
 
+    // Precise local-shell foreground detection (computed on demand, no timer):
+    //   - Unix:    compares tcgetpgrp(masterFd) against the child shell's pgid
+    //              (== childPid).
+    //   - Windows: probes for child processes of the shell via Toolhelp
+    //              (coarse: any child => Busy).
+    WorkState workState() const override;
+    QString foregroundProcessName() const override;
+
 signals:
     void programChanged();
     void argumentsChanged();
