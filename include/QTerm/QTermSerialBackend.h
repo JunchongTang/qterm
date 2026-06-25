@@ -67,6 +67,11 @@ public:
     void writeData(const QByteArray &data) override;
     void resize(int columns, int rows) override; // no-op for serial
 
+    // Serial is a device connection with no "foreground process" concept —
+    // closing merely disconnects the device, there is no process to interrupt.
+    // Always Idle, so the in-progress-work confirmation never fires for serial.
+    WorkState workState() const override { return WorkIdle; }
+
 signals:
     void portNameChanged();
     void baudRateChanged();

@@ -23,6 +23,11 @@
 #include <pty.h>
 #endif
 
+#if defined(Q_OS_MACOS)
+#include <libproc.h>     // proc_name — foreground process name
+#include <sys/param.h>   // MAXCOMLEN
+#endif
+
 namespace {
 
 constexpr int kExitPollIntervalMs = 50;
@@ -372,6 +377,45 @@ void QTermLocalShellBackend::applyEnvironmentOverrides() const
         const QByteArray valueUtf8 = environment.value(key).toLocal8Bit();
         ::setenv(keyUtf8.constData(), valueUtf8.constData(), 1);
     }
+}
+
+// ── Foreground process detection (Unix) ─────────────────────────────────────
+// A PTY's foreground process group is kernel-maintained: tcgetpgrp returns the
+// group id that currently owns the keyboard / Ctrl-C. The child shell from
+// forkpty becomes a session/group leader via setsid, so its pgid == m_childPid.
+// When idle (at a prompt) the foreground group is the shell itself (== childPid);
+// while running a command the shell sets that command's group as foreground
+// (!= childPid). So a single tcgetpgrp call decides it.
+
+QTermSessionBackend::WorkState QTermLocalShellBackend::workState() const
+{
+    if (m_masterFd < 0 || m_childPid <= 0)
+        return WorkUnknown;
+    const pid_t fg = ::tcgetpgrp(m_masterFd);
+    if (fg < 0)
+        return WorkUnknown;
+    return (fg == static_cast<pid_t>(m_childPid)) ? WorkIdle : WorkBusy;
+}
+
+QString QTermLocalShellBackend::foregroundProcessName() const
+{
+    if (m_masterFd < 0 || m_childPid <= 0)
+        return {};
+    const pid_t fg = ::tcgetpgrp(m_masterFd);
+    if (fg <= 0 || fg == static_cast<pid_t>(m_childPid))
+        return {};   // idle: foreground is the shell itself, no running program
+    // fg is a process-group id == the leader's (i.e. the command's) pid; name it.
+#if defined(Q_OS_MACOS)
+    char name[2 * MAXCOMLEN + 1] = {0};
+    if (::proc_name(fg, name, sizeof(name)) > 0)
+        return QString::fromLocal8Bit(name);
+    return {};
+#else // Linux / other platforms exposing /proc
+    QFile comm(QStringLiteral("/proc/%1/comm").arg(fg));
+    if (comm.open(QIODevice::ReadOnly))
+        return QString::fromLocal8Bit(comm.readAll()).trimmed();
+    return {};
+#endif
 }
 
 } // namespace QTerm
