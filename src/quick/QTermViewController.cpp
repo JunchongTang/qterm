@@ -346,6 +346,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
         // 三击：选整逻辑行
         m_selectionAnchorRow    = -1;
         m_selectionAnchorColumn = -1;
+        m_selectionAnchorProjectionRow = -1;
         m_suppressSelectionRelease = true;
         m_autoScrollDirection = 0;
         m_selectionAutoScrollTimer->stop();
@@ -355,6 +356,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
 
     m_selectionAnchorRow    = row;
     m_selectionAnchorColumn = col;
+    m_selectionAnchorProjectionRow = m_terminal->viewportTopProjectionRow() + row;
     m_dragX = event->position().x();
     m_dragY = event->position().y();
     m_suppressSelectionRelease = false;
@@ -373,6 +375,7 @@ bool QTermViewController::handleMouseDoubleClick(QMouseEvent *event)
 
     m_selectionAnchorRow    = -1;
     m_selectionAnchorColumn = -1;
+    m_selectionAnchorProjectionRow = -1;
     m_autoScrollDirection = 0;
     m_selectionAutoScrollTimer->stop();
     m_terminal->selectWordAt(rowAtPosition(event->position().y()),
@@ -444,6 +447,7 @@ bool QTermViewController::handleMouseRelease(QMouseEvent *event)
     updateSelectionFromDrag(event->position().x(), event->position().y());
     m_selectionAnchorRow    = -1;
     m_selectionAnchorColumn = -1;
+    m_selectionAnchorProjectionRow = -1;
     return true;
 }
 
@@ -582,24 +586,16 @@ void QTermViewController::syncTerminalSize()
 
 void QTermViewController::updateSelectionFromDrag(qreal x, qreal y)
 {
-    if (!m_terminal || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0)
+    if (!m_terminal || m_selectionAnchorProjectionRow < 0 || m_selectionAnchorColumn < 0)
         return;
-    const int row = rowAtPosition(y);
-    const int col = columnAtPosition(x);
-    // Selection uses half-open intervals [start, end). To include the character under
-    // the cursor at both the anchor and the drag end, adjust based on drag direction:
-    // dragging forward → anchor is left edge, drag end is right edge (+1)
-    // dragging backward → anchor is right edge (+1), drag end is left edge
-    const bool dragForward = row > m_selectionAnchorRow ||
-        (row == m_selectionAnchorRow && col >= m_selectionAnchorColumn);
-    if (dragForward) {
-        m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn,
-                                      row, qMin(m_terminal->columns(), col + 1));
-    } else {
-        m_terminal->setSelectionRange(m_selectionAnchorRow,
-                                      qMin(m_terminal->columns(), m_selectionAnchorColumn + 1),
-                                      row, col);
-    }
+    // 锚点与拖拽点都换算成 **projection 绝对行**(视口顶行 + 视口内行)。这样自动
+    // 滚动时锚点钉在内容上不漂移;rowAtPosition 把越界 y 夹到可见边缘,配合视口顶
+    // 行随 scrollByLines 推进,拖拽点也能持续向缓冲深处延伸。
+    // 半开区间 [start, end) + 字素对齐(宽字符整字纳入)交给 setSelectionDrag 处理。
+    const int dragProjectionRow = m_terminal->viewportTopProjectionRow() + rowAtPosition(y);
+    const int dragColumn = columnAtPosition(x);
+    m_terminal->setSelectionDrag(m_selectionAnchorProjectionRow, m_selectionAnchorColumn,
+                                 dragProjectionRow, dragColumn);
 }
 
 } // namespace QTerm

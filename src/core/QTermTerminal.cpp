@@ -108,6 +108,11 @@ int QTermTerminal::scrollOffset() const noexcept
     return maxViewportTopProjectionRow() - m_viewportTopProjectionRow;
 }
 
+int QTermTerminal::viewportTopProjectionRow() const noexcept
+{
+    return m_viewportTopProjectionRow;
+}
+
 int QTermTerminal::maxScrollOffset() const noexcept
 {
     return maxViewportTopProjectionRow();
@@ -222,6 +227,16 @@ void QTermTerminal::setSelectionRange(int startRow, int startColumn, int endRow,
         return;
     }
 
+    syncSurfaceSelection();
+}
+
+void QTermTerminal::setSelectionDrag(int anchorProjectionRow, int anchorColumn,
+                                     int dragProjectionRow, int dragColumn)
+{
+    m_selectionModel->setSelectionFromDragCells(m_core->buffer(),
+                                                anchorProjectionRow, anchorColumn,
+                                                dragProjectionRow, dragColumn);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
     syncSurfaceSelection();
 }
 
