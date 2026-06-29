@@ -45,8 +45,9 @@ public:
     int rows() const noexcept;
     int columns() const noexcept;
     int scrollOffset() const noexcept;
-    // 当前视口顶在 projection 空间(含 scrollback)的绝对行号。视图层做选区拖拽时
-    // 用它把视口内行换算成绝对行,使锚点不随滚动漂移。
+    // Absolute row index, in projection space (including scrollback), of the top
+    // of the current viewport. The view layer uses it to map viewport-relative
+    // rows to absolute rows so a selection anchor does not drift while scrolling.
     int viewportTopProjectionRow() const noexcept;
     int maxScrollOffset() const noexcept;
     QTermSession *session() const noexcept;
@@ -75,10 +76,13 @@ public:
     Q_INVOKABLE void setTerminalSize(int columns, int rows);
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
-    // 拖拽选区:锚点 + 拖拽点均以 **projection 绝对行**给出(视图层用
-    // viewportTopProjectionRow() 换算),内部按 projection 端点 + logical 锚点建立
-    // 选区(可跨 scrollback、自动滚动不丢起点),并对端点做字素对齐(宽字符/CJK
-    // 整字纳入,高亮不再只覆盖半个字)。列为单元格列,半开区间由本方法内部处理。
+    // Drag-selection: anchor and drag point are both given as **absolute
+    // projection rows** (the view maps them via viewportTopProjectionRow()).
+    // Internally builds the selection from projection endpoints + logical anchors,
+    // so it spans scrollback and never loses the start during auto-scroll, and
+    // snaps the endpoints to grapheme boundaries (wide/CJK chars selected whole,
+    // so the highlight no longer covers half a glyph). Columns are cell columns;
+    // the half-open interval is handled inside this method.
     Q_INVOKABLE void setSelectionDrag(int anchorProjectionRow, int anchorColumn,
                                       int dragProjectionRow, int dragColumn);
     Q_INVOKABLE void selectWordAt(int row, int column);

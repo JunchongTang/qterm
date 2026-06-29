@@ -93,6 +93,9 @@ signals:
     void cursorStyleChanged();
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
+    // Ctrl (⌘ on macOS) + wheel zoom intent: steps>0 zoom in, <0 zoom out.
+    // The host connects this to adjust the terminal font size.
+    void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
     void themeChanged();

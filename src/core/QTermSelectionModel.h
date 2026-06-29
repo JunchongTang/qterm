@@ -42,10 +42,12 @@ public:
 
     void clearSelection();
     void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
-    // 拖拽选区(projection 绝对行 + 单元格列)。内部排序端点、对端点做字素对齐
-    // (起点回退到字首格、终点扩到字尾的下一格 → 宽字符/CJK 整字纳入),再走
-    // logical 锚点路径(可跨 scrollback、自动滚动不丢起点)。视口行做不到这些,
-    // 故拖拽不再用 setSelectionRange。
+    // Drag-selection (absolute projection rows + cell columns). Orders the
+    // endpoints, snaps them to grapheme boundaries (start back to the first cell
+    // of its glyph, end out to the cell after the glyph → wide/CJK chars taken
+    // whole), then goes through the logical-anchor path (spans scrollback, never
+    // loses the start during auto-scroll). Viewport rows cannot do this, so the
+    // drag no longer uses setSelectionRange.
     void setSelectionFromDragCells(const QTermBuffer &buffer,
                                    int anchorProjectionRow, int anchorColumn,
                                    int dragProjectionRow, int dragColumn);

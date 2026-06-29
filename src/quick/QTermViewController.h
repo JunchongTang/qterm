@@ -77,8 +77,9 @@ signals:
     void metricsChanged();          // cellWidth/Height 变化 → Widget 需要 repaint + resize
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
-    // Ctrl(macOS=⌘)+ 滚轮的「缩放意图」:steps>0 放大、<0 缩小(已按档累加去抖)。
-    // QTerm 本身不改字号 —— 仅上报,由宿主(app)决定如何缩放(如调终端字号)。
+    // Ctrl (⌘ on macOS) + wheel "zoom intent": steps>0 zoom in, <0 zoom out
+    // (already accumulated per detent and de-bounced). QTerm itself does not change
+    // the font — it only reports; the host (app) decides how to zoom (e.g. font size).
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
@@ -134,18 +135,22 @@ private:
     int   m_lastClickColumn        = -1;
     int   m_selectionAnchorRow     = -1;
     int   m_selectionAnchorColumn  = -1;
-    // 选区锚点的**projection 绝对行**(含 scrollback),拖拽时随内容固定,不随视口
-    // 滚动漂移 —— 自动滚动选很多行时,起点才不会丢。-1 = 无锚点。
+    // The selection anchor's **absolute projection row** (including scrollback);
+    // pinned to the content during a drag, not drifting with the viewport — so the
+    // start isn't lost when auto-scrolling across many rows. -1 = no anchor.
     int   m_selectionAnchorProjectionRow = -1;
     bool  m_suppressSelectionRelease = false;
     qreal m_dragX                  = 0.0;
     qreal m_dragY                  = 0.0;
     int   m_autoScrollDirection    = 0; // +1 = 向上, -1 = 向下
-    // 滚轮按「行」滚,但触控板/妙控鼠标发高分辨率像素增量(且惯性高频发事件)。
-    // 把像素换算成小数行累加于此,只在攒满整行时才滚 —— 不足一行不强滚 1 行,
-    // 否则惯性尾巴会叠成几十行(macOS 滚动过冲根因)。
+    // The wheel scrolls by "rows", but trackpads/Magic Mouse send high-resolution
+    // pixel deltas (and fire high-frequency events during momentum). Pixels are
+    // converted to fractional rows and accumulated here, scrolling only once a whole
+    // row is reached — a sub-row delta does not force a 1-row scroll, otherwise the
+    // momentum tail piles up into dozens of rows (the macOS over-scroll root cause).
     qreal m_wheelRowAccumulator    = 0.0;
-    // Ctrl+滚轮缩放的小数档累加(同理去抖:触控板高频像素增量攒满一档才发一步)。
+    // Fractional step accumulator for Ctrl+wheel zoom (same de-bounce: a trackpad's
+    // high-frequency pixel deltas must fill one step before a step is emitted).
     qreal m_zoomStepAccumulator    = 0.0;
 };
 

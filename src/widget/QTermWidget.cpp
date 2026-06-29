@@ -69,6 +69,8 @@ QTermWidget::QTermWidget(QWidget *parent)
             this, &QTermWidget::scrollChanged);
     connect(m_controller, &QTermViewController::wheelScrolled,
             this, &QTermWidget::wheelScrolled);
+    connect(m_controller, &QTermViewController::zoomRequested,
+            this, &QTermWidget::zoomRequested);
     connect(m_controller, &QTermViewController::copyRequested,
             this, &QTermWidget::copyRequested);
     connect(m_controller, &QTermViewController::hyperlinkActivated,

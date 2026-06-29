@@ -408,10 +408,13 @@ struct VisibleSnapshotRows
     int endColumn = 0;
 };
 
-// 把 projection 空间的选区 [start,end] **裁剪**到当前可见窗口,产出视口相对的快照行/列。
-// 选区比一屏长时,超出上/下边界的部分被裁掉而非整段隐藏:首行被裁 → 从列 0 起;
-// 末行被裁 → 延到整行宽(columns)。完全在视口外 → visible=false。
-// (旧的 all-or-nothing「两端都可见才显」会让跨屏选区高亮整段消失。)
+// Clip a projection-space selection [start,end] to the current visible window,
+// producing viewport-relative snapshot rows/columns. When the selection is taller
+// than one screen, the parts past the top/bottom edge are clipped instead of
+// hiding the whole highlight: a clipped first row starts at column 0; a clipped
+// last row extends to the full row width (columns). Fully outside the viewport →
+// visible=false. (The old all-or-nothing "show only if both endpoints are visible"
+// made an off-screen-spanning selection's highlight vanish entirely.)
 VisibleSnapshotRows clipSelectionToViewport(int firstVisibleProjectionRow,
                                             int visibleRowCount,
                                             int columns,
@@ -569,7 +572,8 @@ void QTermSelectionModel::setSelectionFromDragCells(const QTermBuffer &buffer,
         return;
     }
 
-    // 端点夹进 buffer 并排序为 start <= end(projection 行优先,同行比列)。
+    // Clamp endpoints into the buffer and order them start <= end (by projection
+    // row first, then by column within the same row).
     int startRow = qBound(0, anchorProjectionRow, projectionRowCount - 1);
     int endRow   = qBound(0, dragProjectionRow,   projectionRowCount - 1);
     int startColumn = qMax(0, anchorColumn);
@@ -585,9 +589,11 @@ void QTermSelectionModel::setSelectionFromDragCells(const QTermBuffer &buffer,
         return;
     }
 
-    // 字素对齐:起点回退到字首格(跳过宽字符续格的空列),终点用 graphemeEndColumn
-    // 扩到该字素之后的第一格(半开 [start,end))。否则落在宽字符/CJK 半格时,高亮
-    // 只覆盖半个字(虽然取出的文本是整字)。
+    // Grapheme alignment: move the start back to the glyph's first cell (skipping
+    // the empty continuation cells of a wide char), and extend the end via
+    // graphemeEndColumn to the first cell past that glyph (half-open [start,end)).
+    // Otherwise, when an endpoint lands on the half cell of a wide/CJK char, the
+    // highlight covers only half the glyph (even though the extracted text is whole).
     const QStringList startColumns = buffer.projectionLineAt(startRow).columnTexts();
     while (startColumn > 0 && startColumn < startColumns.size()
            && startColumns.at(startColumn).isEmpty())
