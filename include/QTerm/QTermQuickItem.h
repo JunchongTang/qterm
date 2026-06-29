@@ -123,7 +123,8 @@ signals:
     void cursorDelegateChanged();
     void scrollChanged();
     void wheelScrolled(qreal angleDelta);
-    // Ctrl(macOS=⌘)+ 滚轮的缩放意图:steps>0 放大、<0 缩小。宿主 QML 接住调字号。
+    // Ctrl (⌘ on macOS) + wheel zoom intent: steps>0 zoom in, <0 zoom out.
+    // The host QML connects this to adjust the terminal font size.
     void zoomRequested(int steps);
     void copyRequested();
     void hyperlinkActivated(const QString &url);
