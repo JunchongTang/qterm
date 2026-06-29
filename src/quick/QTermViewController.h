@@ -138,6 +138,10 @@ private:
     qreal m_dragX                  = 0.0;
     qreal m_dragY                  = 0.0;
     int   m_autoScrollDirection    = 0; // +1 = 向上, -1 = 向下
+    // 滚轮按「行」滚,但触控板/妙控鼠标发高分辨率像素增量(且惯性高频发事件)。
+    // 把像素换算成小数行累加于此,只在攒满整行时才滚 —— 不足一行不强滚 1 行,
+    // 否则惯性尾巴会叠成几十行(macOS 滚动过冲根因)。
+    qreal m_wheelRowAccumulator    = 0.0;
 };
 
 } // namespace QTerm
