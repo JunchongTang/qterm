@@ -470,6 +470,28 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
 
     const QPoint angleDelta = event->angleDelta();
 
+    // Ctrl(macOS=⌘)+ 滚轮 = 缩放意图,优先于一切(含鼠标协议):不滚动 scrollback,
+    // 上报 zoomRequested,由宿主调字号。触控板像素增量按 ~40px 一档去抖,滚轮 120=一档。
+    if (event->modifiers() & Qt::ControlModifier) {
+        const QPoint pixelDelta = event->pixelDelta();
+        qreal stepDelta = 0.0;
+        if (pixelDelta.y() != 0)
+            stepDelta = pixelDelta.y() / 40.0;
+        else if (angleDelta.y() != 0)
+            stepDelta = angleDelta.y() / 120.0;
+        if (!qFuzzyIsNull(stepDelta)) {
+            if ((stepDelta > 0.0) != (m_zoomStepAccumulator > 0.0))
+                m_zoomStepAccumulator = 0.0;               // 方向反转丢残量
+            m_zoomStepAccumulator += stepDelta;
+            const int steps = static_cast<int>(m_zoomStepAccumulator);
+            if (steps != 0) {
+                m_zoomStepAccumulator -= steps;
+                emit zoomRequested(steps);                 // +放大 / -缩小
+            }
+        }
+        return true;                                       // 消费,不滚动
+    }
+
     if (m_terminal->isMouseProtocolActive() && angleDelta.y() != 0) {
         // 鼠标协议启用：虚拟按钮码 64=向上、65=向下（X10/SGR 滚轮约定）
         const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
