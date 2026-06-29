@@ -131,6 +131,9 @@ private:
     int   m_lastClickColumn        = -1;
     int   m_selectionAnchorRow     = -1;
     int   m_selectionAnchorColumn  = -1;
+    // 选区锚点的**projection 绝对行**(含 scrollback),拖拽时随内容固定,不随视口
+    // 滚动漂移 —— 自动滚动选很多行时,起点才不会丢。-1 = 无锚点。
+    int   m_selectionAnchorProjectionRow = -1;
     bool  m_suppressSelectionRelease = false;
     qreal m_dragX                  = 0.0;
     qreal m_dragY                  = 0.0;
