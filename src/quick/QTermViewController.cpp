@@ -471,12 +471,16 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
     const QPoint angleDelta = event->angleDelta();
 
     // Ctrl(macOS=⌘)+ 滚轮 = 缩放意图,优先于一切(含鼠标协议):不滚动 scrollback,
-    // 上报 zoomRequested,由宿主调字号。触控板像素增量按 ~40px 一档去抖,滚轮 120=一档。
+    // 上报 zoomRequested,由宿主调字号。字号调节要慢:像素增量按 ~120px 一档(≈精密
+    // 鼠标一格一步,和键盘 1 步一致,不再一格跳 3),滚轮 120 单位=一档。
     if (event->modifiers() & Qt::ControlModifier) {
+        // 惯性(momentum)阶段不缩放:否则松手后余速会继续狂缩。仅 macOS 给该相位。
+        if (event->phase() == Qt::ScrollMomentum)
+            return true;                                   // 消费,不滚动也不缩放
         const QPoint pixelDelta = event->pixelDelta();
         qreal stepDelta = 0.0;
         if (pixelDelta.y() != 0)
-            stepDelta = pixelDelta.y() / 40.0;
+            stepDelta = pixelDelta.y() / 120.0;
         else if (angleDelta.y() != 0)
             stepDelta = angleDelta.y() / 120.0;
         if (!qFuzzyIsNull(stepDelta)) {
