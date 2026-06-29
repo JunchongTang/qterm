@@ -77,6 +77,9 @@ signals:
     void metricsChanged();          // cellWidth/Height 变化 → Widget 需要 repaint + resize
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
+    // Ctrl(macOS=⌘)+ 滚轮的「缩放意图」:steps>0 放大、<0 缩小(已按档累加去抖)。
+    // QTerm 本身不改字号 —— 仅上报,由宿主(app)决定如何缩放(如调终端字号)。
+    void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
     void mouseAcceptanceChanged();  // Widget 应重新调用 updateMouseAcceptance()
@@ -142,6 +145,8 @@ private:
     // 把像素换算成小数行累加于此,只在攒满整行时才滚 —— 不足一行不强滚 1 行,
     // 否则惯性尾巴会叠成几十行(macOS 滚动过冲根因)。
     qreal m_wheelRowAccumulator    = 0.0;
+    // Ctrl+滚轮缩放的小数档累加(同理去抖:触控板高频像素增量攒满一档才发一步)。
+    qreal m_zoomStepAccumulator    = 0.0;
 };
 
 } // namespace QTerm

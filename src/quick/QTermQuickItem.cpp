@@ -422,6 +422,8 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
             this, &QTermQuickItem::scrollChanged);
     connect(m_controller, &QTermViewController::wheelScrolled,
             this, &QTermQuickItem::wheelScrolled);
+    connect(m_controller, &QTermViewController::zoomRequested,
+            this, &QTermQuickItem::zoomRequested);
     connect(m_controller, &QTermViewController::copyRequested,
             this, &QTermQuickItem::copyRequested);
     connect(m_controller, &QTermViewController::hyperlinkActivated,

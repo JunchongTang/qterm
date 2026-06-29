@@ -123,6 +123,8 @@ signals:
     void cursorDelegateChanged();
     void scrollChanged();
     void wheelScrolled(qreal angleDelta);
+    // Ctrl(macOS=⌘)+ 滚轮的缩放意图:steps>0 放大、<0 缩小。宿主 QML 接住调字号。
+    void zoomRequested(int steps);
     void copyRequested();
     void hyperlinkActivated(const QString &url);
 
