@@ -482,20 +482,32 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
         return true;
     }
 
-    // 鼠标协议禁用：滚动 scrollback
-    int deltaRows = 0;
-    if (angleDelta.y() != 0) {
-        const int stepCount = qMax(1, qAbs(angleDelta.y()) / 120);
-        deltaRows = (angleDelta.y() > 0 ? 1 : -1) * stepCount * kWheelScrollRowsPerStep;
-    } else if (event->pixelDelta().y() != 0) {
-        const int pixelRows = static_cast<int>(
-            std::round(event->pixelDelta().y() / qMax<qreal>(1.0, m_cellHeight)));
-        deltaRows = pixelRows != 0 ? pixelRows : (event->pixelDelta().y() > 0 ? 1 : -1);
+    // 鼠标协议禁用：滚动 scrollback。
+    // 高分辨率优先:触控板 / 妙控鼠标发 pixelDelta(惯性还会高频连发),按行高
+    // 1:1 换算成小数行,贴合手指位移、不过冲;传统滚轮无 pixelDelta,用 angleDelta
+    // (120 单位 = 一档,每档 kWheelScrollRowsPerStep 行)。macOS 上这些设备的
+    // angleDelta 是粗粒度派生值,故 pixelDelta 在场时一律以它为准(VSCode 同思路)。
+    const QPoint pixelDelta = event->pixelDelta();
+    qreal rowsDelta = 0.0;
+    if (pixelDelta.y() != 0) {
+        rowsDelta = pixelDelta.y() / qMax<qreal>(1.0, m_cellHeight);
+    } else if (angleDelta.y() != 0) {
+        rowsDelta = (angleDelta.y() / 120.0) * kWheelScrollRowsPerStep;
     }
+    if (qFuzzyIsNull(rowsDelta)) return false;
 
-    if (deltaRows == 0) return false;
+    // 方向反转 → 丢弃残量,立刻跟手。
+    if ((rowsDelta > 0.0) != (m_wheelRowAccumulator > 0.0))
+        m_wheelRowAccumulator = 0.0;
+    m_wheelRowAccumulator += rowsDelta;
 
-    m_terminal->scrollByLines(deltaRows);
+    // 截断向零取整行;不足一行则累加、吞掉本事件(不强滚 1 行)。
+    const int wholeRows = static_cast<int>(m_wheelRowAccumulator);
+    if (wholeRows == 0)
+        return true;
+    m_wheelRowAccumulator -= wholeRows;
+
+    m_terminal->scrollByLines(wholeRows);
     emit wheelScrolled(m_terminal->scrollOffset());
     emit scrollChanged();
     return true;
