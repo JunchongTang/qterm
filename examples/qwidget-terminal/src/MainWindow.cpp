@@ -204,11 +204,17 @@ QTabBar::tab:selected {
     color: %8;
     border: 1px solid %9;
 }
+/* subcontrol-position pins the button to the tab's border box, ignoring the
+   tab padding, so the inset has to come from its own margin. Matches the Qt
+   Quick demo, where the 12px glyph sits in a 20px button with a 4px gap to the
+   tab edge. */
 QTabBar::close-button {
     image: url(:/assets/icons/close-%10.svg);
     width: 12px;
     height: 12px;
     subcontrol-position: right;
+    margin-right: %11px;
+    margin-left: %12px;
 }
 )")
             .arg(theme->mutedForeground().name(QColor::HexArgb))
@@ -220,7 +226,9 @@ QTabBar::close-button {
             .arg(theme->muted().name(QColor::HexArgb))
             .arg(theme->foreground().name(QColor::HexArgb))
             .arg(theme->border().name(QColor::HexArgb))
-            .arg(theme->isDark() ? QStringLiteral("dark") : QStringLiteral("light"));
+            .arg(theme->isDark() ? QStringLiteral("dark") : QStringLiteral("light"))
+            .arg(theme->space2())   // 11: inset from the tab's right edge
+            .arg(theme->space1());  // 12: gap between the label and the button
     m_tabBar->setStyleSheet(tabQss);
 }
 
