@@ -119,7 +119,7 @@ void QTermQuickPaintedItemTest::preservesPromptLinesAcrossWidthOscillation()
 
     // 77-char prompt — fits at wide width, wraps at narrow.
     const QString prompt =
-        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo"_s;
+        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/qtquick-terminal"_s;
 
     // Simulate 5 Enter presses: 4 completed lines + 1 active prompt.
     QString transcript;
@@ -173,7 +173,7 @@ void QTermQuickPaintedItemTest::preservesPromptLinesWhenShellUsesAbsoluteColumnM
     item.setHeight(600);
 
     const QString prompt =
-        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo"_s;
+        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/qtquick-terminal"_s;
 
     QString transcript;
     for (int i = 0; i < 4; ++i) {
