@@ -21,7 +21,9 @@
 #include <QSGVertexColorMaterial>
 #include <QTextCharFormat>
 #include <QTextLayout>
+#include <QTextOption>
 #include <QWheelEvent>
+#include <cmath>
 
 namespace QTerm {
 
@@ -39,6 +41,8 @@ struct QTermSGRootNode : public QSGNode
 {
     QSGGeometryNode *bgFillNode = nullptr;
     QSGGeometryNode *selectionNode = nullptr;
+    QSGGeometryNode *searchNode = nullptr;         // all matches (dim)
+    QSGGeometryNode *searchCurrentNode = nullptr;  // current match (bright)
     QSGNode *textGroupNode = nullptr;
     QSGGeometryNode *cursorNode = nullptr;
     QVector<QSGTextNode *> textNodes; // parallel to visible rows, NOT OwnedByParent
@@ -183,7 +187,7 @@ void recreateTextRowNodes(QTermSGRootNode *root, QQuickWindow *win,
 void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
                          qreal cellW, qreal cellH,
                          const QFont &baseFont, const qreal topOffset,
-                         const QColor &termFg, const QColor &hyperlinkTint,
+                         const QColor &termFg, const QColor &termBg, const QColor &hyperlinkTint,
                          const QColor *palette16)
 {
     tn->clear();
@@ -209,7 +213,7 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
             runFont.setUnderline(run.value(QStringLiteral("underline")).toBool() || hasHyperlink);
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
 
-            QColor fg = qtermEffectiveForeground(run, termFg, palette16);
+            QColor fg = qtermEffectiveForeground(run, termFg, termBg, palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
@@ -221,6 +225,17 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
 
             // Build a QTextLayout for this run so we can call addTextLayout.
             QTextLayout layout(text, runFont);
+
+            // A run fills a fixed span of the cell grid, so it must never wrap.
+            // With the default word-wrapping mode, setLineWidth(runW) below
+            // moves the trailing word onto a second line as soon as the run
+            // measures runW or more -- and since only the first line is ever
+            // laid out, that word is silently dropped. A monospaced run of n
+            // columns measures exactly n * cellW, so it hits that boundary on
+            // every full-width line.
+            QTextOption textOption = layout.textOption();
+            textOption.setWrapMode(QTextOption::NoWrap);
+            layout.setTextOption(textOption);
 
             QTextCharFormat cf;
             cf.setForeground(fg);
@@ -289,6 +304,50 @@ void rebuildSelection(QSGGeometryNode *node, QTermSurfaceModel *sm,
 }
 
 // ── Cursor geometry ───────────────────────────────────────────────────────────
+
+// Search-match highlight rectangles. currentOnly selects which set to draw:
+// false = all non-current matches; true = the current match. Two passes into
+// two nodes give the two tints with flat-color materials.
+void rebuildSearchHighlights(QSGGeometryNode *node, QTermSurfaceModel *sm,
+                             qreal cellW, qreal cellH, const QColor &color,
+                             bool currentOnly)
+{
+    auto *mat = static_cast<QSGFlatColorMaterial *>(node->material());
+    mat->setColor(color);
+
+    const QVariantList highlights = sm ? sm->searchHighlights() : QVariantList{};
+    if (highlights.isEmpty()) {
+        node->geometry()->allocate(0);
+        node->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
+        return;
+    }
+
+    // Count quads in this pass first (allocate exact).
+    int quadCount = 0;
+    for (const QVariant &v : highlights) {
+        const QVariantMap h = v.toMap();
+        if (h.value(QStringLiteral("current")).toBool() == currentOnly)
+            ++quadCount;
+    }
+    QSGGeometry *geom = node->geometry();
+    geom->allocate(quadCount * 6);
+    auto *vtx = geom->vertexDataAsPoint2D();
+    int vi = 0;
+    for (const QVariant &v : highlights) {
+        const QVariantMap h = v.toMap();
+        if (h.value(QStringLiteral("current")).toBool() != currentOnly)
+            continue;
+        const int row = h.value(QStringLiteral("row")).toInt();
+        const int startCol = h.value(QStringLiteral("startColumn")).toInt();
+        const int endCol = h.value(QStringLiteral("endColumn")).toInt();
+        const float x0 = float(startCol * cellW);
+        const float y0 = float(row * cellH);
+        const float x1 = float(endCol * cellW);
+        const float y1 = float(y0 + cellH);
+        appendQuadP2D(vtx, vi, x0, y0, x1, y1);
+    }
+    node->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
+}
 
 void rebuildCursor(QSGGeometryNode *node, QTermSurfaceModel *sm,
                    qreal cellW, qreal cellH,
@@ -376,6 +435,8 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
             this, &QTermQuickItem::scrollChanged);
     connect(m_controller, &QTermViewController::wheelScrolled,
             this, &QTermQuickItem::wheelScrolled);
+    connect(m_controller, &QTermViewController::zoomRequested,
+            this, &QTermQuickItem::zoomRequested);
     connect(m_controller, &QTermViewController::copyRequested,
             this, &QTermQuickItem::copyRequested);
     connect(m_controller, &QTermViewController::hyperlinkActivated,
@@ -509,6 +570,26 @@ void QTermQuickItem::setSelectionColor(const QColor &selectionColor)
 {
     if (m_selectionColor == selectionColor) return;
     m_selectionColor = selectionColor;
+    scheduleSelectionDirty();
+    emit paletteChanged();
+}
+
+QColor QTermQuickItem::searchHighlightColor() const { return m_searchHighlightColor; }
+
+void QTermQuickItem::setSearchHighlightColor(const QColor &color)
+{
+    if (m_searchHighlightColor == color) return;
+    m_searchHighlightColor = color;
+    scheduleSelectionDirty();
+    emit paletteChanged();
+}
+
+QColor QTermQuickItem::searchCurrentColor() const { return m_searchCurrentColor; }
+
+void QTermQuickItem::setSearchCurrentColor(const QColor &color)
+{
+    if (m_searchCurrentColor == color) return;
+    m_searchCurrentColor = color;
     scheduleSelectionDirty();
     emit paletteChanged();
 }
@@ -758,6 +839,14 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         root->selectionNode->setFlag(QSGNode::OwnedByParent);
         root->appendChildNode(root->selectionNode);
 
+        root->searchNode = createFlatColorGeomNode(m_searchHighlightColor);
+        root->searchNode->setFlag(QSGNode::OwnedByParent);
+        root->appendChildNode(root->searchNode);
+
+        root->searchCurrentNode = createFlatColorGeomNode(m_searchCurrentColor);
+        root->searchCurrentNode->setFlag(QSGNode::OwnedByParent);
+        root->appendChildNode(root->searchCurrentNode);
+
         root->textGroupNode = new QSGNode;
         root->textGroupNode->setFlag(QSGNode::OwnedByParent);
         root->appendChildNode(root->textGroupNode);
@@ -809,8 +898,8 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         for (int row = 0; row < rows; ++row) {
             populateRowTextNode(root->textNodes[row], row, lineRuns,
                                 cellW, cellH, baseFont, topOffset,
-                                m_foregroundColor, m_theme.hyperlinkTint(),
-                                m_theme.palette16());
+                                m_foregroundColor, m_backgroundColor,
+                                m_theme.hyperlinkTint(), m_theme.palette16());
         }
     } else if (hasPartialRows) {
         const QVariantList lineRuns = sm->visibleLineRuns();
@@ -818,8 +907,8 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
             if (row >= 0 && row < rows) {
                 populateRowTextNode(root->textNodes[row], row, lineRuns,
                                     cellW, cellH, baseFont, topOffset,
-                                    m_foregroundColor, m_theme.hyperlinkTint(),
-                                    m_theme.palette16());
+                                    m_foregroundColor, m_backgroundColor,
+                                    m_theme.hyperlinkTint(), m_theme.palette16());
             }
         }
     }
@@ -827,6 +916,10 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     // ── Selection ─────────────────────────────────────────────────────────────
     if (m_fullDirty || m_selectionDirty) {
         rebuildSelection(root->selectionNode, sm, cellW, cellH, m_selectionColor);
+        rebuildSearchHighlights(root->searchNode, sm, cellW, cellH,
+                                m_searchHighlightColor, /*currentOnly=*/false);
+        rebuildSearchHighlights(root->searchCurrentNode, sm, cellW, cellH,
+                                m_searchCurrentColor, /*currentOnly=*/true);
     }
 
     // ── Cursor ────────────────────────────────────────────────────────────────

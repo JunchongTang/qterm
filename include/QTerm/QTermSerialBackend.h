@@ -12,16 +12,14 @@ class QSerialPort;
 
 namespace QTerm {
 
-// Serial-port session backend backed by Qt's QSerialPort.
-//
-// Usage:
-//   QTermSerialBackend backend;
-//   backend.setPortName("/dev/tty.usbserial-0001");
-//   backend.setBaudRate(115200);
-//   backend.open();
-//   // wire up to QTermSession the same way as QTermLocalPtyBackend
-//
-// resize() is accepted but ignored — serial devices have no terminal geometry.
+/*!
+    \class QTermSerialBackend
+    \inmodule QTerm
+    \brief Serial-port session backend based on QSerialPort.
+
+    This backend maps terminal session I/O to a serial device. The resize()
+    call is accepted for API consistency and ignored by serial hardware.
+*/
 class QTermSerialBackend : public QTermSessionBackend
 {
     Q_OBJECT
@@ -37,28 +35,32 @@ public:
     explicit QTermSerialBackend(QObject *parent = nullptr);
     ~QTermSerialBackend() override;
 
-    // ── Port selection ────────────────────────────────────────────────────────
+    /*! \brief Returns the configured serial port name, for example COM3 or /dev/ttyUSB0. */
     QString portName() const;
+    /*! \brief Sets the serial port name, for example COM3 or /dev/ttyUSB0. */
     void setPortName(const QString &portName);
 
     // ── Line parameters ───────────────────────────────────────────────────────
-    // Use any integer baud rate supported by the OS/driver.
+    /*! \brief Returns the configured baud rate. */
     int  baudRate() const noexcept;
+    /*! \brief Sets the baud rate supported by the OS driver. */
     void setBaudRate(int baudRate);
 
     int  dataBits() const noexcept;   // 5/6/7/8
     void setDataBits(int dataBits);
 
-    // "N" / "E" / "O" / "M" / "S"  (None/Even/Odd/Mark/Space)
+    /*! \brief Returns the configured parity mode as one of N, E, O, M or S. */
     QString parity() const;
+    /*! \brief Sets the parity mode as one of N, E, O, M or S. */
     void    setParity(const QString &parity);
 
     // 1 / 2 (1.5 not exposed — rarely used)
     int  stopBits() const noexcept;
     void setStopBits(int stopBits);
 
-    // "none" / "hardware" / "software"
+    /*! \brief Returns the configured flow control mode. */
     QString flowControl() const;
+    /*! \brief Sets the flow control mode to none, hardware or software. */
     void    setFlowControl(const QString &flowControl);
 
     // ── QTermSessionBackend interface ─────────────────────────────────────────
@@ -66,6 +68,11 @@ public:
     void close() override;
     void writeData(const QByteArray &data) override;
     void resize(int columns, int rows) override; // no-op for serial
+
+    // Serial is a device connection with no "foreground process" concept —
+    // closing merely disconnects the device, there is no process to interrupt.
+    // Always Idle, so the in-progress-work confirmation never fires for serial.
+    WorkState workState() const override { return WorkIdle; }
 
 signals:
     void portNameChanged();

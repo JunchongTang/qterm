@@ -1,6 +1,6 @@
 // Manual visual verification of the resize-regression fix using a REAL PTY.
 //
-// This program starts an actual zsh process via QTermLocalPtyBackend, displays
+// This program starts an actual zsh process via QTermLocalShellBackend, displays
 // it in a QTermQuickPaintedItem, then automatically cycles between narrow and wide
 // widths so zsh receives real SIGWINCH signals and redraws its own prompt.
 //
@@ -27,7 +27,7 @@
 #include <QTextStream>
 #include <QTimer>
 
-#include <QTerm/QTermLocalPtyBackend.h>
+#include <QTerm/QTermLocalShellBackend.h>
 #include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermSession.h>
 #include <QTerm/QTermTerminal.h>
@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
 
     // ── PTY backend + session + terminal ──────────────────────────────────
-    QTerm::QTermLocalPtyBackend backend;
+    QTerm::QTermLocalShellBackend backend;
     QTerm::QTermSession          session;
     QTerm::QTermTerminal         terminal;
 
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
         ts << "(( ${+functions[p10k]} )) && p10k finalize 2>/dev/null; true\n";
         ts << "unset ZSH_THEME POWERLEVEL9K_TRANSIENT_PROMPT\n";
         // Simple, long prompt so it wraps at narrow width (~23 cols).
-        ts << "PS1='%F{cyan}➜%f  %n@%m /home/dev/workspace/terminal-app/build/examples/quick-demo %# '\n";
+        ts << "PS1='%F{cyan}➜%f  %n@%m /home/dev/workspace/terminal-app/build/examples/qtquick-terminal %# '\n";
         ts << "PS2='> '\n";
         ts << "PROMPT_EOL_MARK=''\n";
     }
@@ -236,7 +236,7 @@ int main(int argc, char **argv)
         case Narrow:
             // 逐步缩窄窗口到 kNarrowWidth，模拟用户拖拽窗口边缘。
             // QTermQuickPaintedItem::geometryChange 会同步调用 syncTerminalSize()，
-            // QTermLocalPtyBackend 的 debounce timer 到期后发 TIOCSWINSZ，
+            // QTermLocalShellBackend 的 debounce timer 到期后发 TIOCSWINSZ，
             // zsh 收到 SIGWINCH 并用 ESC[1G 重绘 prompt（折成多行）。
             qDebug().noquote()
                 << u"  → Narrowing to %1 px (zsh gets SIGWINCH)"_s.arg(kNarrowWidth);

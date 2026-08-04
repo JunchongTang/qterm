@@ -1,0 +1,16 @@
+/*!
+    \module QTerm
+    \title QTerm C++ Module
+    \brief Terminal emulation components for Qt applications.
+
+    The QTerm module provides terminal core models, session backends and UI
+    integration types for both Qt Widgets and Qt Quick.
+
+    Public API groups:
+    \list
+    \li Core models and session control
+    \li Local shell, serial and telnet backends
+    \li Theme and surface projection types
+    \li Widgets and Qt Quick terminal views
+    \endlist
+*/

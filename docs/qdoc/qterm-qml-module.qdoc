@@ -1,0 +1,13 @@
+/*!
+    \qmlmodule QTerm
+    \title QTerm QML Module
+    \brief QML types for embedding terminal features in Qt Quick applications.
+
+    Import this module in QML:
+    \code
+    import QTerm 1.0
+    \endcode
+
+    The module exposes terminal items, session backends and value types such as
+    shell and serial-port descriptors.
+*/

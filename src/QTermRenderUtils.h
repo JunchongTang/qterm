@@ -90,11 +90,16 @@ QColor qtermRunBackgroundColor(const QVariantMap &run, const QColor *palette16 =
 }
 
 QColor qtermEffectiveForeground(const QVariantMap &run, const QColor &defaultForeground,
+                                const QColor &defaultBackground,
                                 const QColor *palette16 = nullptr)
 {
     if (run.value(QStringLiteral("inverse")).toBool()) {
+        // Reverse video swaps the *resolved* colors: a cell with no explicit
+        // background must take the theme's default background as its glyph
+        // color. (A hardcoded dark constant here only looks right on dark
+        // themes; on light themes it renders dark-on-dark.)
         const QColor bg = qtermRunBackgroundColor(run, palette16);
-        return bg.isValid() ? bg : QColor(QStringLiteral("#0a0f15"));
+        return bg.isValid() ? bg : defaultBackground;
     }
     return qtermRunForegroundColor(run, defaultForeground, palette16);
 }
@@ -209,7 +214,7 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
             painter->setFont(runFont);
 
-            QColor fg = qtermEffectiveForeground(run, req.foreground, req.palette16);
+            QColor fg = qtermEffectiveForeground(run, req.foreground, req.background, req.palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {

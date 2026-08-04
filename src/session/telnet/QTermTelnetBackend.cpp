@@ -64,7 +64,7 @@ void QTermTelnetBackend::open()
     if (state() == Open || state() == Opening) return;
 
     if (m_host.isEmpty()) {
-        emitErrorOccurred(QStringLiteral("No host specified."));
+        emitErrorOccurred(HostNotFound, QStringLiteral("No host specified."));
         return;
     }
 
@@ -191,8 +191,31 @@ void QTermTelnetBackend::onReadyRead()
 
 void QTermTelnetBackend::onSocketError()
 {
-    if (state() != Closed && state() != Closing)
-        emitErrorOccurred(m_socket->errorString());
+    if (state() == Closed || state() == Closing)
+        return;
+    const bool wasUp = (state() == Open);
+    int kind = Other;
+    switch (m_socket->error()) {
+    case QAbstractSocket::ConnectionRefusedError:
+        kind = ConnectionRefused;
+        break;
+    case QAbstractSocket::HostNotFoundError:
+        kind = HostNotFound;
+        break;
+    case QAbstractSocket::SocketTimeoutError:
+        kind = Timeout;
+        break;
+    case QAbstractSocket::RemoteHostClosedError:
+        kind = ConnectionLost;
+        break;
+    case QAbstractSocket::NetworkError:
+        kind = wasUp ? ConnectionLost : Other;
+        break;
+    default:
+        kind = wasUp ? ConnectionLost : Other;
+        break;
+    }
+    emitErrorOccurred(kind, m_socket->errorString());
 }
 
 // ── Private: protocol helpers ─────────────────────────────────────────────────

@@ -18,7 +18,7 @@ namespace QTerm {
 QTermCore::QTermCore(QObject *parent)
     : QObject(parent)
     , m_primaryScreen(80, 24)
-    , m_alternateScreen(80, 24)
+    , m_alternateScreen(80, 24, 0)
 {
 }
 
@@ -30,6 +30,11 @@ int QTermCore::rows() const noexcept
 int QTermCore::columns() const noexcept
 {
     return activeScreen().buffer.columns();
+}
+
+int QTermCore::maximumScrollbackLines() const noexcept
+{
+    return m_primaryScreen.buffer.maximumHistoryLines();
 }
 
 QString QTermCore::title() const
@@ -52,9 +57,14 @@ int QTermCore::lastExitCode() const noexcept
     return m_lastExitCode;
 }
 
-QString QTermCore::debugPlainText() const
+QString QTermCore::dumpPlainText() const
 {
-    return activeScreen().buffer.debugPlainText();
+    return activeScreen().buffer.dumpPlainText();
+}
+
+QByteArray QTermCore::dumpAnsi(int maxLines) const
+{
+    return activeScreen().buffer.dumpAnsi(maxLines);
 }
 
 QTermCursorState QTermCore::cursorState() const noexcept
@@ -113,7 +123,7 @@ void QTermCore::clear()
     m_primaryScreen.clear();
     m_alternateScreen.clear();
     m_modeState = QTermModeState();
-    emit debugPlainTextChanged();
+    emit dumpPlainTextChanged();
     emit cursorStateChanged();
 }
 
@@ -188,7 +198,7 @@ void QTermCore::writePlainText(const QString &text)
 
     m_textParser.parse(text, executor);
 
-    emit debugPlainTextChanged();
+    emit dumpPlainTextChanged();
     emit cursorStateChanged();
 
     if (m_modeState.mouseTracking != prevMouseTracking ||
@@ -196,6 +206,16 @@ void QTermCore::writePlainText(const QString &text)
         m_modeState.cursorShape != prevCursorShape) {
         emit modeStateChanged();
     }
+}
+
+void QTermCore::setMaximumScrollbackLines(int maximumScrollbackLines)
+{
+    if (m_primaryScreen.buffer.maximumHistoryLines() == qMax(0, maximumScrollbackLines)) {
+        return;
+    }
+
+    m_primaryScreen.buffer.setMaximumHistoryLines(maximumScrollbackLines);
+    emit dumpPlainTextChanged();
 }
 
 void QTermCore::setTerminalSize(int columns, int rows)
@@ -209,7 +229,7 @@ void QTermCore::setTerminalSize(int columns, int rows)
     m_primaryScreen.resize(boundedColumns, boundedRows);
     m_alternateScreen.resize(boundedColumns, boundedRows);
     emit sizeChanged();
-    emit debugPlainTextChanged();
+    emit dumpPlainTextChanged();
     emit cursorStateChanged();
 }
 

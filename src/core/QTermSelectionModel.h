@@ -42,6 +42,15 @@ public:
 
     void clearSelection();
     void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
+    // Drag-selection (absolute projection rows + cell columns). Orders the
+    // endpoints, snaps them to grapheme boundaries (start back to the first cell
+    // of its glyph, end out to the cell after the glyph → wide/CJK chars taken
+    // whole), then goes through the logical-anchor path (spans scrollback, never
+    // loses the start during auto-scroll). Viewport rows cannot do this, so the
+    // drag no longer uses setSelectionRange.
+    void setSelectionFromDragCells(const QTermBuffer &buffer,
+                                   int anchorProjectionRow, int anchorColumn,
+                                   int dragProjectionRow, int dragColumn);
     void selectWordAt(const QTermBuffer &buffer, int row, int column);
     void selectLogicalLineAt(const QTermBuffer &buffer, int row);
 

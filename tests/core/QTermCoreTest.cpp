@@ -20,6 +20,9 @@ private slots:
     void wrapsCursorByColumnCount();
     void supportsCsiCursorBackward();
     void keepsPartialCsiStateAcrossWrites();
+    void ignoresUnsupportedControlStrings();
+    void supportsColonSeparatedTrueColorSgr();
+    void treatsVerticalTabAndFormFeedAsLineFeeds();
     void supportsCsiCursorPosition();
     void supportsCsiEraseInLine();
     void supportsCsiEraseInDisplay();
@@ -39,6 +42,7 @@ private slots:
     void togglesApplicationCursorKeysMode();
     void switchesToAlternateScreen();
     void restoresPrimaryScreenFromAlternate();
+    void doesNotStoreAlternateScreenScrollback();
     void combinesNonSpacingMarks();
     void storesWideCharactersAcrossTwoCells();
     void keepsNonBmpWideCharactersAcrossWrites();
@@ -119,7 +123,7 @@ void QTermCoreTest::usesDefaultTerminalSize()
 
     QCOMPARE(core.columns(), 80);
     QCOMPARE(core.rows(), 24);
-    QCOMPARE(core.debugPlainText(), QString());
+    QCOMPARE(core.dumpPlainText(), QString());
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 0);
 }
@@ -140,7 +144,7 @@ void QTermCoreTest::tracksCrlfAsLineBreak()
 
     core.writePlainText("ab\r\ncd"_L1);
 
-    QCOMPARE(core.debugPlainText(), "ab\ncd"_L1);
+    QCOMPARE(core.dumpPlainText(), "ab\ncd"_L1);
     QCOMPARE(core.cursorState().row, 1);
     QCOMPARE(core.cursorState().column, 2);
 }
@@ -151,7 +155,7 @@ void QTermCoreTest::preservesColumnOnLineFeed()
 
     core.writePlainText("ab\ncd"_L1);
 
-    QCOMPARE(core.debugPlainText(), "ab\n  cd"_L1);
+    QCOMPARE(core.dumpPlainText(), "ab\n  cd"_L1);
     QCOMPARE(core.cursorState().row, 1);
     QCOMPARE(core.cursorState().column, 4);
 }
@@ -162,7 +166,7 @@ void QTermCoreTest::overwritesCellsAfterCarriageReturn()
 
     core.writePlainText("abc\rZ"_L1);
 
-    QCOMPARE(core.debugPlainText(), "Zbc"_L1);
+    QCOMPARE(core.dumpPlainText(), "Zbc"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 1);
 }
@@ -174,7 +178,7 @@ void QTermCoreTest::wrapsCursorByColumnCount()
 
     core.writePlainText("abcde"_L1);
 
-    QCOMPARE(core.debugPlainText(), "abcde"_L1);
+    QCOMPARE(core.dumpPlainText(), "abcde"_L1);
     QCOMPARE(core.cursorState().row, 1);
     QCOMPARE(core.cursorState().column, 1);
 }
@@ -185,7 +189,7 @@ void QTermCoreTest::supportsCsiCursorBackward()
 
     core.writePlainText("abcd\x1b[2DXY"_L1);
 
-    QCOMPARE(core.debugPlainText(), "abXY"_L1);
+    QCOMPARE(core.dumpPlainText(), "abXY"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 4);
 }
@@ -198,9 +202,38 @@ void QTermCoreTest::keepsPartialCsiStateAcrossWrites()
     core.writePlainText("\x1b[2"_L1);
     core.writePlainText("DXY"_L1);
 
-    QCOMPARE(core.debugPlainText(), "abXY"_L1);
+    QCOMPARE(core.dumpPlainText(), "abXY"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 4);
+}
+
+void QTermCoreTest::ignoresUnsupportedControlStrings()
+{
+    QTermCore core;
+
+    core.writePlainText("before\x1bPignored\x1b\\after"_L1);
+    core.writePlainText("\x1b#8done"_L1);
+
+    QCOMPARE(core.dumpPlainText(), "beforeafterdone"_L1);
+}
+
+void QTermCoreTest::supportsColonSeparatedTrueColorSgr()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[38:2::255:0:0mred"_L1);
+
+    QCOMPARE(core.dumpPlainText(), "red"_L1);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0xff0000);
+}
+
+void QTermCoreTest::treatsVerticalTabAndFormFeedAsLineFeeds()
+{
+    QTermCore core;
+
+    core.writePlainText("a\vb\fc"_L1);
+
+    QCOMPARE(core.dumpPlainText(), "a\n b\n  c"_L1);
 }
 
 void QTermCoreTest::supportsCsiCursorPosition()
@@ -209,7 +242,7 @@ void QTermCoreTest::supportsCsiCursorPosition()
 
     core.writePlainText("ab\r\ncd\x1b[1;1HXY"_L1);
 
-    QCOMPARE(core.debugPlainText(), "XY\ncd"_L1);
+    QCOMPARE(core.dumpPlainText(), "XY\ncd"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 2);
 }
@@ -220,7 +253,7 @@ void QTermCoreTest::supportsCsiEraseInLine()
 
     core.writePlainText("abcde\x1b[2D\x1b[K"_L1);
 
-    QCOMPARE(core.debugPlainText(), "abc"_L1);
+    QCOMPARE(core.dumpPlainText(), "abc"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
 }
@@ -231,7 +264,7 @@ void QTermCoreTest::supportsCsiEraseInDisplay()
 
     core.writePlainText("ab\r\ncd\x1b[2J"_L1);
 
-    QCOMPARE(core.debugPlainText(), QString());
+    QCOMPARE(core.dumpPlainText(), QString());
     QCOMPARE(core.cursorState().row, 1);
     QCOMPARE(core.cursorState().column, 2);
 }
@@ -278,7 +311,7 @@ void QTermCoreTest::supportsInsertCharacters()
 
     core.writePlainText("abcd\x1b[3D\x1b[@Z"_L1);
 
-    QCOMPARE(core.debugPlainText(), "aZbcd"_L1);
+    QCOMPARE(core.dumpPlainText(), "aZbcd"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 2);
 }
@@ -289,7 +322,7 @@ void QTermCoreTest::supportsDeleteCharacters()
 
     core.writePlainText("abcd\x1b[3D\x1b[P"_L1);
 
-    QCOMPARE(core.debugPlainText(), "acd"_L1);
+    QCOMPARE(core.dumpPlainText(), "acd"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 1);
 }
@@ -300,7 +333,7 @@ void QTermCoreTest::supportsInsertLines()
 
     core.writePlainText("1\r\n2\r\n3\x1b[2;1H\x1b[LX"_L1);
 
-    QCOMPARE(core.debugPlainText(), "1\nX\n2\n3"_L1);
+    QCOMPARE(core.dumpPlainText(), "1\nX\n2\n3"_L1);
     QCOMPARE(core.cursorState().row, 1);
     QCOMPARE(core.cursorState().column, 1);
 }
@@ -311,7 +344,7 @@ void QTermCoreTest::supportsDeleteLines()
 
     core.writePlainText("1\r\n2\r\n3\x1b[2;1H\x1b[M"_L1);
 
-    QCOMPARE(core.debugPlainText(), "1\n3"_L1);
+    QCOMPARE(core.dumpPlainText(), "1\n3"_L1);
     QCOMPARE(core.cursorState().row, 1);
     QCOMPARE(core.cursorState().column, 0);
 }
@@ -322,7 +355,7 @@ void QTermCoreTest::supportsSaveAndRestoreCursor()
 
     core.writePlainText("ab\x1b[s\x1b[1;1HXY\x1b[uZ"_L1);
 
-    QCOMPARE(core.debugPlainText(), "XYZ"_L1);
+    QCOMPARE(core.dumpPlainText(), "XYZ"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
 }
@@ -333,7 +366,7 @@ void QTermCoreTest::supportsEscapeSaveAndRestoreCursor()
 
     core.writePlainText("ab\x1b" "7\x1b[1;1HXY\x1b" "8Z"_L1);
 
-    QCOMPARE(core.debugPlainText(), "XYZ"_L1);
+    QCOMPARE(core.dumpPlainText(), "XYZ"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
 }
@@ -344,7 +377,7 @@ void QTermCoreTest::ignoresUnsupportedEscapeFinals()
 
     core.writePlainText("\x1b=\x1b>prompt"_L1);
 
-    QCOMPARE(core.debugPlainText(), "prompt"_L1);
+    QCOMPARE(core.dumpPlainText(), "prompt"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 6);
 }
@@ -355,7 +388,7 @@ void QTermCoreTest::supportsScrollRegionDuringLineFeed()
 
     core.writePlainText("1\r\n2\r\n3\x1b[2;3r\x1b[3;1H\nX"_L1);
 
-    QCOMPARE(core.debugPlainText(), "1\n3\nX"_L1);
+    QCOMPARE(core.dumpPlainText(), "1\n3\nX"_L1);
     QCOMPARE(core.cursorState().row, 2);
     QCOMPARE(core.cursorState().column, 1);
 }
@@ -378,7 +411,7 @@ void QTermCoreTest::preservesScrollbackAcrossFullScreenLineFeed()
     core.setTerminalSize(5, 2);
     core.writePlainText("alpha\r\nbeta\r\ngamma"_L1);
 
-    QCOMPARE(core.debugPlainText(), "alpha\nbeta\ngamma"_L1);
+    QCOMPARE(core.dumpPlainText(), "alpha\nbeta\ngamma"_L1);
     QCOMPARE(core.buffer().lineAt(0).plainText(), "beta"_L1);
     QCOMPARE(core.buffer().lineAt(1).plainText(), "gamma"_L1);
 }
@@ -412,7 +445,7 @@ void QTermCoreTest::switchesToAlternateScreen()
     core.writePlainText("main\x1b[?1049halt"_L1);
 
     QVERIFY(core.modeState().alternateScreenActive);
-    QCOMPARE(core.debugPlainText(), "alt"_L1);
+    QCOMPARE(core.dumpPlainText(), "alt"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
 }
@@ -426,9 +459,19 @@ void QTermCoreTest::restoresPrimaryScreenFromAlternate()
     core.writePlainText("\x1b[?1049l"_L1);
 
     QVERIFY(!core.modeState().alternateScreenActive);
-    QCOMPARE(core.debugPlainText(), "main"_L1);
+    QCOMPARE(core.dumpPlainText(), "main"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 4);
+}
+
+void QTermCoreTest::doesNotStoreAlternateScreenScrollback()
+{
+    QTermCore core;
+    core.setTerminalSize(4, 2);
+    core.writePlainText("\x1b[?1049h"_L1);
+    core.writePlainText("one\ntwo\nthree"_L1);
+
+    QCOMPARE(core.buffer().historyLineCount(), 0);
 }
 
 void QTermCoreTest::combinesNonSpacingMarks()
@@ -439,7 +482,7 @@ void QTermCoreTest::combinesNonSpacingMarks()
 
     core.writePlainText(composed);
 
-    QCOMPARE(core.debugPlainText(), composed);
+    QCOMPARE(core.dumpPlainText(), composed);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 2);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, firstCellText);
@@ -453,7 +496,7 @@ void QTermCoreTest::storesWideCharactersAcrossTwoCells()
 
     core.writePlainText(text);
 
-    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.dumpPlainText(), text);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, wideChar);
@@ -493,7 +536,7 @@ void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()
     core.writePlainText(emoji.left(1));
     core.writePlainText(emoji.mid(1) + "a"_L1);
 
-    QCOMPARE(core.debugPlainText(), emoji + "a"_L1);
+    QCOMPARE(core.dumpPlainText(), emoji + "a"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, emoji);
@@ -509,7 +552,7 @@ void QTermCoreTest::emitsBellWithoutChangingBuffer()
     core.writePlainText("a\ab"_L1);
 
     QCOMPARE(bellSpy.size(), 1);
-    QCOMPARE(core.debugPlainText(), "ab"_L1);
+    QCOMPARE(core.dumpPlainText(), "ab"_L1);
 }
 
 void QTermCoreTest::reflowsVisibleContentWhenNarrowing()
@@ -520,7 +563,7 @@ void QTermCoreTest::reflowsVisibleContentWhenNarrowing()
     core.writePlainText("alpha beta"_L1);
     core.setTerminalSize(5, 4);
 
-    QCOMPARE(core.debugPlainText(), "alpha beta"_L1);
+    QCOMPARE(core.dumpPlainText(), "alpha beta"_L1);
     QCOMPARE(core.buffer().lineAt(0).plainText(), "alpha"_L1);
     QCOMPARE(core.buffer().lineAt(1).plainText(), " beta"_L1);
     QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
@@ -538,7 +581,7 @@ void QTermCoreTest::reflowsBackWhenWidening()
 
     core.setTerminalSize(5, 4);
 
-    QCOMPARE(core.debugPlainText(), "abc"_L1);
+    QCOMPARE(core.dumpPlainText(), "abc"_L1);
     QCOMPARE(core.buffer().lineAt(0).plainText(), "abc"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
@@ -553,14 +596,14 @@ void QTermCoreTest::reflowsCombiningCharactersAcrossResize()
     core.writePlainText(text);
     core.setTerminalSize(2, 4);
 
-    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.dumpPlainText(), text);
     QCOMPARE(core.buffer().lineAt(0).plainText(), QStringLiteral("e\u0301a"));
     QCOMPARE(core.buffer().lineAt(1).plainText(), "bc"_L1);
 
     core.setTerminalSize(4, 4);
     core.writePlainText("X"_L1);
 
-    QCOMPARE(core.debugPlainText(), QStringLiteral("e\u0301abcX"));
+    QCOMPARE(core.dumpPlainText(), QStringLiteral("e\u0301abcX"));
     QCOMPARE(core.buffer().lineAt(0).plainText(), text);
     QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
     QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
@@ -574,12 +617,12 @@ void QTermCoreTest::preservesWrappedBoundarySemanticsAcrossReflow()
     core.writePlainText("abcde"_L1);
 
     core.setTerminalSize(2, 4);
-    QCOMPARE(core.debugPlainText(), "abcde"_L1);
+    QCOMPARE(core.dumpPlainText(), "abcde"_L1);
 
     core.setTerminalSize(5, 4);
     core.writePlainText("X"_L1);
 
-    QCOMPARE(core.debugPlainText(), "abcdeX"_L1);
+    QCOMPARE(core.dumpPlainText(), "abcdeX"_L1);
     QCOMPARE(core.buffer().lineAt(0).plainText(), "abcde"_L1);
     QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
     QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
@@ -594,13 +637,13 @@ void QTermCoreTest::reflowsWideCharactersAcrossResize()
     core.writePlainText(text);
     core.setTerminalSize(2, 4);
 
-    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.dumpPlainText(), text);
     QCOMPARE(core.buffer().lineAt(0).plainText(), QString::fromUtf8(u8"中"));
     QCOMPARE(core.buffer().lineAt(1).plainText(), "ab"_L1);
 
     core.setTerminalSize(4, 4);
 
-    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.dumpPlainText(), text);
     QCOMPARE(core.buffer().lineAt(0).plainText(), text);
 }
 
@@ -612,12 +655,12 @@ void QTermCoreTest::preservesWideWrappedBoundarySemanticsAcrossReflow()
     core.setTerminalSize(4, 4);
     core.writePlainText(text);
     core.setTerminalSize(2, 4);
-    QCOMPARE(core.debugPlainText(), text);
+    QCOMPARE(core.dumpPlainText(), text);
 
     core.setTerminalSize(4, 4);
     core.writePlainText("X"_L1);
 
-    QCOMPARE(core.debugPlainText(), QString::fromUtf8(u8"中abX"));
+    QCOMPARE(core.dumpPlainText(), QString::fromUtf8(u8"中abX"));
     QCOMPARE(core.buffer().lineAt(0).plainText(), text);
     QCOMPARE(core.buffer().lineAt(1).plainText(), "X"_L1);
     QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
@@ -632,17 +675,17 @@ void QTermCoreTest::preservesComplexPromptAcrossRepeatedResizeCycles()
     core.writePlainText(prompt);
 
     core.setTerminalSize(11, 6);
-    QCOMPARE(core.debugPlainText(), prompt);
+    QCOMPARE(core.dumpPlainText(), prompt);
 
     core.setTerminalSize(19, 6);
-    QCOMPARE(core.debugPlainText(), prompt);
+    QCOMPARE(core.dumpPlainText(), prompt);
 
     core.setTerminalSize(7, 6);
-    QCOMPARE(core.debugPlainText(), prompt);
+    QCOMPARE(core.dumpPlainText(), prompt);
 
     core.setTerminalSize(64, 6);
 
-    QCOMPARE(core.debugPlainText(), prompt);
+    QCOMPARE(core.dumpPlainText(), prompt);
     QCOMPARE(core.buffer().lineAt(0).plainText(), prompt);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, prompt.size());
@@ -692,7 +735,7 @@ void QTermCoreTest::preservesTreeListingAcrossRepeatedResizeCycles()
         QString::fromUtf8(u8"    └── StatusBar.qml"),
         QString(),
         QString::fromUtf8(u8"10 directories, 28 files"),
-        QString::fromUtf8(u8"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo")
+        QString::fromUtf8(u8"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/qtquick-terminal")
     };
     const QString inputTranscript = lines.join(QStringLiteral("\r\n"));
     const QString projectedTranscript = lines.join(QStringLiteral("\n"));
@@ -701,19 +744,19 @@ void QTermCoreTest::preservesTreeListingAcrossRepeatedResizeCycles()
     core.writePlainText(inputTranscript);
 
     core.setTerminalSize(58, 14);
-    QCOMPARE(core.debugPlainText(), projectedTranscript);
+    QCOMPARE(core.dumpPlainText(), projectedTranscript);
 
     core.setTerminalSize(44, 14);
-    QCOMPARE(core.debugPlainText(), projectedTranscript);
+    QCOMPARE(core.dumpPlainText(), projectedTranscript);
 
     core.setTerminalSize(73, 14);
-    QCOMPARE(core.debugPlainText(), projectedTranscript);
+    QCOMPARE(core.dumpPlainText(), projectedTranscript);
 
     core.setTerminalSize(39, 14);
-    QCOMPARE(core.debugPlainText(), projectedTranscript);
+    QCOMPARE(core.dumpPlainText(), projectedTranscript);
 
     core.setTerminalSize(88, 14);
-    QCOMPARE(core.debugPlainText(), projectedTranscript);
+    QCOMPARE(core.dumpPlainText(), projectedTranscript);
 }
 
 void QTermCoreTest::preservesMultiplePromptLinesAcrossExtremeResizeCycles()
@@ -741,7 +784,7 @@ void QTermCoreTest::preservesMultiplePromptLinesAcrossExtremeResizeCycles()
 
     // Verify initial state: 5 prompt lines, cursor at end of last.
     const QString expected = (QStringList(5, prompt)).join(u'\n');
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
     QCOMPARE(core.cursorState().row, 4);
     QCOMPARE(core.cursorState().column, prompt.size());
 
@@ -750,7 +793,7 @@ void QTermCoreTest::preservesMultiplePromptLinesAcrossExtremeResizeCycles()
     // Content reflows: each 28-char prompt wraps into 3 physical rows of 10.
     // Total 5*3=15 physical rows; with rows=8, 7 pushed to history.
     // wrappedToNextLine flags are set correctly by reflow.
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // --- Shell receives SIGWINCH and redraws prompt at cursor position ---
     // Real zsh does: move cursor to start of prompt line, ESC[K, reprint prompt.
@@ -759,13 +802,13 @@ void QTermCoreTest::preservesMultiplePromptLinesAcrossExtremeResizeCycles()
     core.writePlainText(u"\r\x1b[K"_s + prompt);  // CR + EL + prompt reprint
 
     // Content must still be correct at this point (just prompt redrawn).
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // --- Widen back: window dragged back to 40 columns ---
     core.setTerminalSize(40, 8);
 
     // All 5 prompt lines must survive.
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 }
 
 void QTermCoreTest::supports256ColorSgrAttributes()
@@ -853,29 +896,29 @@ void QTermCoreTest::preservesContentAcrossRepeatedNarrowWithRedraw()
     core.writePlainText(transcript);
 
     const QString expected = QStringList(5, prompt).join(u'\n');
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Cycle 1: narrow to 20, shell redraws
     core.setTerminalSize(20, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
     core.writePlainText(u"\r\x1b[K"_s + prompt);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Cycle 2: narrow to 15, shell redraws
     core.setTerminalSize(15, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
     core.writePlainText(u"\r\x1b[K"_s + prompt);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Cycle 3: narrow to 10, shell redraws
     core.setTerminalSize(10, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
     core.writePlainText(u"\r\x1b[K"_s + prompt);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Widen back all the way
     core.setTerminalSize(40, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 }
 
 void QTermCoreTest::preservesContentAcrossOscillatingResize()
@@ -894,18 +937,18 @@ void QTermCoreTest::preservesContentAcrossOscillatingResize()
     core.writePlainText(transcript);
 
     const QString expected = QStringList(5, prompt).join(u'\n');
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Oscillate multiple times: narrow with redraw, wide with redraw
     for (int cycle = 0; cycle < 3; ++cycle) {
         core.setTerminalSize(20, 8);
         core.writePlainText(u"\r\x1b[K"_s + prompt);
-        QCOMPARE(core.debugPlainText(), expected);
+        QCOMPARE(core.dumpPlainText(), expected);
 
         core.setTerminalSize(40, 8);
         // Shell redraws after widening: prompt fits in 1 row, no predecessor chain
         core.writePlainText(u"\r\x1b[K"_s + prompt);
-        QCOMPARE(core.debugPlainText(), expected);
+        QCOMPARE(core.dumpPlainText(), expected);
     }
 }
 
@@ -939,12 +982,12 @@ void QTermCoreTest::preservesContentWhenResizeInterleavesMidRedraw()
     core.writePlainText(transcript);
 
     const QString expected = QStringList(5, prompt).join(u'\n');
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Step 2: user drags to 10 cols. Each 28-char prompt -> 3 rows.
     // Cursor ends up at last physical row (row index 2 of 3), col 8.
     core.setTerminalSize(10, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Step 3: shell sends \r (carriageReturn at 10 cols).
     // Cursor moves to col 0 of that last physical row.
@@ -955,18 +998,18 @@ void QTermCoreTest::preservesContentWhenResizeInterleavesMidRedraw()
     // At 7 cols, 28 chars -> 4 rows. logicalCursorRow = 20/7 = 2 (NOT the last row, 3).
     // So the cursor lands at row 2 of 4, column 6.
     core.setTerminalSize(7, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Step 5: \x1b[K + prompt arrive at 7 cols.
     // \x1b[K clears from cursor col (6) to end of row 2 AND sets wrappedToNextLine=false,
     // severing row 2 from row 3. Without a fix this leaves row 3 as a spurious
     // logical line and the rewrite only covers rows up to cursor+1.
     core.writePlainText(u"\x1b[K"_s + prompt);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 
     // Step 6: user drags back to 40 cols.
     core.setTerminalSize(40, 8);
-    QCOMPARE(core.debugPlainText(), expected);
+    QCOMPARE(core.dumpPlainText(), expected);
 }
 
 void QTermCoreTest::clearsState(){
@@ -975,7 +1018,7 @@ void QTermCoreTest::clearsState(){
 
     core.clear();
 
-    QCOMPARE(core.debugPlainText(), QString());
+    QCOMPARE(core.dumpPlainText(), QString());
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 0);
 }
@@ -1361,7 +1404,7 @@ void QTermCoreTest::risResetsTerminalState()
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 0);
     // Screen cleared.
-    QCOMPARE(core.debugPlainText(), QString());
+    QCOMPARE(core.dumpPlainText(), QString());
 }
 
 void QTermCoreTest::cursorNextAndPreviousLine()
@@ -1433,9 +1476,9 @@ void QTermCoreTest::reflowsScrollbackOnNarrow()
 
     core.setTerminalSize(3, 3);
 
-    // Full logical content must be intact (debugPlainText separates independent
+    // Full logical content must be intact (dumpPlainText separates independent
     // logical lines with '\n' and joins wrapped physical rows directly).
-    QCOMPARE(core.buffer().debugPlainText(), "AAAAAA\nBBBBBB\nCCCCCC\nXYZ"_L1);
+    QCOMPARE(core.buffer().dumpPlainText(), "AAAAAA\nBBBBBB\nCCCCCC\nXYZ"_L1);
 
     // The history line "AAAAAA" must split into two projection rows of 3 cols.
     QCOMPARE(core.buffer().projectionLineAt(0).plainText(), "AAA"_L1);
@@ -1489,11 +1532,11 @@ void QTermCoreTest::reflowsLongScrollbackLogicalLine()
 
     // Narrow to 4: each 8-col physical row splits into two 4-col rows.
     core.setTerminalSize(4, 2);
-    QCOMPARE(core.buffer().debugPlainText(), longLine);
+    QCOMPARE(core.buffer().dumpPlainText(), longLine);
 
     // Widen back to 8: the three physical rows must reassemble into one logical line.
     core.setTerminalSize(8, 2);
-    QCOMPARE(core.buffer().debugPlainText(), longLine);
+    QCOMPARE(core.buffer().dumpPlainText(), longLine);
     QCOMPARE(core.buffer().historyLineCount(), 1);
     QCOMPARE(core.buffer().projectionLineAt(0).plainText(), "abcdefgh"_L1);
     QVERIFY(core.buffer().projectionLineAt(0).wrappedToNextLine());
@@ -1521,11 +1564,11 @@ void QTermCoreTest::reflowsLogicalLineSpanningHistoryAndVisible()
 
     // Narrow: logical line "abcdef" (across history rows) must still be intact
     core.setTerminalSize(2, 2);
-    QVERIFY(core.buffer().debugPlainText().contains("abcdef"_L1));
+    QVERIFY(core.buffer().dumpPlainText().contains("abcdef"_L1));
 
     // Widen back
     core.setTerminalSize(4, 2);
-    QVERIFY(core.buffer().debugPlainText().contains("abcdef"_L1));
+    QVERIFY(core.buffer().dumpPlainText().contains("abcdef"_L1));
 }
 
 void QTermCoreTest::reflowsMultipleLogicalLinesInScrollback()
@@ -1542,15 +1585,15 @@ void QTermCoreTest::reflowsMultipleLogicalLinesInScrollback()
 
     QVERIFY(core.buffer().historyLineCount() >= 1);
 
-    const QString full = core.buffer().debugPlainText();
+    const QString full = core.buffer().dumpPlainText();
 
     // Narrow to 3: each 6-char line splits into 2 rows
     core.setTerminalSize(3, 3);
-    QCOMPARE(core.buffer().debugPlainText(), full);
+    QCOMPARE(core.buffer().dumpPlainText(), full);
 
     // Widen back to 6: must reassemble
     core.setTerminalSize(6, 3);
-    QCOMPARE(core.buffer().debugPlainText(), full);
+    QCOMPARE(core.buffer().dumpPlainText(), full);
 }
 
 // ── CJK / mixed content ───────────────────────────────────────────────────
@@ -1566,7 +1609,7 @@ void QTermCoreTest::reflowsMixedAsciiAndCjkOnNarrow()
     core.writePlainText(text);
     core.setTerminalSize(4, 4);
 
-    QCOMPARE(core.buffer().debugPlainText(), text);
+    QCOMPARE(core.buffer().dumpPlainText(), text);
     QCOMPARE(core.buffer().lineAt(0).plainText(), QString::fromUtf8(u8"AB\u4e2d"));
     QCOMPARE(core.buffer().lineAt(1).plainText(), "C"_L1);
     QVERIFY(core.buffer().lineAt(0).wrappedToNextLine());
@@ -1583,7 +1626,7 @@ void QTermCoreTest::reflowsMixedAsciiAndCjkOnWiden()
     core.setTerminalSize(4, 4);
     core.setTerminalSize(6, 4);
 
-    QCOMPARE(core.buffer().debugPlainText(), text);
+    QCOMPARE(core.buffer().dumpPlainText(), text);
     QCOMPARE(core.buffer().lineAt(0).plainText(), text);
     QVERIFY(!core.buffer().lineAt(0).wrappedToNextLine());
 }
@@ -1607,7 +1650,7 @@ void QTermCoreTest::reflowsMixedCjkPreservesLogicalContent()
     // Use only widths where wide chars land cleanly (no 1-col remainder at EOL).
     for (const int width : {9, 7, 9, 13}) {
         core.setTerminalSize(width, 4);
-        QCOMPARE(core.buffer().debugPlainText(), text);
+        QCOMPARE(core.buffer().dumpPlainText(), text);
     }
 }
 
@@ -1657,11 +1700,11 @@ void QTermCoreTest::reflowsCombiningTextMultipleCycles()
 
     core.setTerminalSize(4, 4);
     core.writePlainText(text);
-    const QString expected = core.debugPlainText();
+    const QString expected = core.dumpPlainText();
 
     for (const int width : {2, 4, 3, 4, 2, 4}) {
         core.setTerminalSize(width, 4);
-        QCOMPARE(core.debugPlainText(), expected);
+        QCOMPARE(core.dumpPlainText(), expected);
     }
 }
 
@@ -1688,17 +1731,17 @@ void QTermCoreTest::reflowsCombiningTextInScrollback()
 
     QCOMPARE(core.buffer().historyLineCount(), 1);
     const QString full = combining + "\nXX\nYY\nXY";
-    QCOMPARE(core.buffer().debugPlainText(), full);
+    QCOMPARE(core.buffer().dumpPlainText(), full);
 
     // Narrow: "e\u0301abc" (4 cols) splits → content still intact.
     core.setTerminalSize(3, 3);
-    QCOMPARE(core.buffer().debugPlainText(), full);
+    QCOMPARE(core.buffer().dumpPlainText(), full);
 
     // Widen: combining marks must reassemble. Cursor was at the bottom
     // (distanceFromBottom=0), so only the minimum overflow rows land in
     // history. projectionLineAt(0) = the reassembled combining line.
     core.setTerminalSize(5, 3);
-    QCOMPARE(core.buffer().debugPlainText(), full);
+    QCOMPARE(core.buffer().dumpPlainText(), full);
     QCOMPARE(core.buffer().projectionLineAt(0).plainText(), combining);
     QVERIFY(!core.buffer().projectionLineAt(0).wrappedToNextLine());
 }

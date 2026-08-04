@@ -13,6 +13,11 @@ namespace QTerm {
 
 class QTermViewController;
 
+/*!
+    \class QTermWidget
+    \inmodule QTerm
+    \brief Widget-based terminal view for embedding a QTermTerminal in Qt Widgets applications.
+*/
 class QTermWidget : public QWidget
 {
     Q_OBJECT
@@ -41,13 +46,38 @@ public:
 
     explicit QTermWidget(QWidget *parent = nullptr);
 
+    /*!
+        \brief Returns the terminal instance attached to the widget.
+        \return The current terminal, or nullptr if none is set.
+    */
     QTermTerminal *terminal() const noexcept;
+
+    /*!
+        \brief Attaches a terminal to the widget.
+        \param terminal The terminal object that provides the buffer and input/output state.
+    */
     void setTerminal(QTermTerminal *terminal);
 
+    /*!
+        \brief Returns the font family used for rendering terminal text.
+    */
     QString fontFamily() const;
+
+    /*!
+        \brief Sets the font family used for rendering terminal text.
+        \param family The font family name.
+    */
     void setFontFamily(const QString &family);
 
+    /*!
+        \brief Returns the pixel size of the terminal font.
+    */
     int fontPixelSize() const noexcept;
+
+    /*!
+        \brief Sets the pixel size of the terminal font.
+        \param size The new font size in pixels.
+    */
     void setFontPixelSize(int size);
 
     qreal cellWidth() const noexcept;
@@ -75,13 +105,33 @@ public:
     void setScrollPosition(qreal position);
     qreal scrollSize() const noexcept;
 
+    /*!
+        \brief Converts a vertical widget position into a terminal row index.
+        \param y The y coordinate in widget coordinates.
+        \return The corresponding row number, or -1 if the position is outside the viewport.
+    */
     Q_INVOKABLE int rowAtPosition(qreal y) const;
+
+    /*!
+        \brief Converts a horizontal widget position into a terminal column index.
+        \param x The x coordinate in widget coordinates.
+        \return The corresponding column number, or -1 if the position is outside the viewport.
+    */
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     QSize sizeHint() const override;
 
+    /*!
+        \brief Returns the currently applied terminal theme.
+        \return The resolved theme used for rendering.
+    */
     QTermTheme theme() const;
+
+    /*!
+        \brief Applies a new theme to the widget.
+        \param theme The theme to use for colors and optional font overrides.
+    */
     void setTheme(const QTermTheme &theme);
 
 signals:
@@ -93,6 +143,9 @@ signals:
     void cursorStyleChanged();
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
+    // Ctrl (⌘ on macOS) + wheel zoom intent: steps>0 zoom in, <0 zoom out.
+    // The host connects this to adjust the terminal font size.
+    void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
     void themeChanged();

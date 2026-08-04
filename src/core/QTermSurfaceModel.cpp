@@ -130,7 +130,21 @@ QString QTermSurfaceModel::plainText() const
     if (!m_selectionController) {
         return {};
     }
-    return m_selectionController->debugPlainText();
+    return m_selectionController->dumpPlainText();
+}
+
+QVariantList QTermSurfaceModel::searchHighlights() const
+{
+    return m_searchHighlights;
+}
+
+void QTermSurfaceModel::setSearchHighlights(const QVariantList &highlights)
+{
+    if (m_searchHighlights == highlights) {
+        return;
+    }
+    m_searchHighlights = highlights;
+    emit searchHighlightsChanged();
 }
 
 void QTermSurfaceModel::setSize(int columns, int rows)
