@@ -1,0 +1,25 @@
+project = QTerm
+description = QTerm API Documentation
+version = 0.1.0
+
+outputdir = ./html
+outputformats = HTML
+
+sourcedirs += ../../include/QTerm
+sourcedirs += .
+headerdirs += ../../include
+exampledirs += ../../examples/qtquick-terminal
+exampledirs += ../../examples/qwidget-terminal
+
+sources.fileextensions += "*.h"
+sources.fileextensions += "*.qdoc"
+
+# Let qdoc resolve Qt symbols and inherited docs.
+depends += qtcore
+depends += qtgui
+depends += qtqml
+depends += qtquick
+depends += qtwidgets
+
+tabsize = 4
+language = Cpp
