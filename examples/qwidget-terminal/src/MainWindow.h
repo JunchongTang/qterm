@@ -33,6 +33,8 @@ private:
     QPushButton *m_themeButton = nullptr;
     QStackedWidget *m_stack = nullptr;
     QWidget *m_emptyState = nullptr;
+    QLabel *m_emptyIcon = nullptr;
+    QList<QPushButton *> m_newSessionButtons;
     QLabel *m_statusLabel = nullptr;
     QList<TerminalTab *> m_tabs;
 };

@@ -1,6 +1,10 @@
 #include "Theme.h"
 
+#include <QBuffer>
+#include <QFile>
 #include <QGuiApplication>
+#include <QImageReader>
+#include <QPixmap>
 #include <QStyleHints>
 
 namespace {
@@ -150,9 +154,11 @@ QComboBox::drop-down {
     width: 20px;
 }
 /* Styling a QComboBox switches it to QStyleSheetStyle, which stops drawing the
-   built-in arrow, so the indicator has to be supplied explicitly. */
+   built-in arrow, so the indicator has to be supplied explicitly. A style sheet
+   can only point at a file, so unlike Theme::icon() this one needs a
+   pre-tinted asset per palette. */
 QComboBox::down-arrow {
-    image: url(:/assets/chevron-down-%21.svg);
+    image: url(:/assets/icons/chevron-down-%21.svg);
     width: 14px;
     height: 14px;
 }
@@ -222,4 +228,31 @@ QToolTip {
                                    : QColor(0, 0, 0, 110))))   // 20
             .arg(m_dark ? QStringLiteral("dark") : QStringLiteral("light")) // 21
             .arg(brd);                                 // 22
+}
+
+QIcon Theme::icon(const QString &name, const QColor &color, int size) const
+{
+    const QColor tint = color.isValid() ? color : foreground();
+
+    QFile file(QStringLiteral(":/assets/icons/%1.svg").arg(name));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+
+    // The assets carry stroke="#ffffff"; swapping that literal is enough to
+    // retint them, and rendering from the patched SVG keeps the result vector
+    // sharp at the requested size.
+    QByteArray svg = file.readAll();
+    svg.replace("#ffffff", tint.name(QColor::HexRgb).toUtf8());
+
+    QBuffer buffer(&svg);
+    QImageReader reader(&buffer, "svg");
+    const qreal dpr = qApp ? qApp->devicePixelRatio() : 1.0;
+    reader.setScaledSize(QSize(size, size) * dpr);
+    const QImage image = reader.read();
+    if (image.isNull())
+        return {};
+
+    QPixmap pixmap = QPixmap::fromImage(image);
+    pixmap.setDevicePixelRatio(dpr);
+    return QIcon(pixmap);
 }

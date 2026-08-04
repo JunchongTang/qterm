@@ -11,6 +11,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSize>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QVBoxLayout>
@@ -198,8 +199,12 @@ QWidget *NewSessionDialog::buildSerialPage()
 {
     m_portCombo = new QComboBox;
     m_portCombo->setEditable(true);
-    auto *refreshButton = new QPushButton(tr("Refresh"));
+    auto *refreshButton = new QPushButton;
     refreshButton->setProperty("variant", "outline");
+    refreshButton->setIcon(Theme::instance()->icon(QStringLiteral("refresh-cw")));
+    refreshButton->setIconSize(QSize(14, 14));
+    refreshButton->setFixedWidth(32);
+    refreshButton->setToolTip(tr("Refresh ports"));
     connect(refreshButton, &QPushButton::clicked, this, &NewSessionDialog::refreshSerialPorts);
 
     auto *portLayout = new QHBoxLayout;

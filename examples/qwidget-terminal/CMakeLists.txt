@@ -20,8 +20,19 @@ set_target_properties(qwidget_terminal PROPERTIES
 qt_add_resources(qwidget_terminal "assets"
     PREFIX "/"
     FILES
-        assets/chevron-down-dark.svg
-        assets/chevron-down-light.svg
+        assets/icons/check.svg
+        assets/icons/chevron-down-dark.svg
+        assets/icons/chevron-down-light.svg
+        assets/icons/chevron-down.svg
+        assets/icons/close-dark.svg
+        assets/icons/close-light.svg
+        assets/icons/layers.svg
+        assets/icons/moon.svg
+        assets/icons/plus.svg
+        assets/icons/refresh-cw.svg
+        assets/icons/sun.svg
+        assets/icons/terminal.svg
+        assets/icons/x.svg
 )
 
 target_link_libraries(qwidget_terminal

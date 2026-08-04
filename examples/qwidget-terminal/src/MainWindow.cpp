@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QSize>
 #include <QTabBar>
 #include <QVBoxLayout>
 
@@ -38,14 +39,16 @@ MainWindow::MainWindow(QWidget *parent)
     m_tabBar->setDrawBase(false);
     m_tabBar->setFocusPolicy(Qt::NoFocus);
 
-    m_newTabButton = new QPushButton(QStringLiteral("+"));
+    m_newTabButton = new QPushButton;
     m_newTabButton->setProperty("variant", "ghost");
     m_newTabButton->setFixedSize(28, 28);
+    m_newTabButton->setIconSize(QSize(14, 14));
     m_newTabButton->setToolTip(tr("New session"));
 
     m_themeButton = new QPushButton;
     m_themeButton->setProperty("variant", "ghost");
     m_themeButton->setFixedSize(28, 28);
+    m_themeButton->setIconSize(QSize(14, 14));
     m_themeButton->setToolTip(tr("Toggle theme"));
 
     barLayout->addWidget(m_tabBar);
@@ -68,6 +71,8 @@ MainWindow::MainWindow(QWidget *parent)
     auto *emptyLayout = new QVBoxLayout(m_emptyState);
     emptyLayout->setSpacing(Theme::instance()->space2());
     emptyLayout->addStretch();
+    m_emptyIcon = new QLabel;
+    m_emptyIcon->setAlignment(Qt::AlignHCenter);
     auto *emptyTitle = new QLabel(tr("No open sessions"));
     emptyTitle->setAlignment(Qt::AlignHCenter);
     emptyTitle->setStyleSheet(QStringLiteral("font-size: %1px; font-weight: 500;")
@@ -76,6 +81,9 @@ MainWindow::MainWindow(QWidget *parent)
     emptyHint->setAlignment(Qt::AlignHCenter);
     emptyHint->setProperty("muted", true);
     auto *emptyButton = new QPushButton(tr("New Session"));
+    emptyButton->setIconSize(QSize(14, 14));
+    m_newSessionButtons.append(emptyButton);
+    emptyLayout->addWidget(m_emptyIcon);
     emptyLayout->addWidget(emptyTitle);
     emptyLayout->addWidget(emptyHint);
     auto *emptyButtonRow = new QHBoxLayout;
@@ -160,14 +168,21 @@ void MainWindow::applyTheme()
 {
     qApp->setStyleSheet(Theme::instance()->styleSheet());
 
-    // The moon/sun glyph mirrors the QML demo: show what a click switches to.
-    m_themeButton->setText(Theme::instance()->isDark() ? QStringLiteral("☀")
-                                                       : QStringLiteral("☽"));
+    // Mirrors the QML demo: the glyph shows what a click switches to.
+    const Theme *t = Theme::instance();
+    m_themeButton->setIcon(t->icon(t->isDark() ? QStringLiteral("sun")
+                                               : QStringLiteral("moon")));
+    m_newTabButton->setIcon(t->icon(QStringLiteral("plus")));
+    m_emptyIcon->setPixmap(t->icon(QStringLiteral("terminal"),
+                                   t->mutedForeground(), 32).pixmap(32, 32));
+    // New-session buttons carry the same leading icon as the QML demo.
+    for (QPushButton *b : m_newSessionButtons)
+        b->setIcon(t->icon(QStringLiteral("plus"), t->primaryForeground(), 14));
 
     // Tab strip: active tab is a filled pill with a 1px border, matching
     // shadcn's tabs-trigger.
     const Theme *theme = Theme::instance();
-    m_tabBar->setStyleSheet(QStringLiteral(R"(
+    const QString tabQss = QStringLiteral(R"(
 QTabBar::tab {
     background: transparent;
     color: %1;
@@ -190,7 +205,9 @@ QTabBar::tab:selected {
     border: 1px solid %9;
 }
 QTabBar::close-button {
-    image: none;
+    image: url(:/assets/icons/close-%10.svg);
+    width: 12px;
+    height: 12px;
     subcontrol-position: right;
 }
 )")
@@ -202,7 +219,9 @@ QTabBar::close-button {
             .arg(theme->muted().name(QColor::HexArgb))
             .arg(theme->muted().name(QColor::HexArgb))
             .arg(theme->foreground().name(QColor::HexArgb))
-            .arg(theme->border().name(QColor::HexArgb)));
+            .arg(theme->border().name(QColor::HexArgb))
+            .arg(theme->isDark() ? QStringLiteral("dark") : QStringLiteral("light"));
+    m_tabBar->setStyleSheet(tabQss);
 }
 
 void MainWindow::updateEmptyState()
@@ -216,8 +235,8 @@ void MainWindow::updateWindowTitle()
 {
     const int index = m_tabBar->currentIndex();
     if (index >= 0 && index < m_tabs.size()) {
-        setWindowTitle(tr("%1 - QTerm Widget Terminal").arg(m_tabs.at(index)->tabTitle()));
+        setWindowTitle(tr("%1 - Qt Widgets Terminal").arg(m_tabs.at(index)->tabTitle()));
         return;
     }
-    setWindowTitle(tr("QTerm Widget Terminal"));
+    setWindowTitle(tr("Qt Widgets Terminal"));
 }
