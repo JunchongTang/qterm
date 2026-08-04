@@ -1,0 +1,58 @@
+name: docs-qdoc
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "*"
+    paths:
+      - "include/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/docs-qdoc.yml"
+  pull_request:
+    paths:
+      - "include/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/docs-qdoc.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  qdoc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (clang)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev
+
+      - name: Install Qt with qdoc
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: "linux"
+          target: "desktop"
+          arch: "gcc_64"
+          modules: "qttools"
+          cache: true
+
+      - name: Generate QTerm API docs
+        shell: bash
+        run: |
+          qdoc docs/qdoc/qterm.qdocconf
+
+      - name: Upload qdoc HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qterm-qdoc-html
+          path: docs/qdoc/html
+          if-no-files-found: error

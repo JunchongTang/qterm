@@ -13,11 +13,13 @@ namespace QTerm {
 class QTermBuffer
 {
 public:
-    QTermBuffer(int columns = 80, int rows = 24);
+    QTermBuffer(int columns = 80, int rows = 24, int maximumHistoryLines = 10000);
 
     int rows() const noexcept;
     int columns() const noexcept;
     int historyLineCount() const noexcept;
+    int maximumHistoryLines() const noexcept;
+    void setMaximumHistoryLines(int maximumHistoryLines);
     int projectionRowCount() const noexcept;
     int visibleRowOffset() const noexcept;
 
@@ -40,7 +42,12 @@ public:
     QVariantList viewportLineRuns(int topProjectionRow, int rowCount) const;
     QStringList visibleLineTexts() const;
     QVariantList visibleLineRuns() const;
-    QString debugPlainText() const;
+    QString dumpPlainText() const;
+    // Dump current buffer (scrollback + visible) as UTF-8 bytes annotated with
+    // SGR (CSI ...m) sequences for each style transition. Re-feeding the output
+    // into a fresh terminal via feedText() reproduces the same visual state.
+    // `maxLines` caps how many tail lines are emitted (0 = no cap).
+    QByteArray dumpAnsi(int maxLines = 5000) const;
 
     // ── Dirty-row tracking ────────────────────────────────────────────────────
     // Returns the set of *visible* row indices that have been modified since the
@@ -57,6 +64,7 @@ private:
 
     int m_columns = 80;
     int m_rows = 24;
+    int m_maximumHistoryLines = 10000;
     QVector<QTermLine> m_historyLines;
     QVector<QTermLine> m_visibleLines;
 

@@ -1,126 +1,154 @@
 # QTerm
 
-QTerm 是一个面向 Qt 生态的终端模拟器组件库，目标是提供一个适合 QML、QWidget、可扩展、可复用、协议可控的终端内核与高性能控件体系。
+[![Qt](https://img.shields.io/badge/Qt-6.8%2B-41CD52?logo=qt&logoColor=white)](https://www.qt.io/)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
+[![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## 项目目标
+English | [简体中文](README.zh-CN.md)
 
-QTerm 的长期目标是成为一个分层清晰的终端能力库，而不是单一控件：
+Qt-native terminal emulator library for Qt Quick and QWidget.
 
-* 为 Qt Quick 提供高性能终端控件。
-* 提供统一的终端会话抽象，接入 PTY、串口、SSH 等常见后端。
-* 自主实现终端协议解析、状态建模、滚动历史和重排逻辑。
-* 保留 QWidget 接入空间，但不让 QWidget 约束核心架构。
-* 最小化依赖，优先使用 Qt 自身能力完成系统集成。
+## Overview
 
-当前开发基线：
+QTerm is a terminal stack for modern Qt applications. It provides a reusable core for terminal state, protocol parsing, rendering integration, and session backends.
 
-* **Qt 6.8**
-* **QML / Qt Quick 优先**
-* **C++ 为核心实现语言**
-* **仅依赖 Qt 构建核心终端实现**
+The project is designed with a core-first approach:
 
-## 分层架构
+- headless core correctness before UI expansion
+- transport-agnostic session abstraction
+- Qt Quick first, QWidget supported
+- incremental rendering and testability
 
-QTerm 计划采用如下分层：
-* 会话层
-* 协议层
-* 状态模型层
-* 渲染与交互层
+## Architecture Layers
 
-### 1. Session Layer
+QTerm is organised into four layers, each with a single responsibility:
 
-职责：与真实终端源建立连接，收发字节流，管理生命周期。
+**1. Session layer** — connects to a real terminal source and moves raw bytes.
+Backends include local PTY, Windows ConPTY, serial, SSH and custom remote
+streams. It owns connecting, reading and writing bytes, propagating window-size
+changes, and handling interruption, close, errors and reconnection. It does no
+VT parsing and keeps no screen state.
 
-典型后端包括：
+**2. Protocol layer** — parses the terminal protocol into VT/ANSI semantics:
+UTF-8 decoding, C0/C1 controls, ESC/CSI/OSC/DCS/APC/PM sequences, SGR
+attributes, cursor movement, erasing, and insertion/deletion.
 
-* Local PTY backend
-* Windows ConPTY backend
-* Serial backend
-* SSH backend
-* 自定义 remote stream backend
+**3. Core model layer** — owns terminal state: the cell buffer, scrollback,
+cursor, modes, selection, reflow on resize, and dirty tracking. This is where
+correctness is decided, and it is fully testable headless.
 
-这一层只解决：
+**4. Rendering and interaction layer** — projects core state into something a
+frontend can draw, and turns input into protocol bytes. Both the Qt Quick and
+QWidget frontends sit on this layer rather than reimplementing the core.
 
-* 如何连接
-* 如何读写原始字节
-* 如何传递窗口大小变化
-* 如何处理中断、关闭、错误和重连
+## Highlights
 
-它不负责 VT 解析，不负责屏幕状态维护。
+- Qt-only implementation with minimal external runtime dependencies
+- VT/ANSI parsing pipeline with terminal state modeling
+- scrollback, selection, and resize reflow support
+- multiple session backends: local shell, serial, telnet
+- dual frontend path: Qt Quick and QWidget
 
-### 2. Protocol Layer
+## Repository Layout
 
-职责：解析终端输入输出协议，建立 VT/ANSI 语义。
+```text
+qterm/
+  include/QTerm/                Public headers
+  src/                          Core library and implementations
+  examples/qtquick-terminal/    Qt Quick demo
+  examples/qwidget-terminal/    QWidget demo
+  tests/                        Unit and integration tests
+  docs/qdoc/                    Public API docs (QDoc source)
+```
 
-这一层需要逐步覆盖：
+## Requirements
 
-* UTF-8 解码
-* C0/C1 控制字符
-* ESC / CSI / OSC / DCS / APC / PM 等序列
-* SGR 样式属性
-* 光标移动、擦除、插入删除
-* DEC 私有模式
-* Alternate screen
-* Bracketed paste
-* Mouse tracking
-* Hyperlink OSC 8
-* Title / clipboard / working directory 等 OSC 扩展
+- Qt 6.8 or newer (development baseline; older Qt 6 versions are untested but may still be compatible)
+- CMake 3.25 or newer
+- C++17 toolchain
+- macOS / Linux / Windows (platform support evolves with current implementation)
 
-建议把协议层继续拆成：
+## Build
 
-* 字节流解码器
-* 状态机解析器
-* 命令分发器
-* capability / mode 状态管理
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
 
-### 3. Core Model Layer
+Build options:
 
-职责：保存终端真实状态，是整个库的核心。
+- `QTERM_BUILD_EXAMPLES=ON|OFF` (default ON)
+- `QTERM_BUILD_TESTS=ON|OFF` (default ON)
 
-这一层应包含：
+## Run Demos
 
-* 主屏与备用屏
-* 基于 cell 的 screen buffer
-* scrollback history
-* cursor state
-* tab stops
-* modes and flags
-* selection model
-* markers / anchors
-* search-friendly text projection
-* dirty region / incremental update tracking
-* resize reflow engine
+Qt Quick demo:
 
-这里最关键的不是“把字符画出来”，而是正确定义：
+```bash
+./build/examples/qtquick-terminal/qtquick-terminal
+```
 
-* 宽字符与 combining character 如何存储
-* 软换行与硬换行如何区分
-* 主屏历史如何保留
-* resize 时哪些内容应该重排，哪些不应该丢失
-* alternate screen 如何与 scrollback 隔离
+QWidget demo:
 
-QTerm 的正确性主要取决于这一层，而不是控件层。
+```bash
+./build/examples/qwidget-terminal/qwidget-terminal
+```
 
-### 4. Frontend Layer
+If your generator uses a different output directory, locate the binaries under your build tree.
 
-职责：具体 UI 实现。
+## Test
 
-提供三个渲染方案：
-* QTermQuickPaintedItem
-* QTermQuickItem
-* QTermWidget
+```bash
+ctest --test-dir build --output-on-failure
+```
 
-## 📚 文档
+## Documentation
 
-完整的 QTerm 文档请参考 [docs/](docs/) 目录：
+Public repository currently keeps API documentation sources in:
 
-* **[入门指南](docs/getting-started/)** — 快速开始、CMake 集成、第一个终端应用
-* **[架构设计](docs/architecture/)** — 五层架构、核心状态机、后端生命周期、前端控制
-* **[开发指南](docs/guides/)** — 会话后端、主题系统、滚动历史、选择与剪贴板、键盘编码
-* **[内部参考](docs/internals/)** — 测试、协议状态、Bug 分析
+- [docs/qdoc/qterm.qdocconf](docs/qdoc/qterm.qdocconf)
+- [docs/qdoc/qterm-cpp-module.qdoc](docs/qdoc/qterm-cpp-module.qdoc)
+- [docs/qdoc/qterm-qml-module.qdoc](docs/qdoc/qterm-qml-module.qdoc)
 
+Generate QDoc locally:
 
-如果你也关心 Qt 场景下真正可控的终端组件，这个项目就是为此而做。
+```bash
+qdoc docs/qdoc/qterm.qdocconf
+```
 
+Internal and Chinese working documents are maintained in the private repository.
 
+## API Snapshot
 
+Major public types include:
+
+- `QTermTerminal`
+- `QTermSession`
+- `QTermSurfaceModel`
+- `QTermQuickItem`
+- `QTermQuickPaintedItem`
+- `QTermWidget`
+
+## Roadmap Direction
+
+Near-term engineering focus:
+
+- protocol completeness and behavior parity for common CLI tools
+- rendering and interaction quality in Qt Quick frontend
+- backend robustness across local shell / serial / telnet scenarios
+- public API stabilization and test coverage growth
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+Suggested contribution flow:
+
+1. Create an issue to discuss changes before large work.
+2. Add or update tests together with code changes.
+3. Keep public APIs and behavior changes clearly documented.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

@@ -5,7 +5,7 @@
 #include <Qt>
 #include <QString>
 
-#include "QTermModeState.h"
+#include <QTerm/QTermModeState.h>
 
 namespace QTerm {
 

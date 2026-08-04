@@ -12,8 +12,8 @@ namespace QTerm {
 
 struct QTermScreenState
 {
-    explicit QTermScreenState(int columns = 80, int rows = 24)
-        : buffer(columns, rows)
+    explicit QTermScreenState(int columns = 80, int rows = 24, int maximumHistoryLines = 10000)
+        : buffer(columns, rows, maximumHistoryLines)
         , scrollBottom(rows - 1)
     {
     }

@@ -17,19 +17,14 @@ namespace QTerm {
 
 class QTermViewController;
 
-// High-performance Qt Scene Graph terminal renderer.
-// Replaces QTermQuickPaintedItem's QPainter-to-texture path with a native QSG
-// node tree: colored background geometry, QSGTextNode-per-row for text, and
-// flat-color geometry nodes for selection and cursor.
-//
-// Dirty-flag system:
-//   Full rebuild  – font/size/terminal change
-//   Content dirty – visibleLineRunsChanged  → bg fills + text nodes repopulated
-//   Selection dirty – selectionChanged      → selection geometry only
-//   Cursor dirty  – cursorChanged           → cursor geometry only
-//
-// The public API is a strict superset of QTermQuickPaintedItem so QML that
-// uses the older item can switch by changing just the type name.
+/*!
+    \qmltype QTermQuickItem
+    \inqmlmodule QTerm
+    \brief High-performance Scene Graph terminal item for Qt Quick.
+
+    QTermQuickItem renders terminal content directly with QSG nodes and exposes
+    the same high-level API as QTermQuickPaintedItem for easier migration.
+*/
 class QTermQuickItem : public QQuickItem
 {
     Q_OBJECT
@@ -42,6 +37,8 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchHighlightColor READ searchHighlightColor WRITE setSearchHighlightColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchCurrentColor READ searchCurrentColor WRITE setSearchCurrentColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermQuickItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
@@ -50,7 +47,10 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
 
 public:
-    // Cursor built-in shapes; values deliberately match QTermQuickPaintedItem::CursorStyle.
+    /*!
+        \enum QTermQuickItem::CursorStyle
+        \brief Built-in cursor rendering styles.
+    */
     enum CursorStyle {
         Block,
         Underline,
@@ -60,10 +60,14 @@ public:
 
     explicit QTermQuickItem(QQuickItem *parent = nullptr);
 
+    /*! \brief Returns the terminal attached to this item. */
     QTermTerminal *terminal() const noexcept;
+    /*! \brief Sets the terminal attached to this item. */
     void setTerminal(QTermTerminal *terminal);
 
+    /*! \brief Returns the font family used to render text. */
     QString fontFamily() const;
+    /*! \brief Sets the font family used to render text. */
     void setFontFamily(const QString &fontFamily);
 
     int fontPixelSize() const noexcept;
@@ -81,6 +85,11 @@ public:
     QColor selectionColor() const;
     void setSelectionColor(const QColor &selectionColor);
 
+    QColor searchHighlightColor() const;
+    void setSearchHighlightColor(const QColor &color);
+    QColor searchCurrentColor() const;
+    void setSearchCurrentColor(const QColor &color);
+
     QColor cursorColor() const;
     void setCursorColor(const QColor &cursorColor);
 
@@ -93,17 +102,22 @@ public:
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
 
+    /*! \brief Returns the current normalized scroll position in the range 0.0 to 1.0. */
     qreal scrollPosition() const noexcept;
+    /*! \brief Sets the normalized scroll position in the range 0.0 to 1.0. */
     void setScrollPosition(qreal position);
+    /*! \brief Returns the normalized visible scroll size in the range 0.0 to 1.0. */
     qreal scrollSize() const noexcept;
 
+    /*! \brief Maps a vertical coordinate to a terminal row index. */
     Q_INVOKABLE int rowAtPosition(qreal y) const;
+    /*! \brief Maps a horizontal coordinate to a terminal column index. */
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void componentComplete() override;
 
-    // Theme API – same as QTermQuickPaintedItem.
+    /*! \brief Applies a resolved theme to the item. */
     Q_INVOKABLE void loadTheme(const QTerm::QTermTheme &theme);
 
 signals:
@@ -116,6 +130,9 @@ signals:
     void cursorDelegateChanged();
     void scrollChanged();
     void wheelScrolled(qreal angleDelta);
+    // Ctrl (⌘ on macOS) + wheel zoom intent: steps>0 zoom in, <0 zoom out.
+    // The host QML connects this to adjust the terminal font size.
+    void zoomRequested(int steps);
     void copyRequested();
     void hyperlinkActivated(const QString &url);
 
@@ -147,6 +164,8 @@ private:
     QColor m_foregroundColor{QStringLiteral("#dce7f3")};
     QColor m_backgroundColor{QStringLiteral("#0a0f15")};
     QColor m_selectionColor{0x46, 0x82, 0xc8, 0x80};
+    QColor m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};  // dim amber, all matches
+    QColor m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};    // bright amber, current match
     QColor m_cursorColor{QStringLiteral("#dce7f3")};
     qreal m_cursorOpacity = 0.8;
     CursorStyle m_cursorStyle = Block;

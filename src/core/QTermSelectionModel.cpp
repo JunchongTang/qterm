@@ -3,6 +3,7 @@
 #include "QTermBuffer.h"
 
 #include <optional>
+#include <utility>
 #include <QStringList>
 #include <QVector>
 #include <QtGlobal>
@@ -398,16 +399,41 @@ ProjectionEndpoint mapLogicalAnchorToProjectionEndpoint(const QTermBuffer &buffe
                               qMax(0, projectionRowDisplayColumns(buffer, span, span.endProjectionRow))};
 }
 
-bool selectionEndpointsAreVisible(int firstVisibleProjectionRow,
-                                  int visibleRowCount,
-                                  const ProjectionEndpoint &start,
-                                  const ProjectionEndpoint &end)
+struct VisibleSnapshotRows
 {
+    bool visible = false;
+    int startRow = -1;
+    int startColumn = 0;
+    int endRow = -1;
+    int endColumn = 0;
+};
+
+// Clip a projection-space selection [start,end] to the current visible window,
+// producing viewport-relative snapshot rows/columns. When the selection is taller
+// than one screen, the parts past the top/bottom edge are clipped instead of
+// hiding the whole highlight: a clipped first row starts at column 0; a clipped
+// last row extends to the full row width (columns). Fully outside the viewport →
+// visible=false. (The old all-or-nothing "show only if both endpoints are visible"
+// made an off-screen-spanning selection's highlight vanish entirely.)
+VisibleSnapshotRows clipSelectionToViewport(int firstVisibleProjectionRow,
+                                            int visibleRowCount,
+                                            int columns,
+                                            const ProjectionEndpoint &start,
+                                            const ProjectionEndpoint &end)
+{
+    VisibleSnapshotRows out;
     const int lastVisibleProjectionRow = firstVisibleProjectionRow + qMax(0, visibleRowCount - 1);
-    return start.projectionRow >= firstVisibleProjectionRow &&
-        start.projectionRow <= lastVisibleProjectionRow &&
-        end.projectionRow >= firstVisibleProjectionRow &&
-        end.projectionRow <= lastVisibleProjectionRow;
+    const int visibleStart = qMax(start.projectionRow, firstVisibleProjectionRow);
+    const int visibleEnd = qMin(end.projectionRow, lastVisibleProjectionRow);
+    if (visibleStart > visibleEnd) {
+        return out;
+    }
+    out.visible = true;
+    out.startRow = visibleStart - firstVisibleProjectionRow;
+    out.startColumn = visibleStart == start.projectionRow ? start.column : 0;
+    out.endRow = visibleEnd - firstVisibleProjectionRow;
+    out.endColumn = visibleEnd == end.projectionRow ? end.column : columns;
+    return out;
 }
 
 } // namespace
@@ -495,17 +521,12 @@ void QTermSelectionModel::completeResize(const QTermBuffer &buffer, int columns,
     const ProjectionEndpoint end = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->end);
 
     m_snapshot.hasSelection = true;
-    if (selectionEndpointsAreVisible(m_viewportTopProjectionRow, m_rows, start, end)) {
-        m_snapshot.startRow = start.projectionRow - m_viewportTopProjectionRow;
-        m_snapshot.startColumn = start.column;
-        m_snapshot.endRow = end.projectionRow - m_viewportTopProjectionRow;
-        m_snapshot.endColumn = end.column;
-    } else {
-        m_snapshot.startRow = -1;
-        m_snapshot.startColumn = 0;
-        m_snapshot.endRow = -1;
-        m_snapshot.endColumn = 0;
-    }
+    const VisibleSnapshotRows visible =
+        clipSelectionToViewport(m_viewportTopProjectionRow, m_rows, m_columns, start, end);
+    m_snapshot.startRow = visible.startRow;
+    m_snapshot.startColumn = visible.startColumn;
+    m_snapshot.endRow = visible.endRow;
+    m_snapshot.endColumn = visible.endColumn;
 
     m_snapshot.selectedText = selectionTextFromProjection(buffer, start, end);
 }
@@ -539,6 +560,48 @@ void QTermSelectionModel::setSelectionRange(int startRow, int startColumn, int e
     m_snapshot.startColumn = range.startColumn;
     m_snapshot.endRow = range.endRow;
     m_snapshot.endColumn = range.endColumn;
+}
+
+void QTermSelectionModel::setSelectionFromDragCells(const QTermBuffer &buffer,
+                                                    int anchorProjectionRow, int anchorColumn,
+                                                    int dragProjectionRow, int dragColumn)
+{
+    const int projectionRowCount = buffer.projectionRowCount();
+    if (projectionRowCount <= 0) {
+        clearSelection();
+        return;
+    }
+
+    // Clamp endpoints into the buffer and order them start <= end (by projection
+    // row first, then by column within the same row).
+    int startRow = qBound(0, anchorProjectionRow, projectionRowCount - 1);
+    int endRow   = qBound(0, dragProjectionRow,   projectionRowCount - 1);
+    int startColumn = qMax(0, anchorColumn);
+    int endColumn   = qMax(0, dragColumn);
+    const bool forward = endRow > startRow || (endRow == startRow && endColumn >= startColumn);
+    if (!forward) {
+        std::swap(startRow, endRow);
+        std::swap(startColumn, endColumn);
+    }
+
+    if (startRow == endRow && startColumn == endColumn) {
+        clearSelection();
+        return;
+    }
+
+    // Grapheme alignment: move the start back to the glyph's first cell (skipping
+    // the empty continuation cells of a wide char), and extend the end via
+    // graphemeEndColumn to the first cell past that glyph (half-open [start,end)).
+    // Otherwise, when an endpoint lands on the half cell of a wide/CJK char, the
+    // highlight covers only half the glyph (even though the extracted text is whole).
+    const QStringList startColumns = buffer.projectionLineAt(startRow).columnTexts();
+    while (startColumn > 0 && startColumn < startColumns.size()
+           && startColumns.at(startColumn).isEmpty())
+        --startColumn;
+    const QStringList endColumns = buffer.projectionLineAt(endRow).columnTexts();
+    const int endExclusive = graphemeEndColumn(endColumns, qBound(0, endColumn, endColumns.size()));
+
+    setSelectionFromProjectionEndpoints(buffer, startRow, startColumn, endRow, endExclusive);
 }
 
 void QTermSelectionModel::selectWordAt(const QTermBuffer &buffer, int row, int column)
@@ -725,17 +788,12 @@ void QTermSelectionModel::updateSelectedText(const QTermBuffer &buffer)
 
     const ProjectionEndpoint start = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->start);
     const ProjectionEndpoint end = mapLogicalAnchorToProjectionEndpoint(buffer, spans, m_selectionAnchors->end);
-    if (selectionEndpointsAreVisible(m_viewportTopProjectionRow, m_rows, start, end)) {
-        m_snapshot.startRow = start.projectionRow - m_viewportTopProjectionRow;
-        m_snapshot.startColumn = start.column;
-        m_snapshot.endRow = end.projectionRow - m_viewportTopProjectionRow;
-        m_snapshot.endColumn = end.column;
-    } else {
-        m_snapshot.startRow = -1;
-        m_snapshot.startColumn = 0;
-        m_snapshot.endRow = -1;
-        m_snapshot.endColumn = 0;
-    }
+    const VisibleSnapshotRows visible =
+        clipSelectionToViewport(m_viewportTopProjectionRow, m_rows, m_columns, start, end);
+    m_snapshot.startRow = visible.startRow;
+    m_snapshot.startColumn = visible.startColumn;
+    m_snapshot.endRow = visible.endRow;
+    m_snapshot.endColumn = visible.endColumn;
 
     m_snapshot.selectedText = selectionTextFromProjection(buffer, start, end);
 }

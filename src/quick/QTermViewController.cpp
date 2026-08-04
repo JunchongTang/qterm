@@ -346,6 +346,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
         // 三击：选整逻辑行
         m_selectionAnchorRow    = -1;
         m_selectionAnchorColumn = -1;
+        m_selectionAnchorProjectionRow = -1;
         m_suppressSelectionRelease = true;
         m_autoScrollDirection = 0;
         m_selectionAutoScrollTimer->stop();
@@ -355,6 +356,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
 
     m_selectionAnchorRow    = row;
     m_selectionAnchorColumn = col;
+    m_selectionAnchorProjectionRow = m_terminal->viewportTopProjectionRow() + row;
     m_dragX = event->position().x();
     m_dragY = event->position().y();
     m_suppressSelectionRelease = false;
@@ -373,6 +375,7 @@ bool QTermViewController::handleMouseDoubleClick(QMouseEvent *event)
 
     m_selectionAnchorRow    = -1;
     m_selectionAnchorColumn = -1;
+    m_selectionAnchorProjectionRow = -1;
     m_autoScrollDirection = 0;
     m_selectionAutoScrollTimer->stop();
     m_terminal->selectWordAt(rowAtPosition(event->position().y()),
@@ -444,6 +447,7 @@ bool QTermViewController::handleMouseRelease(QMouseEvent *event)
     updateSelectionFromDrag(event->position().x(), event->position().y());
     m_selectionAnchorRow    = -1;
     m_selectionAnchorColumn = -1;
+    m_selectionAnchorProjectionRow = -1;
     return true;
 }
 
@@ -466,6 +470,35 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
 
     const QPoint angleDelta = event->angleDelta();
 
+    // Ctrl (⌘ on macOS) + wheel = zoom intent, takes priority over everything
+    // (including the mouse protocol): does not scroll the scrollback; reports
+    // zoomRequested for the host to resize the font. Zoom must be gentle: pixel
+    // delta is ~120px per step (≈ one detent on a precise mouse = one step, matching
+    // the keyboard's 1 step, no longer jumping 3 per detent); a wheel detent is 120 units.
+    if (event->modifiers() & Qt::ControlModifier) {
+        // Don't zoom during the momentum phase, or the inertia after release keeps
+        // zooming wildly. (Only macOS reports this phase.)
+        if (event->phase() == Qt::ScrollMomentum)
+            return true;                                   // consume, neither scroll nor zoom
+        const QPoint pixelDelta = event->pixelDelta();
+        qreal stepDelta = 0.0;
+        if (pixelDelta.y() != 0)
+            stepDelta = pixelDelta.y() / 120.0;
+        else if (angleDelta.y() != 0)
+            stepDelta = angleDelta.y() / 120.0;
+        if (!qFuzzyIsNull(stepDelta)) {
+            if ((stepDelta > 0.0) != (m_zoomStepAccumulator > 0.0))
+                m_zoomStepAccumulator = 0.0;               // direction reversed → drop remainder
+            m_zoomStepAccumulator += stepDelta;
+            const int steps = static_cast<int>(m_zoomStepAccumulator);
+            if (steps != 0) {
+                m_zoomStepAccumulator -= steps;
+                emit zoomRequested(steps);                 // + zoom in / - zoom out
+            }
+        }
+        return true;                                       // consume, don't scroll
+    }
+
     if (m_terminal->isMouseProtocolActive() && angleDelta.y() != 0) {
         // 鼠标协议启用：虚拟按钮码 64=向上、65=向下（X10/SGR 滚轮约定）
         const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
@@ -478,20 +511,35 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
         return true;
     }
 
-    // 鼠标协议禁用：滚动 scrollback
-    int deltaRows = 0;
-    if (angleDelta.y() != 0) {
-        const int stepCount = qMax(1, qAbs(angleDelta.y()) / 120);
-        deltaRows = (angleDelta.y() > 0 ? 1 : -1) * stepCount * kWheelScrollRowsPerStep;
-    } else if (event->pixelDelta().y() != 0) {
-        const int pixelRows = static_cast<int>(
-            std::round(event->pixelDelta().y() / qMax<qreal>(1.0, m_cellHeight)));
-        deltaRows = pixelRows != 0 ? pixelRows : (event->pixelDelta().y() > 0 ? 1 : -1);
+    // Mouse protocol disabled: scroll the scrollback.
+    // Prefer high resolution: trackpads / Magic Mouse send pixelDelta (and emit
+    // high-frequency events during momentum); map it 1:1 to fractional rows by line
+    // height — tracks the finger, no overshoot. Classic wheels have no pixelDelta,
+    // so use angleDelta (120 units = one detent, kWheelScrollRowsPerStep rows each).
+    // On macOS those devices' angleDelta is a coarse derived value, so whenever
+    // pixelDelta is present it always wins (same approach as VS Code).
+    const QPoint pixelDelta = event->pixelDelta();
+    qreal rowsDelta = 0.0;
+    if (pixelDelta.y() != 0) {
+        rowsDelta = pixelDelta.y() / qMax<qreal>(1.0, m_cellHeight);
+    } else if (angleDelta.y() != 0) {
+        rowsDelta = (angleDelta.y() / 120.0) * kWheelScrollRowsPerStep;
     }
+    if (qFuzzyIsNull(rowsDelta)) return false;
 
-    if (deltaRows == 0) return false;
+    // Direction reversed → drop the remainder so it tracks the finger immediately.
+    if ((rowsDelta > 0.0) != (m_wheelRowAccumulator > 0.0))
+        m_wheelRowAccumulator = 0.0;
+    m_wheelRowAccumulator += rowsDelta;
 
-    m_terminal->scrollByLines(deltaRows);
+    // Truncate toward zero to whole rows; if less than a row, accumulate and
+    // swallow this event (don't force a 1-row scroll).
+    const int wholeRows = static_cast<int>(m_wheelRowAccumulator);
+    if (wholeRows == 0)
+        return true;
+    m_wheelRowAccumulator -= wholeRows;
+
+    m_terminal->scrollByLines(wholeRows);
     emit wheelScrolled(m_terminal->scrollOffset());
     emit scrollChanged();
     return true;
@@ -517,6 +565,12 @@ void QTermViewController::reconnectSurfaceModel()
         emit repaintNeeded();
         emit selectionChanged();
     });
+    // Search highlights are background-fill rectangles like the selection;
+    // relay through the same dirty path (the view rebuilds both together).
+    m_surfaceSearchConnection = connect(surfaceModel, &QTermSurfaceModel::searchHighlightsChanged, this, [this]() {
+        emit repaintNeeded();
+        emit selectionChanged();
+    });
     m_surfaceVisibleRunsConnection = connect(surfaceModel, &QTermSurfaceModel::visibleLineRunsChanged, this, [this]() {
         emit repaintNeeded();
     });
@@ -534,6 +588,7 @@ void QTermViewController::disconnectSurfaceModel()
     QObject::disconnect(m_surfaceSizeConnection);
     QObject::disconnect(m_surfaceCursorConnection);
     QObject::disconnect(m_surfaceSelectionConnection);
+    QObject::disconnect(m_surfaceSearchConnection);
     QObject::disconnect(m_surfaceVisibleRunsConnection);
     QObject::disconnect(m_surfacePartialRunsConnection);
     QObject::disconnect(m_surfaceDestroyedConnection);
@@ -575,24 +630,19 @@ void QTermViewController::syncTerminalSize()
 
 void QTermViewController::updateSelectionFromDrag(qreal x, qreal y)
 {
-    if (!m_terminal || m_selectionAnchorRow < 0 || m_selectionAnchorColumn < 0)
+    if (!m_terminal || m_selectionAnchorProjectionRow < 0 || m_selectionAnchorColumn < 0)
         return;
-    const int row = rowAtPosition(y);
-    const int col = columnAtPosition(x);
-    // Selection uses half-open intervals [start, end). To include the character under
-    // the cursor at both the anchor and the drag end, adjust based on drag direction:
-    // dragging forward → anchor is left edge, drag end is right edge (+1)
-    // dragging backward → anchor is right edge (+1), drag end is left edge
-    const bool dragForward = row > m_selectionAnchorRow ||
-        (row == m_selectionAnchorRow && col >= m_selectionAnchorColumn);
-    if (dragForward) {
-        m_terminal->setSelectionRange(m_selectionAnchorRow, m_selectionAnchorColumn,
-                                      row, qMin(m_terminal->columns(), col + 1));
-    } else {
-        m_terminal->setSelectionRange(m_selectionAnchorRow,
-                                      qMin(m_terminal->columns(), m_selectionAnchorColumn + 1),
-                                      row, col);
-    }
+    // Map both anchor and drag point to **absolute projection rows** (viewport-top
+    // row + row within the viewport). This keeps the anchor pinned to the content
+    // and not drifting during auto-scroll; rowAtPosition clamps an out-of-bounds y
+    // to the visible edge, and as the viewport-top row advances with scrollByLines
+    // the drag point keeps extending deeper into the buffer.
+    // The half-open interval [start, end) + grapheme alignment (wide chars taken
+    // whole) is handled inside setSelectionDrag.
+    const int dragProjectionRow = m_terminal->viewportTopProjectionRow() + rowAtPosition(y);
+    const int dragColumn = columnAtPosition(x);
+    m_terminal->setSelectionDrag(m_selectionAnchorProjectionRow, m_selectionAnchorColumn,
+                                 dragProjectionRow, dragColumn);
 }
 
 } // namespace QTerm
