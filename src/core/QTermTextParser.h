@@ -20,8 +20,14 @@ private:
         EscapeIntermediate,
         Csi,
         CsiIntermediate, // after an intermediate byte (0x20–0x2F) inside CSI
+        CsiIgnore,
         Osc,
         OscEscape,
+        IgnoreString,
+        IgnoreStringEscape,
+        IgnoreOsc,
+        IgnoreOscEscape,
+        EscapeIgnore,
     };
 
     static int parameterAt(const QVector<int> &parameters, int index, int defaultValue);

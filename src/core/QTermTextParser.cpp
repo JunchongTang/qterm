@@ -6,6 +6,13 @@
 
 namespace QTerm {
 
+namespace {
+
+constexpr qsizetype kMaximumCsiParameterLength = 4096;
+constexpr qsizetype kMaximumOscDataLength = 1024 * 1024;
+
+} // namespace
+
 void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
 {
     for (int index = 0; index < text.size(); ++index) {
@@ -36,9 +43,13 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
             if (character == u'[') {
                 m_state = State::Csi;
                 m_csiParameters.clear();
+                m_csiIntermediate = QChar();
             } else if (character == u']') {
                 m_state = State::Osc;
                 m_oscData.clear();
+            } else if (character == u'P' || character == u'X' || character == u'^'
+                       || character == u'_') {
+                m_state = State::IgnoreString;
             } else if (character == u'\x1b') {
                 m_state = State::Escape;
             } else if (character == u'(' || character == u')' || character == u'%') {
@@ -46,6 +57,8 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 // e.g. ESC ( 0, ESC ( B, ESC ) 0
                 m_escIntermediate = character;
                 m_state = State::EscapeIntermediate;
+            } else if (character.unicode() >= 0x20 && character.unicode() <= 0x2F) {
+                m_state = State::EscapeIgnore;
             } else {
                 handleEscapeFinal(character, executor);
                 m_state = State::Ground;
@@ -57,8 +70,13 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
             m_state = State::Ground;
             break;
         case State::Csi:
-            if (character.isDigit() || character == u';' || character == u'?' || character == u'>') {
+            if (character.isDigit() || character == u';' || character == u':'
+                || character == u'?' || character == u'>') {
                 m_csiParameters.append(character);
+                if (m_csiParameters.size() > kMaximumCsiParameterLength) {
+                    m_csiParameters.clear();
+                    m_state = State::CsiIgnore;
+                }
             } else if (character.unicode() >= 0x20 && character.unicode() <= 0x2F) {
                 // Intermediate byte (e.g. SP for DECSCUSR)
                 m_csiIntermediate = character;
@@ -78,6 +96,11 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
             m_csiIntermediate = QChar();
             m_state = State::Ground;
             break;
+        case State::CsiIgnore:
+            if (character.unicode() >= 0x40 && character.unicode() <= 0x7E) {
+                m_state = State::Ground;
+            }
+            break;
         case State::Osc:
             if (character == u'\x07') {
                 handleOscTerminator(executor);
@@ -85,6 +108,10 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 m_state = State::OscEscape;
             } else {
                 m_oscData.append(character);
+                if (m_oscData.size() > kMaximumOscDataLength) {
+                    m_oscData.clear();
+                    m_state = State::IgnoreOsc;
+                }
             }
             break;
         case State::OscEscape:
@@ -95,6 +122,35 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 m_oscData.append(character);
                 m_state = State::Osc;
             }
+            break;
+        case State::IgnoreString:
+            if (character == u'\x1b') {
+                m_state = State::IgnoreStringEscape;
+            }
+            break;
+        case State::IgnoreStringEscape:
+            if (character == u'\\') {
+                m_state = State::Ground;
+            } else {
+                m_state = State::IgnoreString;
+            }
+            break;
+        case State::IgnoreOsc:
+            if (character == u'\x07') {
+                m_state = State::Ground;
+            } else if (character == u'\x1b') {
+                m_state = State::IgnoreOscEscape;
+            }
+            break;
+        case State::IgnoreOscEscape:
+            if (character == u'\\') {
+                m_state = State::Ground;
+            } else {
+                m_state = State::IgnoreOsc;
+            }
+            break;
+        case State::EscapeIgnore:
+            m_state = State::Ground;
             break;
         }
     }
@@ -120,7 +176,7 @@ QVector<int> QTermTextParser::parseCsiParameters(const QString &text)
         return {};
     }
 
-    const QStringList parts = parametersText.split(u';');
+    const QStringList parts = parametersText.replace(u':', u';').split(u';');
     QVector<int> parameters;
     parameters.reserve(parts.size());
     for (const QString &part : parts) {
@@ -144,6 +200,8 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
             executor.bell();
             break;
         case '\n':
+        case '\v':
+        case '\f':
             executor.lineFeed();
             break;
         case '\r':
@@ -160,7 +218,9 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
         case '\x7f': // DEL — ignored
             break;
         default:
-            executor.print(text);
+            if (text.front().unicode() >= 0x20) {
+                executor.print(text);
+            }
             break;
         }
         return;

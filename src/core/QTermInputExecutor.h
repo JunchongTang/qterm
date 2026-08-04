@@ -5,7 +5,7 @@
 #include <QString>
 #include <QVector>
 
-#include "QTermModeState.h"
+#include <QTerm/QTermModeState.h>
 #include "QTermScreenState.h"
 
 namespace QTerm {

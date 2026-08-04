@@ -10,6 +10,11 @@ namespace QTerm {
 
 class QTermTerminal;
 
+/*!
+    \class QTermSurfaceModel
+    \inmodule QTerm
+    \brief Exposes the visible terminal buffer, cursor and selection state to views and QML.
+*/
 class QTermSurfaceModel final : public QObject
 {
     Q_OBJECT
@@ -36,26 +41,85 @@ class QTermSurfaceModel final : public QObject
 public:
     explicit QTermSurfaceModel(QObject *parent = nullptr);
 
+    /*!
+        \brief Returns the number of rows in the current viewport.
+    */
     int rows() const noexcept;
+    /*!
+        \brief Returns the number of columns in the current viewport.
+    */
     int columns() const noexcept;
+    /*!
+        \brief Returns the cursor row position.
+    */
     int cursorRow() const noexcept;
+    /*!
+        \brief Returns the cursor column position.
+    */
     int cursorColumn() const noexcept;
+    /*!
+        \brief Returns whether the cursor is currently visible.
+    */
     bool cursorVisible() const noexcept;
     // Cursor shape: 0 = Block, 1 = Underline, 2 = Bar (matches CursorShape enum)
+    /*!
+        \brief Returns the cursor shape as an integer code.
+    */
     int cursorShape() const noexcept;
+    /*!
+        \brief Returns whether a selection range is currently active.
+    */
     bool hasSelection() const noexcept;
+    /*!
+        \brief Returns whether the selection is currently visible.
+    */
     bool selectionVisible() const noexcept;
+    /*!
+        \brief Returns the selection start row.
+    */
     int selectionStartRow() const noexcept;
+    /*!
+        \brief Returns the selection start column.
+    */
     int selectionStartColumn() const noexcept;
+    /*!
+        \brief Returns the selection end row.
+    */
     int selectionEndRow() const noexcept;
+    /*!
+        \brief Returns the selection end column.
+    */
     int selectionEndColumn() const noexcept;
+    /*!
+        \brief Returns the currently selected text.
+    */
     QString selectedText() const;
+    /*!
+        \brief Returns the currently visible terminal lines.
+    */
     QStringList visibleLines() const;
+    /*!
+        \brief Returns the visible line runs used for rendering.
+    */
     QVariantList visibleLineRuns() const;
-    QString plainText() const;  // on-demand; delegates to terminal dumpPlainText()
+    /*!
+        \brief Returns the full terminal text as plain text.
+
+        Computed on demand; delegates to the terminal's dumpPlainText().
+    */
+    QString plainText() const;
+    /*!
+        \brief Returns the highlight ranges for the current search matches.
+    */
     QVariantList searchHighlights() const;
 
+    /*!
+        \brief Clears the current selection.
+    */
     Q_INVOKABLE void clearSelection();
+    /*!
+        \brief Sets a new selection range.
+    */
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
 
 signals:

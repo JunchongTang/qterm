@@ -103,6 +103,11 @@ int QTermTerminal::columns() const noexcept
     return m_core->columns();
 }
 
+int QTermTerminal::maximumScrollbackLines() const noexcept
+{
+    return m_core->maximumScrollbackLines();
+}
+
 int QTermTerminal::scrollOffset() const noexcept
 {
     return maxViewportTopProjectionRow() - m_viewportTopProjectionRow;
@@ -188,6 +193,27 @@ void QTermTerminal::clear()
 void QTermTerminal::feedText(const QString &text)
 {
     m_core->writePlainText(text);
+}
+
+void QTermTerminal::setMaximumScrollbackLines(int maximumScrollbackLines)
+{
+    const int previousScrollOffset = scrollOffset();
+    const int boundedMaximum = qMax(0, maximumScrollbackLines);
+    if (m_core->maximumScrollbackLines() == boundedMaximum) {
+        return;
+    }
+
+    m_core->setMaximumScrollbackLines(boundedMaximum);
+    clampViewportToBuffer();
+    m_selectionModel->setViewport(m_viewportTopProjectionRow);
+    m_selectionModel->refreshSelectionText(m_core->buffer());
+    syncSurfaceSelection();
+    syncSurfaceViewport();
+    syncSurfaceCursor(m_surfaceModel, m_core, m_viewportTopProjectionRow);
+    emit maximumScrollbackLinesChanged();
+    if (scrollOffset() != previousScrollOffset) {
+        emit viewportChanged();
+    }
 }
 
 void QTermTerminal::setTerminalSize(int columns, int rows)

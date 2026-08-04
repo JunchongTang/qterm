@@ -14,10 +14,14 @@ class QTimer;
 
 namespace QTerm {
 
-// Cross-platform local shell backend.
-// On Unix/macOS: launches a process via forkpty (Unix PTY).
-// On Windows:    launches a process via CreatePseudoConsole (ConPTY).
-// Windows ConPTY requires Windows 10 1809 (build 17763) or later.
+/*!
+    \class QTermLocalShellBackend
+    \inmodule QTerm
+    \brief Launches a local shell process and forwards its I/O through a terminal session.
+
+    The backend uses platform-specific PTY or ConPTY support depending on the
+    current operating system.
+*/
 class QTermLocalShellBackend : public QTermSessionBackend
 {
     Q_OBJECT
@@ -30,19 +34,72 @@ public:
     explicit QTermLocalShellBackend(QObject *parent = nullptr);
     ~QTermLocalShellBackend() override;
 
+    /*!
+        \brief Returns the configured shell program path.
+        \return The executable path used when launching the shell.
+    */
     QString program() const;
+
+    /*!
+        \brief Returns the argument list passed to the shell process.
+    */
     QStringList arguments() const;
+
+    /*!
+        \brief Returns the working directory used for launching the shell.
+    */
     QString workingDirectory() const;
+
+    /*!
+        \brief Returns the environment variables applied to the child process.
+    */
     QProcessEnvironment processEnvironment() const;
 
+    /*!
+        \brief Sets the shell program to launch.
+        \param program The executable path or command name.
+    */
     void setProgram(const QString &program);
+
+    /*!
+        \brief Sets the arguments passed to the shell process.
+        \param arguments The argument list.
+    */
     void setArguments(const QStringList &arguments);
+
+    /*!
+        \brief Sets the working directory used by the shell process.
+        \param workingDirectory The directory to start in.
+    */
     void setWorkingDirectory(const QString &workingDirectory);
+
+    /*!
+        \brief Sets the process environment for the shell.
+        \param environment The environment variables to apply.
+    */
     void setProcessEnvironment(const QProcessEnvironment &environment);
 
+    /*!
+        \brief Starts the local shell process.
+    */
     void open() override;
+
+    /*!
+        \brief Stops the local shell process and closes the PTY or ConPTY connection.
+    */
     void close() override;
+
+    /*!
+        \brief Sends input data to the child shell process.
+        \param data The bytes to write to the shell's stdin.
+    */
     void writeData(const QByteArray &data) override;
+
+    /*!
+        \brief Resizes the pseudo-terminal.
+        \param columns The new number of columns.
+        \param rows The new number of rows.
+    */
     void resize(int columns, int rows) override;
 
     // Precise local-shell foreground detection (computed on demand, no timer):

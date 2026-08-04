@@ -12,21 +12,14 @@ class QTcpSocket;
 
 namespace QTerm {
 
-// Telnet session backend backed by QTcpSocket.
-//
-// Implements RFC 854 (Telnet) with the following option negotiation:
-//   NAWS  (RFC 1073) — sends terminal size on connect and on resize()
-//   ECHO  (RFC 857)  — asks server to echo input (normal for interactive use)
-//   SGA   (RFC 858)  — asks server to suppress Go-Ahead (full-duplex mode)
-//
-// Unknown DO/WILL requests are refused with WONT/DONT automatically.
-//
-// Usage:
-//   QTermTelnetBackend *b = new QTermTelnetBackend(this);
-//   b->setHost("192.168.1.1");
-//   b->setPort(23);
-//   b->open();
-//   // wire to QTermSession the same way as QTermLocalShellBackend
+/*!
+    \class QTermTelnetBackend
+    \inmodule QTerm
+    \brief Telnet session backend based on QTcpSocket.
+
+    The backend implements core Telnet negotiation and forwards data between
+    a network Telnet endpoint and a QTerm session.
+*/
 class QTermTelnetBackend : public QTermSessionBackend
 {
     Q_OBJECT
@@ -38,11 +31,14 @@ public:
     explicit QTermTelnetBackend(QObject *parent = nullptr);
     ~QTermTelnetBackend() override;
 
-    // ── Connection parameters ─────────────────────────────────────────────────
+    /*! \brief Returns the remote Telnet host name or IP address. */
     QString host() const;
+    /*! \brief Sets the remote Telnet host name or IP address. */
     void    setHost(const QString &host);
 
+    /*! \brief Returns the remote Telnet port. */
     quint16 port() const noexcept;
+    /*! \brief Sets the remote Telnet port. */
     void    setPort(quint16 port);
 
     // ── QTermSessionBackend interface ─────────────────────────────────────────
@@ -50,7 +46,7 @@ public:
     void close() override;
     void writeData(const QByteArray &data) override;
 
-    // Sends an IAC SB NAWS subnegotiation to inform the server of the new size.
+    /*! \brief Sends terminal size updates through NAWS negotiation. */
     void resize(int columns, int rows) override;
 
 signals:

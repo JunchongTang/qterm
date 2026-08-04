@@ -19,12 +19,21 @@ namespace QTerm {
 class QTermCore;
 class QTermSelectionModel;
 
+/*!
+    \class QTermTerminal
+    \inmodule QTerm
+    \brief Core terminal model and controller for buffer, selection and viewport state.
+
+    QTermTerminal owns the terminal buffer, selection state and the connection to
+    a session backend. It is the main object consumed by the widget and QML layers.
+*/
 class QTermTerminal : public QObject
 {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(int rows READ rows NOTIFY sizeChanged)
     Q_PROPERTY(int columns READ columns NOTIFY sizeChanged)
+    Q_PROPERTY(int maximumScrollbackLines READ maximumScrollbackLines WRITE setMaximumScrollbackLines NOTIFY maximumScrollbackLinesChanged)
     Q_PROPERTY(int scrollOffset READ scrollOffset NOTIFY viewportChanged)
     Q_PROPERTY(int maxScrollOffset READ maxScrollOffset NOTIFY viewportChanged)
     Q_PROPERTY(QTerm::QTermSession *session READ session WRITE setSession NOTIFY sessionChanged)
@@ -42,19 +51,67 @@ public:
     explicit QTermTerminal(QObject *parent = nullptr);
     ~QTermTerminal() override;
 
+    /*!
+        \brief Returns the number of rows currently visible in the viewport.
+    */
     int rows() const noexcept;
+
+    /*!
+        \brief Returns the number of columns currently visible in the viewport.
+    */
     int columns() const noexcept;
+
+    /*!
+        \brief Returns the maximum number of scrollback lines retained in the buffer.
+    */
+    int maximumScrollbackLines() const noexcept;
+
+    /*!
+        \brief Returns the current scroll offset from the bottom of the buffer.
+    */
     int scrollOffset() const noexcept;
-    // Absolute row index, in projection space (including scrollback), of the top
-    // of the current viewport. The view layer uses it to map viewport-relative
-    // rows to absolute rows so a selection anchor does not drift while scrolling.
+    /*!
+        \brief Returns the absolute row index, in projection space, of the viewport top.
+
+        Projection space includes scrollback. The view layer uses this to map
+        viewport-relative rows to absolute rows so a selection anchor does not
+        drift while scrolling.
+    */
     int viewportTopProjectionRow() const noexcept;
+
+    /*!
+        \brief Returns the maximum scroll offset available for the current buffer.
+    */
     int maxScrollOffset() const noexcept;
+
+    /*!
+        \brief Returns the session currently attached to this terminal.
+    */
     QTermSession *session() const noexcept;
+
+    /*!
+        \brief Returns the terminal title advertised by the shell or application.
+    */
     QString title() const;
+
+    /*!
+        \brief Returns the current working directory reported by the shell integration layer.
+    */
     QString currentDirectory() const;
+
+    /*!
+        \brief Returns the current shell integration zone index.
+    */
     int shellZone() const noexcept;
+
+    /*!
+        \brief Returns the last shell exit code reported by shell integration.
+    */
     int lastExitCode() const noexcept;
+
+    /*!
+        \brief Returns the surface model that exposes the viewport and selection state.
+    */
     QTermSurfaceModel *surfaceModel() noexcept;
 
     // Mouse protocol state (for view-layer event routing)
@@ -62,50 +119,146 @@ public:
     bool isHoverTrackingActive() const noexcept;
     bool isButtonTrackingActive() const noexcept;
 
-    // OSC 8: resolve a hyperlink id (from a style run) to its URL
+    /*!
+        \brief Resolves an OSC 8 hyperlink identifier to its target URL.
+        \param id The hyperlink identifier carried by a style run.
+        \return The resolved URL, or an empty string if no hyperlink matches.
+    */
     Q_INVOKABLE QString hyperlinkUrl(int id) const;
-    // Returns the full buffer content as plain text; intended for tests and debugging.
+    /*!
+        \brief Returns the full buffer content as plain text.
+        \return The complete terminal content, intended for tests and debugging.
+    */
     QString dumpPlainText() const;
-    // ANSI-encoded snapshot of the buffer (UTF-8 bytes with embedded SGR escapes).
-    // Re-feeding via feedText() on a fresh terminal reproduces the same visual
-    // state — used by host apps to restore scrollback after restart.
+    /*!
+        \brief Returns an ANSI-encoded snapshot of the buffer.
+        \return UTF-8 bytes with embedded SGR escapes.
+
+        Re-feeding the result via feedText() on a fresh terminal reproduces the
+        same visual state, which host applications use to restore scrollback
+        after a restart.
+    */
     Q_INVOKABLE QByteArray dumpAnsi(int maxLines = 5000) const;
 
+    /*!
+        \brief Clears the terminal buffer and resets the viewport state.
+    */
     Q_INVOKABLE void clear();
+
+    /*!
+        \brief Feeds text into the terminal as if it had been typed by the user.
+        \param text The text to feed to the terminal parser.
+    */
     Q_INVOKABLE void feedText(const QString &text);
+
+    /*!
+        \brief Sets the maximum number of scrollback lines retained by the terminal.
+        \param maximumScrollbackLines The maximum scrollback size.
+    */
+    Q_INVOKABLE void setMaximumScrollbackLines(int maximumScrollbackLines);
+
+    /*!
+        \brief Sets the visible viewport size in columns and rows.
+        \param columns The number of columns.
+        \param rows The number of rows.
+    */
     Q_INVOKABLE void setTerminalSize(int columns, int rows);
+
+    /*!
+        \brief Clears the current selection from the terminal buffer.
+    */
     Q_INVOKABLE void clearSelection();
+
+    /*!
+        \brief Sets a rectangular selection range in the terminal buffer.
+    */
     Q_INVOKABLE void setSelectionRange(int startRow, int startColumn, int endRow, int endColumn);
-    // Drag-selection: anchor and drag point are both given as **absolute
-    // projection rows** (the view maps them via viewportTopProjectionRow()).
-    // Internally builds the selection from projection endpoints + logical anchors,
-    // so it spans scrollback and never loses the start during auto-scroll, and
-    // snaps the endpoints to grapheme boundaries (wide/CJK chars selected whole,
-    // so the highlight no longer covers half a glyph). Columns are cell columns;
-    // the half-open interval is handled inside this method.
+    /*!
+        \brief Updates a drag selection from absolute projection rows.
+
+        Both endpoints are absolute projection rows; the view maps them via
+        viewportTopProjectionRow(). The selection is built from projection
+        endpoints plus logical anchors, so it spans scrollback and never loses
+        its start during auto-scroll, and its endpoints snap to grapheme
+        boundaries so a wide or CJK character is always selected whole. Columns
+        are cell columns; the half-open interval is handled internally.
+    */
     Q_INVOKABLE void setSelectionDrag(int anchorProjectionRow, int anchorColumn,
                                       int dragProjectionRow, int dragColumn);
+
+    /*!
+        \brief Selects the word under the given cursor position.
+    */
     Q_INVOKABLE void selectWordAt(int row, int column);
+
+    /*!
+        \brief Selects the full logical line at the specified row.
+    */
     Q_INVOKABLE void selectLogicalLineAt(int row);
+
+    /*!
+        \brief Scrolls the viewport by a relative number of lines.
+        \param deltaRows The number of lines to move the viewport.
+    */
     Q_INVOKABLE void scrollByLines(int deltaRows);
+
+    /*!
+        \brief Scrolls the viewport to the bottom of the buffer.
+    */
     Q_INVOKABLE void scrollToBottom();
 
     // ── In-buffer search ───────────────────────────────────────────────────────
-    // Scan the whole buffer (history + screen) for `query` and remember the
-    // matches. Returns the match count; picks the match nearest the current
-    // viewport as the current one and scrolls it into view. Matches are kept in
-    // projection-row coordinates and re-projected to the viewport for rendering,
-    // so they stay anchored to content while scrolling.
+    /*!
+        \brief Searches the whole buffer, history included, for \a query.
+        \return The number of matches.
+
+        Picks the match nearest the current viewport as the current one and
+        scrolls it into view. Matches are kept in projection-row coordinates and
+        re-projected for rendering, so they stay anchored to content while
+        scrolling.
+    */
     Q_INVOKABLE int search(const QString &query, bool caseSensitive = false);
+    /*!
+        \brief Moves to the next search match.
+    */
     Q_INVOKABLE void findNext();
+    /*!
+        \brief Moves to the previous search match.
+    */
     Q_INVOKABLE void findPrevious();
+    /*!
+        \brief Clears the current search and its highlights.
+    */
     Q_INVOKABLE void clearSearch();
+
+    /*!
+        \brief Sends a key event to the attached session.
+        \param key The key code.
+        \param text Optional text payload for printable keys.
+    */
     Q_INVOKABLE void sendKey(int key, const QString &text = QString());
+
+    /*!
+        \brief Sends pasted text to the attached session.
+        \param text The text to paste.
+    */
     Q_INVOKABLE void sendPaste(const QString &text);
+
+    /*!
+        \brief Sends a mouse event to the attached session.
+    */
     Q_INVOKABLE void sendMouse(int row, int column, int button, int modifiers, bool isPress, bool isMotion = false);
 
+    /*!
+        \brief Attaches a session backend to the terminal.
+        \param session The session to use for I/O and state changes.
+    */
     void setSession(QTermSession *session);
-    // Initial title can be set by embedding application; thereafter updated by OSC 0/2
+
+    /*!
+        \brief Sets the terminal title.
+        \param title The title to expose to the UI or shell integration layer.
+    */
     void setTitle(const QString &title);
 
 private slots:
@@ -114,6 +267,7 @@ private slots:
 signals:
     void bell();
     void sizeChanged();
+    void maximumScrollbackLinesChanged();
     void viewportChanged();
     void searchChanged();
     void sessionChanged();

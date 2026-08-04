@@ -10,17 +10,12 @@
 
 namespace QTerm {
 
-// QML singleton that enumerates available serial ports at runtime.
-//
-// QML usage:
-//   import QTerm 1.0
-//
-//   Component.onCompleted: {
-//       var ports = SerialPortScanner.availablePorts()
-//       for (var i = 0; i < ports.length; i++) {
-//           console.log(ports[i].portName, ports[i].description)
-//       }
-//   }
+/*!
+    \qmltype QTermSerialPortScanner
+    \inqmlmodule QTerm
+    \qmlsingleton
+    \brief QML singleton that enumerates serial ports at runtime.
+*/
 class QTermSerialPortScanner : public QObject
 {
     Q_OBJECT
@@ -30,8 +25,10 @@ class QTermSerialPortScanner : public QObject
 public:
     explicit QTermSerialPortScanner(QObject *parent = nullptr);
 
-    // Returns a snapshot of all serial ports currently visible to the OS.
-    // Each call re-enumerates; there is no caching.
+    /*!
+        \brief Returns a snapshot of all serial ports visible to the operating system.
+        \return A list of available serial-port descriptors.
+    */
     Q_INVOKABLE QList<QTerm::QTermSerialPortInfo> availablePorts() const;
 };
 

@@ -17,19 +17,14 @@ namespace QTerm {
 
 class QTermViewController;
 
-// High-performance Qt Scene Graph terminal renderer.
-// Replaces QTermQuickPaintedItem's QPainter-to-texture path with a native QSG
-// node tree: colored background geometry, QSGTextNode-per-row for text, and
-// flat-color geometry nodes for selection and cursor.
-//
-// Dirty-flag system:
-//   Full rebuild  – font/size/terminal change
-//   Content dirty – visibleLineRunsChanged  → bg fills + text nodes repopulated
-//   Selection dirty – selectionChanged      → selection geometry only
-//   Cursor dirty  – cursorChanged           → cursor geometry only
-//
-// The public API is a strict superset of QTermQuickPaintedItem so QML that
-// uses the older item can switch by changing just the type name.
+/*!
+    \qmltype QTermQuickItem
+    \inqmlmodule QTerm
+    \brief High-performance Scene Graph terminal item for Qt Quick.
+
+    QTermQuickItem renders terminal content directly with QSG nodes and exposes
+    the same high-level API as QTermQuickPaintedItem for easier migration.
+*/
 class QTermQuickItem : public QQuickItem
 {
     Q_OBJECT
@@ -52,7 +47,10 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
 
 public:
-    // Cursor built-in shapes; values deliberately match QTermQuickPaintedItem::CursorStyle.
+    /*!
+        \enum QTermQuickItem::CursorStyle
+        \brief Built-in cursor rendering styles.
+    */
     enum CursorStyle {
         Block,
         Underline,
@@ -62,10 +60,14 @@ public:
 
     explicit QTermQuickItem(QQuickItem *parent = nullptr);
 
+    /*! \brief Returns the terminal attached to this item. */
     QTermTerminal *terminal() const noexcept;
+    /*! \brief Sets the terminal attached to this item. */
     void setTerminal(QTermTerminal *terminal);
 
+    /*! \brief Returns the font family used to render text. */
     QString fontFamily() const;
+    /*! \brief Sets the font family used to render text. */
     void setFontFamily(const QString &fontFamily);
 
     int fontPixelSize() const noexcept;
@@ -100,17 +102,22 @@ public:
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
 
+    /*! \brief Returns the current normalized scroll position in the range 0.0 to 1.0. */
     qreal scrollPosition() const noexcept;
+    /*! \brief Sets the normalized scroll position in the range 0.0 to 1.0. */
     void setScrollPosition(qreal position);
+    /*! \brief Returns the normalized visible scroll size in the range 0.0 to 1.0. */
     qreal scrollSize() const noexcept;
 
+    /*! \brief Maps a vertical coordinate to a terminal row index. */
     Q_INVOKABLE int rowAtPosition(qreal y) const;
+    /*! \brief Maps a horizontal coordinate to a terminal column index. */
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void componentComplete() override;
 
-    // Theme API – same as QTermQuickPaintedItem.
+    /*! \brief Applies a resolved theme to the item. */
     Q_INVOKABLE void loadTheme(const QTerm::QTermTheme &theme);
 
 signals:

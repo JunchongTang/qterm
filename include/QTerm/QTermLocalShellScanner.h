@@ -10,19 +10,15 @@
 
 namespace QTerm {
 
-// QML singleton that enumerates available local shells at runtime.
-//
-// On Unix:    reads /etc/shells, filters to executable entries, prepends $SHELL.
-// On Windows: searches PATH for pwsh.exe (PowerShell 7), powershell.exe, cmd.exe.
-//
-// QML usage:
-//   import QTerm 1.0
-//
-//   Component.onCompleted: {
-//       var shells = QTermLocalShellScanner.availableShells()
-//       for (var i = 0; i < shells.length; i++)
-//           console.log(shells[i].name, shells[i].program)
-//   }
+/*!
+    \qmltype QTermLocalShellScanner
+    \inqmlmodule QTerm
+    \qmlsingleton
+    \brief Enumerates locally available shell programs at runtime.
+
+    The scanner inspects the current platform and returns a list of shells that
+    can be launched by QTermLocalShellBackend.
+*/
 class QTermLocalShellScanner : public QObject
 {
     Q_OBJECT
@@ -32,9 +28,10 @@ class QTermLocalShellScanner : public QObject
 public:
     explicit QTermLocalShellScanner(QObject *parent = nullptr);
 
-    // Returns a snapshot of available shells on this system.
-    // The first entry is the preferred default (system shell or best available).
-    // Each call re-enumerates; there is no caching.
+    /*!
+        \brief Returns a snapshot of shells available on the current system.
+        \return A list of discovered shells; the first entry is typically the preferred default.
+    */
     Q_INVOKABLE QList<QTerm::QTermShellInfo> availableShells() const;
 };
 
