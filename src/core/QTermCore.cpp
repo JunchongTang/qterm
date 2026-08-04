@@ -18,7 +18,7 @@ namespace QTerm {
 QTermCore::QTermCore(QObject *parent)
     : QObject(parent)
     , m_primaryScreen(80, 24)
-    , m_alternateScreen(80, 24)
+    , m_alternateScreen(80, 24, 0)
 {
 }
 
@@ -30,6 +30,11 @@ int QTermCore::rows() const noexcept
 int QTermCore::columns() const noexcept
 {
     return activeScreen().buffer.columns();
+}
+
+int QTermCore::maximumScrollbackLines() const noexcept
+{
+    return m_primaryScreen.buffer.maximumHistoryLines();
 }
 
 QString QTermCore::title() const
@@ -201,6 +206,16 @@ void QTermCore::writePlainText(const QString &text)
         m_modeState.cursorShape != prevCursorShape) {
         emit modeStateChanged();
     }
+}
+
+void QTermCore::setMaximumScrollbackLines(int maximumScrollbackLines)
+{
+    if (m_primaryScreen.buffer.maximumHistoryLines() == qMax(0, maximumScrollbackLines)) {
+        return;
+    }
+
+    m_primaryScreen.buffer.setMaximumHistoryLines(maximumScrollbackLines);
+    emit dumpPlainTextChanged();
 }
 
 void QTermCore::setTerminalSize(int columns, int rows)

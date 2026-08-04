@@ -9,6 +9,11 @@
 
 namespace QTerm {
 
+/*!
+    \class QTermSessionBackend
+    \inmodule QTerm
+    \brief Abstract base class for terminal backends that provide I/O and state changes.
+*/
 class QTermSessionBackend : public QObject
 {
     Q_OBJECT
@@ -82,17 +87,46 @@ public:
 
     explicit QTermSessionBackend(QObject *parent = nullptr);
 
+    /*!
+        \brief Returns the current state of the backend.
+        \return The current backend state.
+    */
     State state() const noexcept;
 
-    // Default: unknown / no name. Subclasses override as described above. Consumers
-    // read these dynamically via QObject::property ("workState" /
-    // "foregroundProcessName"), hence the read-only, no-NOTIFY Q_PROPERTY above.
+    /*!
+        \brief Returns whether the session currently has in-progress foreground work.
+
+        Defaults to \c WorkUnknown; subclasses override it with the best precision
+        they can achieve. Consumers read this dynamically via QObject::property
+        ("workState"), hence the read-only, no-NOTIFY Q_PROPERTY above.
+    */
     virtual WorkState workState() const { return WorkUnknown; }
+    /*!
+        \brief Returns the foreground process name, or an empty string when unknown.
+    */
     virtual QString foregroundProcessName() const { return {}; }
 
+    /*!
+        \brief Opens the backend and starts the underlying process or connection.
+    */
     virtual void open() = 0;
+
+    /*!
+        \brief Closes the backend and releases any associated resources.
+    */
     virtual void close() = 0;
+
+    /*!
+        \brief Writes raw data to the backend input stream.
+        \param data The bytes to write.
+    */
     virtual void writeData(const QByteArray &data) = 0;
+
+    /*!
+        \brief Resizes the underlying terminal dimensions.
+        \param columns The new number of columns.
+        \param rows The new number of rows.
+    */
     virtual void resize(int columns, int rows) = 0;
 
 signals:

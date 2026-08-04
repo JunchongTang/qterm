@@ -13,11 +13,13 @@ namespace QTerm {
 class QTermBuffer
 {
 public:
-    QTermBuffer(int columns = 80, int rows = 24);
+    QTermBuffer(int columns = 80, int rows = 24, int maximumHistoryLines = 10000);
 
     int rows() const noexcept;
     int columns() const noexcept;
     int historyLineCount() const noexcept;
+    int maximumHistoryLines() const noexcept;
+    void setMaximumHistoryLines(int maximumHistoryLines);
     int projectionRowCount() const noexcept;
     int visibleRowOffset() const noexcept;
 
@@ -62,6 +64,7 @@ private:
 
     int m_columns = 80;
     int m_rows = 24;
+    int m_maximumHistoryLines = 10000;
     QVector<QTermLine> m_historyLines;
     QVector<QTermLine> m_visibleLines;
 

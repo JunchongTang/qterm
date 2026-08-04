@@ -105,9 +105,10 @@ QVector<LogicalLineProjection> snapshotLogicalLines(const QVector<QTermLine> &hi
 
 } // namespace
 
-QTermBuffer::QTermBuffer(int columns, int rows)
+QTermBuffer::QTermBuffer(int columns, int rows, int maximumHistoryLines)
     : m_columns(columns)
     , m_rows(rows)
+    , m_maximumHistoryLines(qMax(0, maximumHistoryLines))
     , m_dirtyRows(rows, false)
     , m_allRowsDirty(true)
 {
@@ -130,6 +131,25 @@ int QTermBuffer::columns() const noexcept
 int QTermBuffer::historyLineCount() const noexcept
 {
     return m_historyLines.size();
+}
+
+int QTermBuffer::maximumHistoryLines() const noexcept
+{
+    return m_maximumHistoryLines;
+}
+
+void QTermBuffer::setMaximumHistoryLines(int maximumHistoryLines)
+{
+    const int boundedMaximum = qMax(0, maximumHistoryLines);
+    if (m_maximumHistoryLines == boundedMaximum) {
+        return;
+    }
+
+    m_maximumHistoryLines = boundedMaximum;
+    if (m_historyLines.size() > m_maximumHistoryLines) {
+        m_historyLines.remove(0, m_historyLines.size() - m_maximumHistoryLines);
+        markAllRowsDirty();
+    }
 }
 
 int QTermBuffer::projectionRowCount() const noexcept
@@ -334,6 +354,9 @@ int QTermBuffer::severPredecessorWrapChain(int visibleRow)
 void QTermBuffer::scrollUp()
 {
     m_historyLines.append(m_visibleLines.takeFirst());
+    if (m_historyLines.size() > m_maximumHistoryLines) {
+        m_historyLines.remove(0, m_historyLines.size() - m_maximumHistoryLines);
+    }
     appendEmptyVisibleLine();
     markAllRowsDirty();
 }

@@ -7,14 +7,15 @@
 
 namespace QTerm {
 
-// Describes one discovered local shell.
-//
-// Registered as a QML value type ("shellInfo") so QML code can read
-// properties directly from items returned by QTermLocalShellScanner::availableShells().
-//
-// On Unix:    program is the full path (e.g. "/bin/zsh"), name is the basename.
-// On Windows: program is the resolved full path (e.g. "C:\Windows\System32\cmd.exe"),
-//             name is a human-readable label ("PowerShell 7", "Command Prompt", …).
+/*!
+    \qmltype shellInfo
+    \inqmlmodule QTerm
+    \qmlvaluetype
+    \brief Describes a discovered local shell and the command used to launch it.
+
+    The type is exposed to QML as a value type so scripts can read its
+    properties directly from the list returned by QTermLocalShellScanner.
+*/
 class QTermShellInfo
 {
     Q_GADGET
@@ -28,11 +29,16 @@ public:
     QTermShellInfo(const QString &name, const QString &program)
         : m_name(name), m_program(program) {}
 
-    // Human-readable display name, e.g. "zsh", "PowerShell 7", "Command Prompt".
+    /*!
+        \brief Returns the human-readable display name of the shell.
+        \return The shell name, for example "zsh", "PowerShell 7" or "Command Prompt".
+    */
     QString name() const { return m_name; }
 
-    // Executable path passed to QTermLocalShellBackend::setProgram(),
-    // e.g. "/bin/zsh" or "C:\Program Files\PowerShell\7\pwsh.exe".
+    /*!
+        \brief Returns the executable path used to launch the shell.
+        \return The resolved program path, for example "/bin/zsh" or "C:\\Program Files\\PowerShell\\7\\pwsh.exe".
+    */
     QString program() const { return m_program; }
 
 private:

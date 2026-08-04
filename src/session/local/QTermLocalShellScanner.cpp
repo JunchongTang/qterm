@@ -1,6 +1,8 @@
 #include <QTerm/QTermLocalShellScanner.h>
 
+#include <QDir>
 #include <QFileInfo>
+#include <QSet>
 
 #if defined(Q_OS_WIN)
 #define WIN32_LEAN_AND_MEAN
@@ -25,7 +27,8 @@ QList<QTermShellInfo> QTermLocalShellScanner::availableShells() const
     QList<QTermShellInfo> result;
 
 #if defined(Q_OS_WIN)
-    // On Windows: search PATH for known shells in preference order.
+    // On Windows: prefer the system default shell first (%ComSpec%), then
+    // add known shells in preference order for explicit selection in UI.
     struct Candidate {
         const wchar_t *exe;
         const char *name;
@@ -36,12 +39,27 @@ QList<QTermShellInfo> QTermLocalShellScanner::availableShells() const
         { L"cmd.exe",        "Command Prompt"     },
     };
 
+    QSet<QString> seenPrograms;
+    const auto appendIfNew = [&](const QString &name, const QString &program) {
+        if (program.isEmpty())
+            return;
+        const QString key = QDir::fromNativeSeparators(program).toLower();
+        if (seenPrograms.contains(key))
+            return;
+        seenPrograms.insert(key);
+        result.append(QTermShellInfo(name, program));
+    };
+
+    QString comspec = qEnvironmentVariable("ComSpec").trimmed();
+    if (comspec.startsWith(QLatin1Char('"')) && comspec.endsWith(QLatin1Char('"')) && comspec.size() > 1)
+        comspec = comspec.mid(1, comspec.size() - 2);
+    if (QFileInfo(comspec).exists())
+        appendIfNew(QStringLiteral("System Default (ComSpec)"), comspec);
+
     for (const auto &c : candidates) {
         wchar_t fullPath[MAX_PATH];
         if (SearchPathW(nullptr, c.exe, nullptr, MAX_PATH, fullPath, nullptr) != 0) {
-            result.append(QTermShellInfo(
-                QString::fromLatin1(c.name),
-                QString::fromWCharArray(fullPath)));
+            appendIfNew(QString::fromLatin1(c.name), QString::fromWCharArray(fullPath));
         }
     }
 #else

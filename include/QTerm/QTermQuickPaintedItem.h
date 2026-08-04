@@ -17,6 +17,14 @@ namespace QTerm {
 
 class QTermViewController; // src/quick/QTermViewController.h
 
+/*!
+    \qmltype QTermQuickPaintedItem
+    \inqmlmodule QTerm
+    \brief QPainter-based terminal item for Qt Quick.
+
+    This item provides compatibility-oriented rendering and mirrors the public
+    API of QTermQuickItem.
+*/
 class QTermQuickPaintedItem : public QQuickPaintedItem
 {
     Q_OBJECT
@@ -39,7 +47,10 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     Q_PROPERTY(QTerm::QTermTheme theme READ theme WRITE setTheme NOTIFY themeChanged)
 
 public:
-    // 光标内建形状枚举。设置后使用对应的默认渲染；设置 cursorDelegate 可完全自定义。
+    /*!
+        \enum QTermQuickPaintedItem::CursorStyle
+        \brief Built-in cursor rendering styles.
+    */
     enum CursorStyle {
         Block,      // 填充块（默认）
         Underline,  // 单元格底部下划线
@@ -49,7 +60,9 @@ public:
 
     explicit QTermQuickPaintedItem(QQuickItem *parent = nullptr);
 
+    /*! \brief Returns the terminal attached to this item. */
     QTermTerminal *terminal() const noexcept;
+    /*! \brief Sets the terminal attached to this item. */
     void setTerminal(QTermTerminal *terminal);
 
     QString fontFamily() const;
@@ -82,12 +95,16 @@ public:
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
 
-    // ScrollBar 对接：position/size 均为标准化 [0..1]，position=0 对应顶部
+    /*! \brief Returns the normalized scroll position in the range 0.0 to 1.0. */
     qreal scrollPosition() const noexcept;
+    /*! \brief Sets the normalized scroll position in the range 0.0 to 1.0. */
     void setScrollPosition(qreal position);
+    /*! \brief Returns the normalized visible scroll size in the range 0.0 to 1.0. */
     qreal scrollSize() const noexcept;
 
+    /*! \brief Maps a vertical coordinate to a terminal row index. */
     Q_INVOKABLE int rowAtPosition(qreal y) const;
+    /*! \brief Maps a horizontal coordinate to a terminal column index. */
     Q_INVOKABLE int columnAtPosition(qreal x) const;
 
     void paint(QPainter *painter) override;
@@ -96,7 +113,9 @@ public:
     // IME support
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
 
+    /*! \brief Returns the currently applied resolved theme. */
     QTermTheme theme() const;
+    /*! \brief Applies a resolved theme to the item. */
     void setTheme(const QTermTheme &theme);
 
 signals:

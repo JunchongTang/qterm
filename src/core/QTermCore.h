@@ -6,7 +6,7 @@
 #include <QString>
 #include <QHash>
 
-#include "QTermModeState.h"
+#include <QTerm/QTermModeState.h>
 #include "QTermScreenState.h"
 #include "QTermTextParser.h"
 
@@ -21,6 +21,7 @@ public:
 
     int rows() const noexcept;
     int columns() const noexcept;
+    int maximumScrollbackLines() const noexcept;
     QString title() const;
     QString currentDirectory() const;
     // OSC 133: current shell zone (0=Unknown, 1=Prompt, 2=CommandInput, 3=Output)
@@ -44,6 +45,7 @@ public:
 
     void clear();
     void writePlainText(const QString &text);
+    void setMaximumScrollbackLines(int maximumScrollbackLines);
     void setTerminalSize(int columns, int rows);
     void sendKey(int key, const QString &text = QString());
     void sendPaste(const QString &text);

@@ -424,16 +424,38 @@ QString QTermLocalShellBackend::resolvedProgram() const
 QString QTermLocalShellBackend::buildCommandLine() const
 {
     // Windows CreateProcess requires a single command-line string.
-    // Quote any argument that contains spaces or double quotes.
+    // Quote arguments using the CommandLineToArgvW backslash rules.
     auto quoteArg = [](const QString &arg) -> QString {
-        if (!arg.contains(QLatin1Char(' '))
+        if (!arg.isEmpty()
+                && !arg.contains(QLatin1Char(' '))
                 && !arg.contains(QLatin1Char('\t'))
                 && !arg.contains(QLatin1Char('"'))) {
             return arg;
         }
-        QString q = arg;
-        q.replace(QLatin1Char('"'), QStringLiteral("\\\""));
-        return QLatin1Char('"') + q + QLatin1Char('"');
+
+        QString quoted = QLatin1Char('"');
+        int backslashCount = 0;
+        for (const QChar character : arg) {
+            if (character == QLatin1Char('\\')) {
+                ++backslashCount;
+                continue;
+            }
+
+            if (character == QLatin1Char('"')) {
+                quoted.append(QString(backslashCount * 2 + 1, QLatin1Char('\\')));
+                quoted.append(character);
+                backslashCount = 0;
+                continue;
+            }
+
+            quoted.append(QString(backslashCount, QLatin1Char('\\')));
+            quoted.append(character);
+            backslashCount = 0;
+        }
+
+        quoted.append(QString(backslashCount * 2, QLatin1Char('\\')));
+        quoted.append(QLatin1Char('"'));
+        return quoted;
     };
 
     QStringList parts;

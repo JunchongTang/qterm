@@ -10,45 +10,55 @@ namespace QTerm {
 
 class QTermThemeLoader;
 
-/**
- * A named collection of QTermTheme variants loaded from a multi-variant
- * .qtheme file (one with a top-level "variants" object).
- *
- * The Widget layer never holds a QTermThemePack — it only consumes the
- * already-resolved QTermTheme returned by variant() or resolveForSystem().
- * The application layer is responsible for choosing a variant and calling
- * setTheme() on the widget.
- */
+/*!
+    \class QTermThemePack
+    \inmodule QTerm
+    \brief A named collection of theme variants used for dark/light switching.
+
+    The widget layer consumes a resolved QTermTheme directly, while the
+    application layer can use QTermThemePack to choose an appropriate variant.
+*/
 class QTermThemePack
 {
 public:
     QTermThemePack() = default;
 
-    /// Pack name (from the top-level "name" field in the .qtheme file).
+    /*!
+        \brief Returns the pack name from the source theme file.
+    */
     QString name() const { return m_name; }
 
-    /// All variant names in file-insertion order.
+    /*!
+        \brief Returns the variant names in insertion order.
+    */
     QStringList variantNames() const { return m_variantOrder; }
 
-    /**
-     * Returns the named variant. Falls back to the first variant if the name
-     * is not found. Returns a default-constructed QTermTheme() if the pack
-     * is empty.
-     */
+    /*!
+        \brief Returns the named variant.
+        \param name The variant name to look up.
+        \return The matching variant, or the first variant if no exact match exists.
+    */
     QTermTheme variant(const QString &name) const;
 
-    /**
-     * Picks a variant based on the system color scheme preference:
-     *   - Qt::ColorScheme::Dark  → variant("dark")
-     *   - Qt::ColorScheme::Light → variant("light")
-     * Falls back to the first variant if the expected name does not exist.
-     */
+    /*!
+        \brief Resolves the most suitable variant for the current system color scheme.
+        \return The themed variant matching the current system preference.
+    */
     QTermTheme resolveForSystem() const;
 
+    /*!
+        \brief Returns whether a variant with the given name exists.
+    */
     bool hasVariant(const QString &name) const { return m_variants.contains(name); }
+
+    /*!
+        \brief Returns the number of variants in the pack.
+    */
     int  variantCount() const { return m_variantOrder.size(); }
 
-    // Built-in pack factory.
+    /*!
+        \brief Returns the built-in QTerm default pack.
+    */
     static QTermThemePack qtermDefault(); ///< "QTerm 2026" with "dark" and "light" variants
 
 private:
