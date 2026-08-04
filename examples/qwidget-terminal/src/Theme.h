@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QIcon>
 #include <QObject>
 #include <QString>
 
@@ -46,6 +47,14 @@ public:
 
     // The application-wide style sheet for the current mode.
     QString styleSheet() const;
+
+    /*
+        Returns one of the bundled icons recolored to \a color, mirroring what
+        the Qt Quick demo does with MultiEffect colorization: the assets are
+        authored as white strokes and tinted at use time, so a single set serves
+        both palettes. Pass a null color for the default foreground.
+    */
+    QIcon icon(const QString &name, const QColor &color = QColor(), int size = 16) const;
 
 signals:
     void darkChanged();
