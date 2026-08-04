@@ -23,8 +23,8 @@ add_subdirectory(third_party)
 add_subdirectory(src)
 
 if(QTERM_BUILD_EXAMPLES)
-    add_subdirectory(examples/quick-demo)
-    add_subdirectory(examples/widget-demo)
+    add_subdirectory(examples/qtquick-terminal)
+    add_subdirectory(examples/qwidget-terminal)
 endif()
 
 if(QTERM_BUILD_TESTS)
