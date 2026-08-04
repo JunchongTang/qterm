@@ -58,3 +58,4 @@ build
 gittool
 .vscode/settings.json
 .cache
+.DS_Store
