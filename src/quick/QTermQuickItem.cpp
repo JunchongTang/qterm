@@ -21,7 +21,9 @@
 #include <QSGVertexColorMaterial>
 #include <QTextCharFormat>
 #include <QTextLayout>
+#include <QTextOption>
 #include <QWheelEvent>
+#include <cmath>
 
 namespace QTerm {
 
@@ -223,6 +225,17 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
 
             // Build a QTextLayout for this run so we can call addTextLayout.
             QTextLayout layout(text, runFont);
+
+            // A run fills a fixed span of the cell grid, so it must never wrap.
+            // With the default word-wrapping mode, setLineWidth(runW) below
+            // moves the trailing word onto a second line as soon as the run
+            // measures runW or more -- and since only the first line is ever
+            // laid out, that word is silently dropped. A monospaced run of n
+            // columns measures exactly n * cellW, so it hits that boundary on
+            // every full-width line.
+            QTextOption textOption = layout.textOption();
+            textOption.setWrapMode(QTextOption::NoWrap);
+            layout.setTextOption(textOption);
 
             QTextCharFormat cf;
             cf.setForeground(fg);
