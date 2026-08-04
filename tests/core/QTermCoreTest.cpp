@@ -20,6 +20,9 @@ private slots:
     void wrapsCursorByColumnCount();
     void supportsCsiCursorBackward();
     void keepsPartialCsiStateAcrossWrites();
+    void ignoresUnsupportedControlStrings();
+    void supportsColonSeparatedTrueColorSgr();
+    void treatsVerticalTabAndFormFeedAsLineFeeds();
     void supportsCsiCursorPosition();
     void supportsCsiEraseInLine();
     void supportsCsiEraseInDisplay();
@@ -39,6 +42,7 @@ private slots:
     void togglesApplicationCursorKeysMode();
     void switchesToAlternateScreen();
     void restoresPrimaryScreenFromAlternate();
+    void doesNotStoreAlternateScreenScrollback();
     void combinesNonSpacingMarks();
     void storesWideCharactersAcrossTwoCells();
     void keepsNonBmpWideCharactersAcrossWrites();
@@ -201,6 +205,35 @@ void QTermCoreTest::keepsPartialCsiStateAcrossWrites()
     QCOMPARE(core.dumpPlainText(), "abXY"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 4);
+}
+
+void QTermCoreTest::ignoresUnsupportedControlStrings()
+{
+    QTermCore core;
+
+    core.writePlainText("before\x1bPignored\x1b\\after"_L1);
+    core.writePlainText("\x1b#8done"_L1);
+
+    QCOMPARE(core.dumpPlainText(), "beforeafterdone"_L1);
+}
+
+void QTermCoreTest::supportsColonSeparatedTrueColorSgr()
+{
+    QTermCore core;
+
+    core.writePlainText("\x1b[38:2::255:0:0mred"_L1);
+
+    QCOMPARE(core.dumpPlainText(), "red"_L1);
+    QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0xff0000);
+}
+
+void QTermCoreTest::treatsVerticalTabAndFormFeedAsLineFeeds()
+{
+    QTermCore core;
+
+    core.writePlainText("a\vb\fc"_L1);
+
+    QCOMPARE(core.dumpPlainText(), "a\n b\n  c"_L1);
 }
 
 void QTermCoreTest::supportsCsiCursorPosition()
@@ -429,6 +462,16 @@ void QTermCoreTest::restoresPrimaryScreenFromAlternate()
     QCOMPARE(core.dumpPlainText(), "main"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 4);
+}
+
+void QTermCoreTest::doesNotStoreAlternateScreenScrollback()
+{
+    QTermCore core;
+    core.setTerminalSize(4, 2);
+    core.writePlainText("\x1b[?1049h"_L1);
+    core.writePlainText("one\ntwo\nthree"_L1);
+
+    QCOMPARE(core.buffer().historyLineCount(), 0);
 }
 
 void QTermCoreTest::combinesNonSpacingMarks()
@@ -692,7 +735,7 @@ void QTermCoreTest::preservesTreeListingAcrossRepeatedResizeCycles()
         QString::fromUtf8(u8"    └── StatusBar.qml"),
         QString(),
         QString::fromUtf8(u8"10 directories, 28 files"),
-        QString::fromUtf8(u8"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo")
+        QString::fromUtf8(u8"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/qtquick-terminal")
     };
     const QString inputTranscript = lines.join(QStringLiteral("\r\n"));
     const QString projectedTranscript = lines.join(QStringLiteral("\n"));

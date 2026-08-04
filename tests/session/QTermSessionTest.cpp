@@ -60,6 +60,7 @@ class QTermSessionTest : public QObject
 private slots:
     void forwardsBackendOperations();
     void terminalRoutesInboundAndOutboundData();
+    void terminalConfiguresScrollbackLimit();
     void terminalDecodesSplitUtf8AcrossChunks();
     void terminalUpdatesTitleFromOscSequence();
     void terminalEmitsBellFromSessionData();
@@ -116,6 +117,26 @@ void QTermSessionTest::forwardsBackendOperations()
     QCOMPARE(dataSpy.at(0).at(0).toByteArray(), QByteArray("hello"));
     QVERIFY(stateSpy.size() >= 2);
     QCOMPARE(session.state(), QTermSessionBackend::Closed);
+}
+
+void QTermSessionTest::terminalConfiguresScrollbackLimit()
+{
+    QTermTerminal terminal;
+    QSignalSpy limitSpy(&terminal, &QTermTerminal::maximumScrollbackLinesChanged);
+    terminal.setTerminalSize(4, 2);
+
+    QCOMPARE(terminal.maximumScrollbackLines(), 10000);
+    terminal.feedText("one\r\ntwo\r\nthree\r\nfour"_L1);
+    QVERIFY(terminal.maxScrollOffset() > 0);
+
+    terminal.setMaximumScrollbackLines(1);
+    QCOMPARE(terminal.maximumScrollbackLines(), 1);
+    QCOMPARE(terminal.maxScrollOffset(), 1);
+    QCOMPARE(limitSpy.size(), 1);
+
+    terminal.setMaximumScrollbackLines(-1);
+    QCOMPARE(terminal.maximumScrollbackLines(), 0);
+    QCOMPARE(terminal.maxScrollOffset(), 0);
 }
 
 void QTermSessionTest::terminalRoutesInboundAndOutboundData()
@@ -780,7 +801,7 @@ void QTermSessionTest::terminalPreservesZshStyledPromptAcrossWidthOscillation()
     // bug report, including ANSI color codes exactly as a real zsh would emit.
     //
     // Real zsh prompt (the one in BUGS.md):
-    //   "➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo"
+    //   "➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/qtquick-terminal"
     //
     // After SIGWINCH, zsh sends a redraw sequence like:
     //   \r + ESC[K + (prompt with color codes)
@@ -795,10 +816,10 @@ void QTermSessionTest::terminalPreservesZshStyledPromptAcrossWidthOscillation()
     // Plain-text visible length = 80 chars.
     const QString coloredPrompt =
         u"\x1b[1;32m➜ \x1b[0m \x1b[1;34mdev@workstation\x1b[0m "
-        u"/home/dev/workspace/terminal-app/build/examples/quick-demo"_s;
+        u"/home/dev/workspace/terminal-app/build/examples/qtquick-terminal"_s;
     // Plain text equivalent (what appears on screen, ANSI codes stripped for assertion).
     const QString plainPrompt =
-        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/quick-demo"_s;
+        u"➜  dev@workstation /home/dev/workspace/terminal-app/build/examples/qtquick-terminal"_s;
 
     // Simulate 5 Enter presses: 4 completed lines + 1 active prompt.
     for (int i = 0; i < 4; ++i) {
