@@ -11,6 +11,7 @@
 #include <QStackedWidget>
 #include <QSize>
 #include <QTabBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <QTerm/QTermTerminal.h>
@@ -34,7 +35,6 @@ MainWindow::MainWindow(QWidget *parent)
     barLayout->setSpacing(Theme::instance()->space1());
 
     m_tabBar = new QTabBar;
-    m_tabBar->setTabsClosable(true);
     m_tabBar->setExpanding(false);
     m_tabBar->setDrawBase(false);
     m_tabBar->setFocusPolicy(Qt::NoFocus);
@@ -113,7 +113,6 @@ MainWindow::MainWindow(QWidget *parent)
             m_stack->setCurrentWidget(m_tabs.at(index));
         updateWindowTitle();
     });
-    connect(m_tabBar, &QTabBar::tabCloseRequested, this, &MainWindow::closeTab);
 
     applyTheme();
     updateEmptyState();
@@ -134,6 +133,30 @@ void MainWindow::addTab(const SessionConfig &config)
     m_stack->addWidget(tab);
 
     const int index = m_tabBar->addTab(tab->tabTitle());
+
+    // A real widget rather than QTabBar's built-in close button: a style sheet
+    // cannot inset ::close-button without QTabBar clipping it away, and this
+    // also reproduces the Qt Quick demo's 20px hit target and its
+    // fade-in-on-hover behaviour.
+    auto *closeButton = new QToolButton;
+    closeButton->setObjectName(QStringLiteral("tabClose"));
+    closeButton->setFixedSize(18, 18);
+    closeButton->setIconSize(QSize(12, 12));
+    closeButton->setCursor(Qt::ArrowCursor);
+    closeButton->setToolTip(tr("Close session"));
+    m_tabBar->setTabButton(index, QTabBar::RightSide, closeButton);
+    m_tabCloseButtons.append(closeButton);
+    connect(closeButton, &QToolButton::clicked, this, [this, closeButton] {
+        // The index shifts as tabs come and go, so resolve it at click time.
+        for (int i = 0; i < m_tabBar->count(); ++i) {
+            if (m_tabBar->tabButton(i, QTabBar::RightSide) == closeButton) {
+                closeTab(i);
+                return;
+            }
+        }
+    });
+    updateTabCloseIcons();
+
     m_tabBar->setCurrentIndex(index);
     m_stack->setCurrentWidget(tab);
 
@@ -156,6 +179,9 @@ void MainWindow::closeTab(int index)
     if (index < 0 || index >= m_tabs.size())
         return;
     TerminalTab *tab = m_tabs.takeAt(index);
+    if (auto *button = qobject_cast<QToolButton *>(
+            m_tabBar->tabButton(index, QTabBar::RightSide)))
+        m_tabCloseButtons.removeOne(button);
     m_tabBar->removeTab(index);
     m_stack->removeWidget(tab);
     tab->deleteLater();
@@ -191,9 +217,10 @@ QTabBar::tab {
     min-width: 100px;
     max-width: 200px;
     height: 28px;
-    padding: 0 %3px;
-    margin-right: %4px;
-    font-size: %5px;
+    padding-left: %3px;
+    padding-right: %4px;
+    margin-right: %5px;
+    font-size: %6px;
     font-weight: 500;
 }
 QTabBar::tab:hover {
@@ -204,32 +231,27 @@ QTabBar::tab:selected {
     color: %8;
     border: 1px solid %9;
 }
-/* subcontrol-position pins the button to the tab's border box, ignoring the
-   tab padding, so the inset has to come from its own margin. Matches the Qt
-   Quick demo, where the 12px glyph sits in a 20px button with a 4px gap to the
-   tab edge. */
-QTabBar::close-button {
-    image: url(:/assets/icons/close-%10.svg);
-    width: 12px;
-    height: 12px;
-    subcontrol-position: right;
-    margin-right: %11px;
-    margin-left: %12px;
-}
 )")
             .arg(theme->mutedForeground().name(QColor::HexArgb))
             .arg(theme->radiusMd())
-            .arg(theme->space2() + 2)
-            .arg(theme->space1())
+            .arg(theme->space2() + 2)   // 3: left padding
+            .arg(theme->space1() + 2)   // 4: right padding, the button sits here
+            .arg(theme->space1())       // 5: gap between tabs
             .arg(theme->textXs())
             .arg(theme->muted().name(QColor::HexArgb))
             .arg(theme->muted().name(QColor::HexArgb))
             .arg(theme->foreground().name(QColor::HexArgb))
-            .arg(theme->border().name(QColor::HexArgb))
-            .arg(theme->isDark() ? QStringLiteral("dark") : QStringLiteral("light"))
-            .arg(theme->space2())   // 11: inset from the tab's right edge
-            .arg(theme->space1());  // 12: gap between the label and the button
+            .arg(theme->border().name(QColor::HexArgb));
     m_tabBar->setStyleSheet(tabQss);
+    updateTabCloseIcons();
+}
+
+void MainWindow::updateTabCloseIcons()
+{
+    const Theme *theme = Theme::instance();
+    const QIcon icon = theme->icon(QStringLiteral("x"), theme->mutedForeground(), 12);
+    for (QToolButton *button : m_tabCloseButtons)
+        button->setIcon(icon);
 }
 
 void MainWindow::updateEmptyState()
