@@ -217,19 +217,18 @@ QTabBar::tab {
     min-width: 100px;
     max-width: 200px;
     height: 28px;
-    padding-left: %3px;
-    padding-right: %4px;
+    padding: 0 %4px 0 %3px;
     margin-right: %5px;
     font-size: %6px;
     font-weight: 500;
 }
 QTabBar::tab:hover {
-    background: %6;
+    background: %7;
 }
 QTabBar::tab:selected {
-    background: %7;
-    color: %8;
-    border: 1px solid %9;
+    background: %8;
+    color: %9;
+    border: 1px solid %10;
 }
 )")
             .arg(theme->mutedForeground().name(QColor::HexArgb))
@@ -237,11 +236,11 @@ QTabBar::tab:selected {
             .arg(theme->space2() + 2)   // 3: left padding
             .arg(theme->space1() + 2)   // 4: right padding, the button sits here
             .arg(theme->space1())       // 5: gap between tabs
-            .arg(theme->textXs())
-            .arg(theme->muted().name(QColor::HexArgb))
-            .arg(theme->muted().name(QColor::HexArgb))
-            .arg(theme->foreground().name(QColor::HexArgb))
-            .arg(theme->border().name(QColor::HexArgb));
+            .arg(theme->textXs())                                 // 6: font size
+            .arg(theme->muted().name(QColor::HexArgb))            // 7: hover fill
+            .arg(theme->muted().name(QColor::HexArgb))            // 8: active fill
+            .arg(theme->foreground().name(QColor::HexArgb))       // 9: active label
+            .arg(theme->border().name(QColor::HexArgb));          // 10: active border
     m_tabBar->setStyleSheet(tabQss);
     updateTabCloseIcons();
 }
