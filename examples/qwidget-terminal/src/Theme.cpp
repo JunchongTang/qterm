@@ -121,6 +121,18 @@ QPushButton[variant="ghost"]:hover {
     background: %12;
 }
 
+/* Tab close button: the ghost look from the Qt Quick demo's IconButton. */
+QToolButton#tabClose {
+    background: transparent;
+    border: none;
+    border-radius: %7px;
+    padding: 0;
+    margin: 0;
+}
+QToolButton#tabClose:hover {
+    background: %12;
+}
+
 QLineEdit {
     background: %13;
     color: %2;

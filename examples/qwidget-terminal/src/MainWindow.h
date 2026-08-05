@@ -8,6 +8,7 @@ class QLabel;
 class QPushButton;
 class QStackedWidget;
 class QTabBar;
+class QToolButton;
 
 class TerminalTab;
 
@@ -27,6 +28,7 @@ private:
     void applyTheme();
     void updateEmptyState();
     void updateWindowTitle();
+    void updateTabCloseIcons();
 
     QTabBar *m_tabBar = nullptr;
     QPushButton *m_newTabButton = nullptr;
@@ -35,6 +37,7 @@ private:
     QWidget *m_emptyState = nullptr;
     QLabel *m_emptyIcon = nullptr;
     QList<QPushButton *> m_newSessionButtons;
+    QList<QToolButton *> m_tabCloseButtons;
     QLabel *m_statusLabel = nullptr;
     QList<TerminalTab *> m_tabs;
 };
