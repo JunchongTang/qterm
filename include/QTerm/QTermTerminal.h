@@ -187,6 +187,18 @@ public:
                                       int dragProjectionRow, int dragColumn);
 
     /*!
+        \brief Selects the whole buffer, scrollback included.
+
+        Equivalent to a drag from the first cell of the oldest projection row to
+        the end of the last row that has content, so it goes through the same
+        logical-anchor path as a real drag selection (and therefore survives
+        auto-scroll and reflow). Blank rows past the end of the output are left
+        out, so Select All followed by a copy does not yield trailing newlines.
+        Clears the selection when the buffer holds nothing but blanks.
+    */
+    Q_INVOKABLE void selectAll();
+
+    /*!
         \brief Selects the word under the given cursor position.
     */
     Q_INVOKABLE void selectWordAt(int row, int column);

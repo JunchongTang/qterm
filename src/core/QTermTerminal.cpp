@@ -266,6 +266,38 @@ void QTermTerminal::setSelectionDrag(int anchorProjectionRow, int anchorColumn,
     syncSurfaceSelection();
 }
 
+void QTermTerminal::selectAll()
+{
+    const QTermBuffer &buffer = m_core->buffer();
+    const int projectionRowCount = buffer.projectionRowCount();
+    if (projectionRowCount <= 0) {
+        clearSelection();
+        return;
+    }
+
+    // Stop at the last row that actually has content. A terminal buffer is always
+    // at least one screen tall, so the rows below the output are real but blank —
+    // selecting them too would make Select All + Copy yield a pile of trailing
+    // newlines, which is the classic annoyance this avoids.
+    int lastRow = projectionRowCount - 1;
+    while (lastRow >= 0 && buffer.projectionLineAt(lastRow).plainText().trimmed().isEmpty()) {
+        --lastRow;
+    }
+    if (lastRow < 0) {
+        // Nothing but blanks in the whole buffer: there is nothing to select.
+        clearSelection();
+        return;
+    }
+
+    // Reuse the drag path rather than setSelectionRange(): the latter normalizes
+    // against the viewport size, so it can never reach past the visible screen
+    // into the scrollback.
+    const int lastColumn = buffer.projectionLineAt(lastRow).columnTexts().size();
+    m_selectionModel->setSelectionFromDragCells(buffer, 0, 0, lastRow, lastColumn);
+    m_selectionModel->refreshSelectionText(buffer);
+    syncSurfaceSelection();
+}
+
 void QTermTerminal::selectWordAt(int row, int column)
 {
     m_selectionModel->selectWordAt(m_core->buffer(), row, column);
