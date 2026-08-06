@@ -28,6 +28,7 @@ class QTermSerialPortInfo
     Q_PROPERTY(QString portName     READ portName     CONSTANT)
     Q_PROPERTY(QString description  READ description  CONSTANT)
     Q_PROPERTY(QString manufacturer READ manufacturer CONSTANT)
+    Q_PROPERTY(QString serialNumber READ serialNumber CONSTANT)
     Q_PROPERTY(quint16 vendorId     READ vendorId     CONSTANT)
     Q_PROPERTY(quint16 productId    READ productId    CONSTANT)
     Q_PROPERTY(bool    isUsb        READ isUsb        CONSTANT)
@@ -45,6 +46,17 @@ public:
     /*! \brief Returns the USB manufacturer string when available. */
     QString manufacturer() const { return m_manufacturer; }
 
+    /*!
+        \brief Returns the USB serial number, or an empty string when the device
+        does not report one.
+
+        Only meaningful for USB adapters, and plenty of mass-produced bridges
+        (CH340, PL2303) leave it empty. Callers that use it to recognise a device
+        across replugs must therefore fall back to vendorId/productId, and then to
+        portName.
+    */
+    QString serialNumber() const { return m_serialNumber; }
+
     /*! \brief Returns the numeric USB vendor identifier, or 0 when not applicable. */
     quint16 vendorId()  const { return m_vendorId; }
     /*! \brief Returns the numeric USB product identifier, or 0 when not applicable. */
@@ -60,6 +72,7 @@ private:
     QString m_portName;
     QString m_description;
     QString m_manufacturer;
+    QString m_serialNumber;
     quint16 m_vendorId  = 0;
     quint16 m_productId = 0;
     bool    m_isUsb     = false;
