@@ -105,8 +105,14 @@ void QTermSerialBackend::open()
     applySettings();
 
     if (!m_serial->open(QIODevice::ReadWrite)) {
-        emitErrorOccurred(DeviceNotFound, m_serial->errorString());
-        setState(Error);
+        // QSerialPort::errorOccurred has already fired for this very failure, and the
+        // handler above mapped it to the precise kind. Emitting again here would report
+        // the same failure twice — and with the *wrong* kind: a permission error would
+        // arrive as PermissionDenied and then again as DeviceNotFound. Only synthesize
+        // one if the signal path did not run (it sets Error, so that is the tell).
+        if (state() != Error) {
+            emitErrorOccurred(DeviceNotFound, m_serial->errorString());
+        }
         return;
     }
 
