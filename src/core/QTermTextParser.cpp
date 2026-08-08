@@ -35,6 +35,21 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 m_state = State::Escape;
             } else if (character.isHighSurrogate()) {
                 m_pendingHighSurrogate = character;
+            } else if (character.unicode() >= 0x20 && character.unicode() < 0x7f) {
+                // Plain printable ASCII: scan the whole run and hand it over in
+                // one go. These are always narrow and never combining, so this
+                // skips the per-character QString, width lookup and cursor
+                // update that the general path performs.
+                int runEnd = index + 1;
+                while (runEnd < text.size()) {
+                    const ushort unit = text.at(runEnd).unicode();
+                    if (unit < 0x20 || unit >= 0x7f) {
+                        break;
+                    }
+                    ++runEnd;
+                }
+                executor.printNarrowRun(QStringView(text).mid(index, runEnd - index));
+                index = runEnd - 1;
             } else {
                 handleGroundTextUnit(QString(character), executor);
             }

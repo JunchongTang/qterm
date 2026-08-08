@@ -93,6 +93,35 @@ void QTermLine::setCell(int column, const QTermCell &cell)
     m_cells[column] = cell;
 }
 
+void QTermLine::setNarrowRun(int column, QStringView text, const QTermCellAttributes &attributes)
+{
+    if (column < 0 || text.isEmpty()) {
+        return;
+    }
+
+    const int count = qMin(text.size(), m_cells.size() - column);
+    if (count <= 0) {
+        return;
+    }
+
+    // Only the two ends can overlap a wide character: the run's start may land
+    // on a continuation cell, and its end may cut a wide character in half.
+    // Everything in between is overwritten wholesale.
+    clearCharacterAt(column);
+    if (column > 0 && m_cells.at(column - 1).width > 1) {
+        clearCharacterAt(column - 1);
+    }
+    clearCharacterAt(column + count - 1);
+
+    for (int offset = 0; offset < count; ++offset) {
+        QTermCell &cell = m_cells[column + offset];
+        cell.text = text.at(offset);
+        cell.width = 1;
+        cell.continuation = false;
+        cell.attributes = attributes;
+    }
+}
+
 void QTermLine::clearCharacterAt(int column)
 {
     if (column < 0 || column >= m_cells.size()) {

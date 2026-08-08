@@ -34,6 +34,10 @@ public:
     void setRegisterHyperlinkHandler(const std::function<int(const QString &)> &handler);
 
     void print(const QString &text);
+    // Fast path for a run of plain printable ASCII (0x20-0x7E). Such characters
+    // are always one cell wide and never combining, so the run can be written
+    // straight into the line instead of going through print() per character.
+    void printNarrowRun(QStringView run);
     void lineFeed();
     void carriageReturn();
     void backspace();
