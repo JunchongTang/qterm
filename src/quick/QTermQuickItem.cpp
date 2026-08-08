@@ -131,7 +131,12 @@ void rebuildBgFills(QSGGeometryNode *node, const QVariantList &lineRuns,
     auto *v = geom->vertexDataAsColoredPoint2D();
     int vi = 0;
 
-    // Full terminal background quad
+    // Full terminal background quad.
+    //
+    // termBg's alpha is honoured here and *only* here: this is what makes a
+    // translucent terminal possible (the pane behind shows through the cells that
+    // use the default background). The same colour must NOT be reused as the
+    // reverse-video glyph colour -- see QTermQuickItem::effectiveInverseTextColor.
     appendQuadCPD(v, vi, 0.0f, 0.0f, float(itemW), float(itemH),
                   quint8(termBg.red()), quint8(termBg.green()),
                   quint8(termBg.blue()), quint8(termBg.alpha()));
@@ -184,10 +189,15 @@ void recreateTextRowNodes(QTermSGRootNode *root, QQuickWindow *win,
 
 // Populate one row's text node from style-run data.
 // Uses one QTextLayout per style run to leverage QSGTextNode::addTextLayout.
+// `inverseTextColor` is only consulted for reverse-video runs -- it is the colour
+// the swap produces for a cell that never set a background. It is deliberately
+// NOT the item's backgroundColor: that one may carry alpha for a translucent
+// terminal, and a translucent glyph over a solid block renders as a smear.
 void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
                          qreal cellW, qreal cellH,
                          const QFont &baseFont, const qreal topOffset,
-                         const QColor &termFg, const QColor &termBg, const QColor &hyperlinkTint,
+                         const QColor &termFg, const QColor &inverseTextColor,
+                         const QColor &hyperlinkTint,
                          const QColor *palette16)
 {
     tn->clear();
@@ -213,7 +223,7 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
             runFont.setUnderline(run.value(QStringLiteral("underline")).toBool() || hasHyperlink);
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
 
-            QColor fg = qtermEffectiveForeground(run, termFg, termBg, palette16);
+            QColor fg = qtermEffectiveForeground(run, termFg, inverseTextColor, palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
@@ -564,6 +574,32 @@ void QTermQuickItem::setBackgroundColor(const QColor &backgroundColor)
     emit paletteChanged();
 }
 
+QColor QTermQuickItem::inverseTextColor() const { return m_inverseTextColor; }
+
+void QTermQuickItem::setInverseTextColor(const QColor &inverseTextColor)
+{
+    if (m_inverseTextColor == inverseTextColor) return;
+    m_inverseTextColor = inverseTextColor;
+    scheduleFullDirty();
+    emit paletteChanged();
+}
+
+// Reverse video (SGR 7) swaps the resolved colours: the block takes the cell's
+// foreground, the glyph takes its background. A cell with no explicit background
+// falls back to the theme default -- and that fallback must stay *opaque* even
+// when m_backgroundColor carries alpha for a translucent terminal, or the glyph
+// is drawn semi-transparent over a solid block of its own foreground (and
+// disappears completely at alpha 0).
+//
+// Deriving keeps the hue: a hardcoded constant here only looks right on one of
+// the two themes.
+QColor QTermQuickItem::effectiveInverseTextColor() const
+{
+    if (m_inverseTextColor.isValid())
+        return m_inverseTextColor;
+    return QColor(m_backgroundColor.rgb());
+}
+
 QColor QTermQuickItem::selectionColor() const { return m_selectionColor; }
 
 void QTermQuickItem::setSelectionColor(const QColor &selectionColor)
@@ -898,7 +934,7 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         for (int row = 0; row < rows; ++row) {
             populateRowTextNode(root->textNodes[row], row, lineRuns,
                                 cellW, cellH, baseFont, topOffset,
-                                m_foregroundColor, m_backgroundColor,
+                                m_foregroundColor, effectiveInverseTextColor(),
                                 m_theme.hyperlinkTint(), m_theme.palette16());
         }
     } else if (hasPartialRows) {
@@ -907,7 +943,7 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
             if (row >= 0 && row < rows) {
                 populateRowTextNode(root->textNodes[row], row, lineRuns,
                                     cellW, cellH, baseFont, topOffset,
-                                    m_foregroundColor, m_backgroundColor,
+                                    m_foregroundColor, effectiveInverseTextColor(),
                                     m_theme.hyperlinkTint(), m_theme.palette16());
             }
         }

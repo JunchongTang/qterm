@@ -133,6 +133,13 @@ struct QTermPaintRequest {
     QFont baseFont;
     QColor foreground;
     QColor background;
+    // Glyph colour for reverse-video cells with no explicit background of their
+    // own. **Deliberately separate from `background`**: that one may carry alpha
+    // for a translucent terminal, and a translucent glyph painted over a solid
+    // block of its own foreground renders as a smear (or vanishes at alpha 0).
+    // Invalid = derive from `background` with alpha forced opaque, which is the
+    // historical behaviour.
+    QColor inverseText;
     QColor selection;
     QColor cursor;
     qreal cursorOpacity = 1.0;
@@ -214,7 +221,10 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
             painter->setFont(runFont);
 
-            QColor fg = qtermEffectiveForeground(run, req.foreground, req.background, req.palette16);
+            const QColor inverseText = req.inverseText.isValid()
+                                     ? req.inverseText
+                                     : QColor(req.background.rgb());
+            QColor fg = qtermEffectiveForeground(run, req.foreground, inverseText, req.palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {

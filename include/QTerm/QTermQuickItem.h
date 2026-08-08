@@ -36,6 +36,23 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY metricsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
+    /*!
+        Glyph colour for reverse-video (SGR 7) cells that carry no explicit
+        background of their own.
+
+        Reverse video swaps the resolved colours: the block is painted with the
+        cell's foreground, the glyph with its background. A cell that never set a
+        background falls back to the theme default — which is \l backgroundColor.
+
+        That fallback breaks the moment \l backgroundColor carries alpha, as it
+        must for a translucent terminal: the glyph is then drawn semi-transparent
+        over a solid block of its own foreground, or vanishes outright at alpha 0.
+        Set this to the opaque colour reverse video should swap to.
+
+        Invalid (the default) means "derive from \l backgroundColor with alpha
+        forced opaque", which reproduces the historical behaviour exactly.
+    */
+    Q_PROPERTY(QColor inverseTextColor READ inverseTextColor WRITE setInverseTextColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor searchHighlightColor READ searchHighlightColor WRITE setSearchHighlightColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor searchCurrentColor READ searchCurrentColor WRITE setSearchCurrentColor NOTIFY paletteChanged)
@@ -81,6 +98,11 @@ public:
 
     QColor backgroundColor() const;
     void setBackgroundColor(const QColor &backgroundColor);
+
+    QColor inverseTextColor() const;
+    void setInverseTextColor(const QColor &inverseTextColor);
+    //! Resolved colour reverse video swaps to. Never invalid, never translucent.
+    QColor effectiveInverseTextColor() const;
 
     QColor selectionColor() const;
     void setSelectionColor(const QColor &selectionColor);
@@ -163,6 +185,8 @@ private:
 
     QColor m_foregroundColor{QStringLiteral("#dce7f3")};
     QColor m_backgroundColor{QStringLiteral("#0a0f15")};
+    // Invalid = derive from m_backgroundColor with alpha forced opaque.
+    QColor m_inverseTextColor;
     QColor m_selectionColor{0x46, 0x82, 0xc8, 0x80};
     QColor m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};  // dim amber, all matches
     QColor m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};    // bright amber, current match

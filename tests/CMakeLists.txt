@@ -18,6 +18,20 @@ qt_add_executable(qterm_quick_item_tests
     quick/QTermQuickPaintedItemTest.cpp
 )
 
+qt_add_executable(qterm_inverse_text_tests
+    quick/QTermInverseTextTest.cpp
+)
+
+target_link_libraries(qterm_inverse_text_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Quick
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_inverse_text_tests COMMAND qterm_inverse_text_tests)
+
 target_include_directories(qterm_core_tests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
