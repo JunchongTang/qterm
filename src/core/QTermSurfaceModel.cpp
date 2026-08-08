@@ -117,7 +117,25 @@ QString QTermSurfaceModel::selectedText() const
 
 QStringList QTermSurfaceModel::visibleLines() const
 {
+    if (m_visibleLinesDirty && m_visibleLinesProvider) {
+        m_visibleLines = m_visibleLinesProvider();
+        m_visibleLinesDirty = false;
+    }
     return m_visibleLines;
+}
+
+void QTermSurfaceModel::setVisibleLinesProvider(std::function<QStringList()> provider)
+{
+    m_visibleLinesProvider = std::move(provider);
+}
+
+void QTermSurfaceModel::markVisibleLinesDirty()
+{
+    if (m_visibleLinesDirty) {
+        return;
+    }
+    m_visibleLinesDirty = true;
+    emit visibleLinesChanged();
 }
 
 QVariantList QTermSurfaceModel::visibleLineRuns() const
