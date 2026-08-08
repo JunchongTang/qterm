@@ -7,9 +7,18 @@ namespace QTerm {
 
 namespace {
 
+// Cells collected for reflow leave their line behind, so the combining marks
+// held in the line's side table have to be resolved up front.
+struct ProjectedCell
+{
+    QString text;
+    int width = 1;
+    QTermCellAttributes attributes;
+};
+
 struct LogicalLineProjection
 {
-    QVector<QTermCell> cells;
+    QVector<ProjectedCell> cells;
     int displayColumns = 0;
     bool containsCursor = false;
     int cursorDisplayOffset = 0;
@@ -23,8 +32,8 @@ int lastRelevantColumn(const QTermLine &line)
             continue;
         }
 
-        if (!cell.text.isEmpty()) {
-            return column + qMax(1, cell.width);
+        if (!cell.isBlank()) {
+            return column + qMax(1, int(cell.width));
         }
     }
 
@@ -40,8 +49,10 @@ void appendLineCells(LogicalLineProjection &logicalLine, const QTermLine &line, 
             continue;
         }
 
-        logicalLine.cells.append(cell);
-        logicalLine.displayColumns += qMax(1, cell.width);
+        logicalLine.cells.append(ProjectedCell{line.textAt(column),
+                                               qMax(1, int(cell.width)),
+                                               cell.attributes});
+        logicalLine.displayColumns += qMax(1, int(cell.width));
     }
 }
 
@@ -184,8 +195,8 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
             QTermLine currentLine(columns);
             int currentColumn = 0;
 
-            for (const QTermCell &cell : logicalLine.cells) {
-                const int cellWidth = qMax(1, cell.width);
+            for (const ProjectedCell &cell : logicalLine.cells) {
+                const int cellWidth = cell.width;
                 if (currentColumn > 0 && currentColumn + cellWidth > columns) {
                     currentLine.setWrappedToNextLine(true);
                     reflowedLines.append(currentLine);
@@ -587,8 +598,8 @@ QByteArray QTermBuffer::dumpAnsi(int maxLines) const
         // 行末空白裁掉——找最后一个真正写过的列。
         int lineEnd = -1;
         for (int c = 0; c < cols; ++c) {
-            const QTermCell &cell = line.cellAt(c);
-            if (!cell.text.isEmpty() && cell.text != QStringLiteral(" "))
+            const QString cellText = line.textAt(c);
+            if (!cellText.isEmpty() && cellText != QStringLiteral(" "))
                 lineEnd = c;
         }
         for (int c = 0; c <= lineEnd; ++c) {
@@ -599,10 +610,11 @@ QByteArray QTermBuffer::dumpAnsi(int maxLines) const
             out.append(sgrTransition(havePrev ? &prevAttrs : nullptr, cell.attributes));
             prevAttrs = cell.attributes;
             havePrev = true;
-            if (cell.text.isEmpty())
+            const QString cellText = line.textAt(c);
+            if (cellText.isEmpty())
                 out.append(' ');             // 空格补位
             else
-                out.append(cell.text.toUtf8());
+                out.append(cellText.toUtf8());
         }
         // 软换行（line wrap）不发 \r\n，让 feedText 自己继续接；
         // 末行也不发 \r\n，免得多一行空行。

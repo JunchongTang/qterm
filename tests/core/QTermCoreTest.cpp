@@ -276,7 +276,7 @@ void QTermCoreTest::preservesSgrAttributesOnCells()
     core.writePlainText("\x1b[1;2;4;7;9;31mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
-    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), "A"_L1);
     QVERIFY(cell.attributes.bold);
     QVERIFY(cell.attributes.dim);
     QVERIFY(cell.attributes.underline);
@@ -485,7 +485,7 @@ void QTermCoreTest::combinesNonSpacingMarks()
     QCOMPARE(core.dumpPlainText(), composed);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 2);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, firstCellText);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), firstCellText);
 }
 
 void QTermCoreTest::storesWideCharactersAcrossTwoCells()
@@ -499,10 +499,10 @@ void QTermCoreTest::storesWideCharactersAcrossTwoCells()
     QCOMPARE(core.dumpPlainText(), text);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, wideChar);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), wideChar);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(2).text, "a"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(2), "a"_L1);
 }
 
 void QTermCoreTest::updatesWindowTitleFromOscBel()
@@ -539,7 +539,7 @@ void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()
     QCOMPARE(core.dumpPlainText(), emoji + "a"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, emoji);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), emoji);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
 }
@@ -818,7 +818,7 @@ void QTermCoreTest::supports256ColorSgrAttributes()
     core.writePlainText("\x1b[38;5;196;48;5;33mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
-    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), "A"_L1);
     QCOMPARE(cell.attributes.foregroundIndex, 196);
     QCOMPARE(cell.attributes.foregroundRgb, -1);
     QCOMPARE(cell.attributes.backgroundIndex, 33);
@@ -832,7 +832,7 @@ void QTermCoreTest::supportsTrueColorSgrAttributes()
     core.writePlainText("\x1b[38;2;12;34;56;48;2;200;210;220mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
-    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), "A"_L1);
     QCOMPARE(cell.attributes.foregroundIndex, -1);
     QCOMPARE(cell.attributes.foregroundRgb, 0x0c2238);
     QCOMPARE(cell.attributes.backgroundIndex, -1);
