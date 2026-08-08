@@ -9,10 +9,13 @@
 
 #include <QTerm/QTermSessionBackend.h>
 
-class QSocketNotifier;
+#include <memory>
+
 class QTimer;
 
 namespace QTerm {
+
+class QTermPtyReader;
 
 /*!
     \class QTermLocalShellBackend
@@ -148,11 +151,18 @@ private:
     void *m_hPipeIn = nullptr;   // HANDLE — write end of stdin pipe
     void *m_hPipeOut = nullptr;  // HANDLE — read end of stdout pipe
 #else
-    // Unix PTY: QSocketNotifier provides async reads from the master fd without
-    // a separate thread.
+    // Unix PTY: the master fd is drained on a dedicated thread. A
+    // QSocketNotifier is simpler, but on macOS it wakes the GUI thread through
+    // CFSocket, and that wake-up dominates a high-rate stream -- see
+    // QTermPtyReader in the .cpp for the measurements.
     void applyPendingResize();
-    void handleReadable();
+    void handleReadData(const QByteArray &data);
+    void handleReadEnded(int error);
     void pollChildExit();
+    // A child can exit while output it already wrote is still in the pty buffer,
+    // so the session is only finished once both the child is reaped and the
+    // reader has hit end of file.
+    void finishIfDrained();
     void closeMasterFd();
     void stopRuntimeWatchers();
     QStringList resolvedArguments() const;
@@ -161,7 +171,10 @@ private:
 
     int m_masterFd = -1;
     qint64 m_childPid = -1;
-    QSocketNotifier *m_readNotifier = nullptr;
+    bool m_childReaped = false;
+    bool m_readEnded = false;
+    QString m_childExitMessage;
+    std::unique_ptr<QTermPtyReader> m_reader;
     QTimer *m_resizeDebounceTimer = nullptr;
     QTimer *m_childExitPollTimer = nullptr;
 #endif
