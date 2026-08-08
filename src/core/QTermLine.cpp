@@ -18,6 +18,7 @@ int QTermLine::columns() const noexcept
 void QTermLine::resize(int columns)
 {
     m_cells.resize(columns);
+    m_usedColumns = qMin(m_usedColumns, columns);
 }
 
 void QTermLine::clear()
@@ -27,6 +28,7 @@ void QTermLine::clear()
     }
 
     m_wrappedToNextLine = false;
+    m_usedColumns = 0;
 }
 
 void QTermLine::clearToEnd(int column)
@@ -49,6 +51,8 @@ void QTermLine::clearToColumn(int column)
 
 void QTermLine::insertCells(int column, int count)
 {
+    // Shifts cells around; keep the watermark conservative.
+    m_usedColumns = m_cells.size();
     if (column < 0 || column >= m_cells.size() || count <= 0) {
         return;
     }
@@ -67,6 +71,8 @@ void QTermLine::insertCells(int column, int count)
 
 void QTermLine::deleteCells(int column, int count)
 {
+    // Shifts cells around; keep the watermark conservative.
+    m_usedColumns = m_cells.size();
     if (column < 0 || column >= m_cells.size() || count <= 0) {
         return;
     }
@@ -90,6 +96,7 @@ const QTermCell &QTermLine::cellAt(int column) const
 
 void QTermLine::setCell(int column, const QTermCell &cell)
 {
+    markWritten(column + 1);
     m_cells[column] = cell;
 }
 
@@ -113,6 +120,7 @@ void QTermLine::setNarrowRun(int column, QStringView text, const QTermCellAttrib
     }
     clearCharacterAt(column + count - 1);
 
+    markWritten(column + count);
     for (int offset = 0; offset < count; ++offset) {
         QTermCell &cell = m_cells[column + offset];
         cell.text = text.at(offset);
@@ -120,6 +128,33 @@ void QTermLine::setNarrowRun(int column, QStringView text, const QTermCellAttrib
         cell.continuation = false;
         cell.attributes = attributes;
     }
+}
+
+void QTermLine::markWritten(int endColumn)
+{
+    m_usedColumns = qMax(m_usedColumns, qMin(endColumn, m_cells.size()));
+}
+
+void QTermLine::resetForReuse(int columns)
+{
+    if (m_cells.size() != columns) {
+        m_cells = QVector<QTermCell>(columns);
+    } else {
+        // Detach once and reset through the raw pointer: QList's non-const
+        // operator[] re-checks for detach on every index, which dominated this
+        // loop when it was written the obvious way.
+        const int limit = qMin(m_usedColumns, m_cells.size());
+        QTermCell *cells = m_cells.data();
+        for (int column = 0; column < limit; ++column) {
+            QTermCell &cell = cells[column];
+            cell.text.clear();
+            cell.width = 1;
+            cell.continuation = false;
+            cell.attributes = QTermCellAttributes();
+        }
+    }
+    m_usedColumns = 0;
+    m_wrappedToNextLine = false;
 }
 
 void QTermLine::clearCharacterAt(int column)
@@ -173,6 +208,7 @@ void QTermLine::setCharacter(int column, const QString &text, int width, const Q
     }
 
     const int boundedWidth = qBound(1, width, m_cells.size() - column);
+    markWritten(column + boundedWidth);
     m_cells[column] = QTermCell{text, boundedWidth, false, attributes};
 
     for (int offset = 1; offset < boundedWidth && column + offset < m_cells.size(); ++offset) {

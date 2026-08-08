@@ -355,9 +355,17 @@ void QTermBuffer::scrollUp()
 {
     m_historyLines.append(m_visibleLines.takeFirst());
     if (m_historyLines.size() > m_maximumHistoryLines) {
+        // Once the history is full every scroll evicts a line, so recycle it
+        // into the new bottom row instead of building a fresh cell array.
+        // resetForReuse() only clears the columns that line actually used,
+        // which for typical output is a small fraction of the width.
+        QTermLine recycled = std::move(m_historyLines.first());
         m_historyLines.remove(0, m_historyLines.size() - m_maximumHistoryLines);
+        recycled.resetForReuse(m_columns);
+        m_visibleLines.append(std::move(recycled));
+    } else {
+        appendEmptyVisibleLine();
     }
-    appendEmptyVisibleLine();
     markAllRowsDirty();
 }
 
