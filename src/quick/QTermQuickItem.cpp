@@ -14,6 +14,7 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSGFlatColorMaterial>
 #include <QSGGeometryNode>
 #include <QSGNode>
@@ -413,6 +414,12 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
 {
     setFlag(QQuickItem::ItemHasContents, true);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
+
+    m_frameCoalesceTimer.setSingleShot(true);
+    connect(&m_frameCoalesceTimer, &QTimer::timeout, this, [this] {
+        m_lastFrameRequest.restart();
+        update();
+    });
     setAcceptedMouseButtons(Qt::LeftButton);
     setAcceptHoverEvents(false);
 
@@ -463,38 +470,76 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
 
 // ── Dirty flag helpers ────────────────────────────────────────────────────────
 
+int QTermQuickItem::minimumFrameIntervalMs() const
+{
+    // Follow the display: a 120 Hz panel should not be held down to 60.
+    if (QQuickWindow *win = window()) {
+        if (const QScreen *screen = win->screen()) {
+            const qreal hz = screen->refreshRate();
+            if (hz > 0.0) {
+                return qMax(1, qRound(1000.0 / hz));
+            }
+        }
+    }
+    return 16;
+}
+
+void QTermQuickItem::requestFrame()
+{
+    // A frame is already queued; the dirty flags it will read are up to date.
+    if (m_frameCoalesceTimer.isActive()) {
+        return;
+    }
+
+    const int interval = minimumFrameIntervalMs();
+    const qint64 since = m_lastFrameRequest.isValid() ? m_lastFrameRequest.elapsed()
+                                                      : interval;
+    if (since >= interval) {
+        // Idle long enough that this is not a burst -- draw straight away so
+        // typing and other interactive updates keep zero added latency.
+        m_lastFrameRequest.restart();
+        update();
+        return;
+    }
+
+    // Mid-burst: fold everything that arrives before the next display refresh
+    // into one repaint. The timer always fires, so the final state of a burst
+    // is never left undrawn.
+    m_frameCoalesceTimer.start(interval - int(since));
+}
+
 void QTermQuickItem::scheduleFullDirty()
 {
     m_fullDirty = true;
     m_contentDirty = m_selectionDirty = m_cursorDirty = true;
     m_dirtyRowSet.clear();
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleContentDirty()
 {
     m_contentDirty = true;
     m_dirtyRowSet.clear();
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleSelectionDirty()
 {
     m_selectionDirty = true;
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleCursorDirty()
 {
     m_cursorDirty = true;
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleRowsDirty(QVector<int> rows)
 {
     if (m_contentDirty || m_fullDirty) {
         // Already doing a full repaint; no need to track individual rows.
-        update();
+        requestFrame();
         return;
     }
     for (int r : rows) {
@@ -502,7 +547,7 @@ void QTermQuickItem::scheduleRowsDirty(QVector<int> rows)
             m_dirtyRowSet.append(r);
         }
     }
-    update();
+    requestFrame();
 }
 
 // ── Terminal 绑定 ─────────────────────────────────────────────────────────────
