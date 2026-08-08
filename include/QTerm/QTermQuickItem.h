@@ -5,6 +5,8 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QQuickItem>
+#include <QTimer>
+#include <QElapsedTimer>
 #include <QString>
 #include <QVector>
 
@@ -179,6 +181,11 @@ private:
     void scheduleSelectionDirty();
     void scheduleCursorDirty();
     void scheduleRowsDirty(QVector<int> rows);
+    // Requests a frame, but never more often than the display can show one.
+    // Output arriving faster than the refresh rate is coalesced into a single
+    // repaint instead of producing frames nobody sees.
+    void requestFrame();
+    int minimumFrameIntervalMs() const;
 
     QTermViewController *m_controller = nullptr;
     QTermTheme m_theme;
@@ -199,6 +206,8 @@ private:
 
     // Dirty flags read inside updatePaintNode (render thread; GUI thread is
     // blocked at that point so plain bool access is safe).
+    QElapsedTimer m_lastFrameRequest;
+    QTimer m_frameCoalesceTimer;
     bool m_fullDirty = true;
     bool m_contentDirty = true;
     bool m_selectionDirty = true;
