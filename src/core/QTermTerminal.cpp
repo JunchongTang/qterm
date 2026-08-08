@@ -40,6 +40,9 @@ QTermTerminal::QTermTerminal(QObject *parent)
     m_surfaceModel.setVisibleLinesProvider([this] {
         return m_core->buffer().viewportLineTexts(m_viewportTopProjectionRow, rows());
     });
+    m_surfaceModel.setVisibleLineRunsProvider([this] {
+        return m_core->buffer().viewportLineRuns(m_viewportTopProjectionRow, rows());
+    });
     m_surfaceModel.setSelectionController(this);
     m_selectionModel->setTerminalSize(m_core->columns(), m_core->rows());
     m_viewportTopProjectionRow = qMax(0, m_core->buffer().projectionRowCount() - m_core->rows());
@@ -652,7 +655,7 @@ void QTermTerminal::syncSurfaceViewport()
     m_lastSyncedViewportTop = m_viewportTopProjectionRow;
 
     if (buf.allRowsDirty() || viewportMoved) {
-        m_surfaceModel.setVisibleLineRuns(buf.viewportLineRuns(m_viewportTopProjectionRow, rows()));
+        m_surfaceModel.markVisibleLineRunsDirty();
         buf.clearDirtyRows();
         return;
     }

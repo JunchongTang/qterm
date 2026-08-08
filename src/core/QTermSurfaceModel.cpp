@@ -140,6 +140,7 @@ void QTermSurfaceModel::markVisibleLinesDirty()
 
 QVariantList QTermSurfaceModel::visibleLineRuns() const
 {
+    materialiseVisibleLineRuns();
     return m_visibleLineRuns;
 }
 
@@ -261,8 +262,32 @@ void QTermSurfaceModel::setVisibleLines(const QStringList &visibleLines)
     emit visibleLinesChanged();
 }
 
+void QTermSurfaceModel::setVisibleLineRunsProvider(std::function<QVariantList()> provider)
+{
+    m_visibleLineRunsProvider = std::move(provider);
+}
+
+void QTermSurfaceModel::markVisibleLineRunsDirty()
+{
+    if (m_visibleLineRunsDirty) {
+        // Already stale and the notification has gone out; nothing to add.
+        return;
+    }
+    m_visibleLineRunsDirty = true;
+    emit visibleLineRunsChanged();
+}
+
+void QTermSurfaceModel::materialiseVisibleLineRuns() const
+{
+    if (m_visibleLineRunsDirty && m_visibleLineRunsProvider) {
+        m_visibleLineRuns = m_visibleLineRunsProvider();
+        m_visibleLineRunsDirty = false;
+    }
+}
+
 void QTermSurfaceModel::setVisibleLineRuns(const QVariantList &visibleLineRuns)
 {
+    m_visibleLineRunsDirty = false;
     if (m_visibleLineRuns == visibleLineRuns) {
         return;
     }
@@ -274,6 +299,8 @@ void QTermSurfaceModel::setVisibleLineRuns(const QVariantList &visibleLineRuns)
 void QTermSurfaceModel::setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs)
 {
     Q_ASSERT(rows.size() == runs.size());
+    // Patching rows needs an up-to-date baseline to patch into.
+    materialiseVisibleLineRuns();
     QVector<int> changedRows;
     changedRows.reserve(rows.size());
 
