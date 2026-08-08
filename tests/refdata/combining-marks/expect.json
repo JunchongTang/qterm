@@ -1,0 +1,65 @@
+{
+    "columns": 30,
+    "cursor": {
+        "column": 0,
+        "row": 2
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "é à ö base+mark               "
+                }
+            ],
+            "text": "é à ö base+mark"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "ź̧ double-mark                 "
+                }
+            ],
+            "text": "ź̧ double-mark"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 6
+}
