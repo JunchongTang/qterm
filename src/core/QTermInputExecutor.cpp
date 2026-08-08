@@ -264,6 +264,66 @@ void QTermInputExecutor::setCursorShape(int parameter)
     }
 }
 
+void QTermInputExecutor::printNarrowRun(QStringView run)
+{
+    // DEC line drawing remaps 0x60-0x7E, so the run is not plain text then.
+    if (currentScreen().lineDrawingMode) {
+        for (const QChar character : run) {
+            print(QString(character));
+        }
+        return;
+    }
+
+    int consumed = 0;
+    while (consumed < run.size()) {
+        if (currentScreen().wrapPending) {
+            if (m_modeState.autoWrap) {
+                wrapToNextLine();
+            } else {
+                currentScreen().wrapPending = false;
+                setCursorState(QTermCursorState{currentScreen().cursorState.row,
+                                                currentScreen().buffer.columns() - 1});
+            }
+        }
+
+        // Same predecessor-chain severing as print(); see the comment there.
+        if (currentScreen().breakPredecessorWrapOnWrite) {
+            currentScreen().breakPredecessorWrapOnWrite = false;
+            const int chainStart = currentScreen().buffer.severPredecessorWrapChain(
+                currentScreen().cursorState.row);
+            if (chainStart < currentScreen().cursorState.row) {
+                setCursorState(QTermCursorState{chainStart, 0});
+            }
+        }
+
+        const int columns = currentScreen().buffer.columns();
+        const int column = currentScreen().cursorState.column;
+        const int available = columns - column;
+        if (available <= 0) {
+            return;
+        }
+        const int take = qMin(available, run.size() - consumed);
+
+        currentScreen().currentAttributes.hyperlinkId = m_modeState.activeHyperlinkId;
+        currentScreen().buffer.lineAt(currentScreen().cursorState.row).setNarrowRun(
+            column, run.mid(consumed, take), currentScreen().currentAttributes);
+        consumed += take;
+
+        if (column + take >= columns) {
+            if (m_modeState.autoWrap) {
+                currentScreen().wrapPending = true;
+            }
+            setCursorState(QTermCursorState{currentScreen().cursorState.row, columns - 1});
+            if (!m_modeState.autoWrap) {
+                // Without auto-wrap the remainder overwrites the last column.
+                return;
+            }
+        } else {
+            setCursorState(QTermCursorState{currentScreen().cursorState.row, column + take});
+        }
+    }
+}
+
 void QTermInputExecutor::print(const QString &text)
 {
     // DEC line drawing translation: if active and the character is in the

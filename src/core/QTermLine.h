@@ -24,6 +24,11 @@ public:
     void clearCharacterAt(int column);
     bool appendCombiningMark(int column, const QString &mark);
     void setCharacter(int column, const QString &text, int width, const QTermCellAttributes &attributes);
+    // Writes a run of single-width characters starting at \a column. The caller
+    // guarantees every character is narrow and non-combining, which lets this
+    // skip the per-character width and continuation-cell handling in
+    // setCharacter().
+    void setNarrowRun(int column, QStringView text, const QTermCellAttributes &attributes);
     int leadingColumnFor(int column) const;
 
     const QTermCell &cellAt(int column) const;
