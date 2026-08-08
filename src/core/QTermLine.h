@@ -29,6 +29,10 @@ public:
     // skip the per-character width and continuation-cell handling in
     // setCharacter().
     void setNarrowRun(int column, QStringView text, const QTermCellAttributes &attributes);
+    // Prepares a recycled line for reuse as a blank row. Only the columns that
+    // were actually written are reset, so a line that used a handful of columns
+    // costs a handful of assignments rather than a full-width rebuild.
+    void resetForReuse(int columns);
     int leadingColumnFor(int column) const;
 
     const QTermCell &cellAt(int column) const;
@@ -43,7 +47,12 @@ public:
     QString plainText() const;
 
 private:
+    // One past the highest column ever written; the tail beyond it is known to
+    // still be default-constructed.
+    void markWritten(int endColumn);
+
     QVector<QTermCell> m_cells;
+    int m_usedColumns = 0;
     bool m_wrappedToNextLine = false;
 };
 
