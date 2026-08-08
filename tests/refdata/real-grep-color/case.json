@@ -1,0 +1,6 @@
+{
+  "columns": 80,
+  "rows": 24,
+  "chunk": 4096,
+  "recordedFrom": "grep --color=always -rn QTermCell /Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp"
+}

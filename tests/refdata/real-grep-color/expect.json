@@ -1,0 +1,345 @@
+{
+    "columns": 80,
+    "cursor": {
+        "column": 0,
+        "row": 23
+    },
+    "historyLines": 21,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:172:    m_cells[bas"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:172:    m_cells[bas"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 11,
+                    "text": "eColumn] = "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 60,
+                    "text": "();                                                         "
+                }
+            ],
+            "text": "eColumn] = QTermCell();"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:175:        m_cells"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:175:        m_cells"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "[baseColumn + offset] = "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 47,
+                    "text": "();                                            "
+                }
+            ],
+            "text": "[baseColumn + offset] = QTermCell();"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 69,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:190:    "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 2,
+                    "text": " &"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:190:    QTermCell &"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "baseCell = m_cells[baseColumn];                                                 "
+                }
+            ],
+            "text": "baseCell = m_cells[baseColumn];"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:199:void QTermLine:"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:199:void QTermLine:"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 64,
+                    "text": ":setCharacter(int column, const QString &text, int width, const "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 7,
+                    "text": "Attribu"
+                }
+            ],
+            "text": ":setCharacter(int column, const QString &text, int width, const QTermCellAttribu"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "tes &attributes)                                                                "
+                }
+            ],
+            "text": "tes &attributes)"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:212:    m_cells[col"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:212:    m_cells[col"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 7,
+                    "text": "umn] = "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 64,
+                    "text": "{text, boundedWidth, false, attributes};                        "
+                }
+            ],
+            "text": "umn] = QTermCell{text, boundedWidth, false, attributes};"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:215:        m_cells"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:215:        m_cells"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "[column + offset] = "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 51,
+                    "text": "{QString(), 0, true, attributes};                  "
+                }
+            ],
+            "text": "[column + offset] = QTermCell{QString(), 0, true, attributes};"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 79,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:254:        const "
+                },
+                {
+                    "bold": true,
+                    "columns": 1,
+                    "foregroundIndex": 1,
+                    "text": "Q"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:254:        const Q"
+        },
+        {
+            "runs": [
+                {
+                    "bold": true,
+                    "columns": 8,
+                    "foregroundIndex": 1,
+                    "text": "TermCell"
+                },
+                {
+                    "columns": 72,
+                    "text": " &cell = m_cells.at(column);                                            "
+                }
+            ],
+            "text": "TermCell &cell = m_cells.at(column);"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 79,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:270:    for (const"
+                },
+                {
+                    "bold": true,
+                    "columns": 1,
+                    "foregroundIndex": 1,
+                    "text": "Q"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:270:    for (constQ"
+        },
+        {
+            "runs": [
+                {
+                    "bold": true,
+                    "columns": 8,
+                    "foregroundIndex": 1,
+                    "text": "TermCell"
+                },
+                {
+                    "columns": 72,
+                    "text": " &cell : m_cells) {                                                     "
+                }
+            ],
+            "text": "TermCell &cell : m_cells) {"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 69,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:283:    "
+                },
+                {
+                    "bold": true,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "QTermCell"
+                },
+                {
+                    "columns": 2,
+                    "text": "At"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:283:    QTermCellAt"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "tributes currentAttributes;                                                     "
+                }
+            ],
+            "text": "tributes currentAttributes;"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 79,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:312:    for (const"
+                },
+                {
+                    "bold": true,
+                    "columns": 1,
+                    "foregroundIndex": 1,
+                    "text": "Q"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:312:    for (constQ"
+        },
+        {
+            "runs": [
+                {
+                    "bold": true,
+                    "columns": 8,
+                    "foregroundIndex": 1,
+                    "text": "TermCell"
+                },
+                {
+                    "columns": 72,
+                    "text": " &cell : m_cells) {                                                     "
+                }
+            ],
+            "text": "TermCell &cell : m_cells) {"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 79,
+                    "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:359:    for (const"
+                },
+                {
+                    "bold": true,
+                    "columns": 1,
+                    "foregroundIndex": 1,
+                    "text": "Q"
+                }
+            ],
+            "text": "/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:359:    for (constQ"
+        },
+        {
+            "runs": [
+                {
+                    "bold": true,
+                    "columns": 8,
+                    "foregroundIndex": 1,
+                    "text": "TermCell"
+                },
+                {
+                    "columns": 72,
+                    "text": " &cell : m_cells) {                                                     "
+                }
+            ],
+            "text": "TermCell &cell : m_cells) {"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 24
+}

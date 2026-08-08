@@ -1,0 +1,46 @@
+^Dtotal 8
+drwxr-xr-x   45 root  wheel  1440 Jun 25 10:29 [;34m.[m
+drwxr-xr-x@  11 root  wheel   352 Jun 25 10:29 [;34m..[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mCSI[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mCoreDuetDaemonConfig.bundle[m
+drwxr-xr-x    2 root  wheel    64 Jun 25 10:29 [;34mans2_dummy_dir[m
+drwxr-xr-x    5 root  wheel   160 Jun 25 10:29 [;34mcom.apple.languageassetd[m
+drwxr-xr-x    5 root  wheel   160 Jun 25 10:29 [;34mcracklib[m
+drwxr-xr-x   12 root  wheel   384 Jun 25 10:29 [;34mcups[m
+drwxr-xr-x    8 root  wheel   256 Jun 25 10:29 [;34mdict[m
+drwxr-xr-x    5 root  wheel   160 Jun 25 10:29 [;34mdoc[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mexamples[m
+drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 [;34mfile[m
+-r--r--r--    1 root  wheel   689 Jun 25 10:29 firmlinks
+drwxr-xr-x    8 root  wheel   256 Jun 25 10:29 [;34mfirmware[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mgermantok[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mhiutil[m
+drwxr-xr-x    5 root  wheel   160 Jun 25 10:29 [;34mhttpd[m
+drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 [;34mi18n[m
+drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 [;34micu[m
+drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 [;34mkdrl.bundle[m
+drwxr-xr-x   58 root  wheel  1856 Jun 25 10:29 [;34mkpep[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mlangid[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mlibc++[m
+drwxr-xr-x  295 root  wheel  9440 Jun 25 10:29 [;34mlocale[m
+drwxr-xr-x   10 root  wheel   320 Jun 25 10:29 [;34mman[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mmecabra[m
+drwxr-xr-x  103 root  wheel  3296 Jun 25 10:29 [;34mmisc[m
+drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 [;34mmorphun[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mopenssh[m
+drwxr-xr-x   37 root  wheel  1184 Jun 25 10:29 [;34mpmenergy[m
+lrwxr-xr-x    1 root  wheel    76 Jun 25 10:29 [;35mri[m -> ../../System/Library/Frameworks/Ruby.framework/Versions/Current/usr/share/ri
+drwxr-xr-x   61 root  wheel  1952 Jun 25 10:29 [;34msandbox[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mscreen[m
+drwxr-xr-x    2 root  wheel    64 Jun 25 10:29 [;34mskel[m
+drwxr-xr-x   28 root  wheel   896 Jun 25 10:29 [;34msnmp[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mswift[m
+drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 [;34mtabset[m
+drwxr-xr-x   44 root  wheel  1408 Jun 25 10:29 [;34mterminfo[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mthermald.bundle[m
+drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 [;34mtokenizer[m
+drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 [;34mucupdate[m
+drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 [;34mvim[m
+lrwxr-xr-x    1 root  wheel    25 Jun 25 10:29 [;35mzoneinfo[m -> /var/db/timezone/zoneinfo
+drwxr-xr-x   69 root  wheel  2208 Jun 25 10:29 [;34mzoneinfo.default[m
+drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 [;34mzsh[m

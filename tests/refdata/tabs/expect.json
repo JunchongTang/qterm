@@ -1,0 +1,227 @@
+{
+    "columns": 80,
+    "cursor": {
+        "column": 0,
+        "row": 3
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "a       b       c       d                                                       "
+                }
+            ],
+            "text": "a       b       c       d"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "12345678        9                                                               "
+                }
+            ],
+            "text": "12345678        9"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "x       y                                                                       "
+                }
+            ],
+            "text": "x       y"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 24
+}

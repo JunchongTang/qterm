@@ -1,0 +1,83 @@
+{
+    "columns": 20,
+    "cursor": {
+        "column": 6,
+        "row": 3
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "abc yy              "
+                }
+            ],
+            "text": "abc yy"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "AB zzD              "
+                }
+            ],
+            "text": "AB zzD"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": " q宽宽              "
+                }
+            ],
+            "text": " q宽宽"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "四mnop七            "
+                }
+            ],
+            "text": "四mnop七"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "                    "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "                    "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "                    "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 20,
+                    "text": "                    "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 8
+}

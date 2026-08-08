@@ -1,0 +1,83 @@
+{
+    "columns": 24,
+    "cursor": {
+        "column": 0,
+        "row": 4
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "xxxxxxxxxxxxxxxxxxxxxxx "
+                }
+            ],
+            "text": "xxxxxxxxxxxxxxxxxxxxxxx "
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "宽after                 "
+                }
+            ],
+            "text": "宽after"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "yyyyyyyyyyyyyyyyyyyyyy宽"
+                }
+            ],
+            "text": "yyyyyyyyyyyyyyyyyyyyyy宽"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "宽                      "
+                }
+            ],
+            "text": "宽"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 8
+}

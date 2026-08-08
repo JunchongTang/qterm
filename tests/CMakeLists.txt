@@ -2,6 +2,27 @@ qt_add_executable(qterm_core_tests
     core/QTermCoreTest.cpp
 )
 
+qt_add_executable(qterm_ref_tests
+    core/QTermRefTest.cpp
+)
+
+target_include_directories(qterm_ref_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_compile_definitions(qterm_ref_tests
+    PRIVATE
+        QTERM_REFDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/refdata"
+)
+
+target_link_libraries(qterm_ref_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+        QTerm::qterm
+)
+
 qt_add_executable(qterm_session_tests
     session/QTermSessionTest.cpp
 )
@@ -88,6 +109,7 @@ target_link_libraries(qterm_resize_visual_test
 )
 
 add_test(NAME qterm_core_tests COMMAND qterm_core_tests)
+add_test(NAME qterm_ref_tests COMMAND qterm_ref_tests)
 add_test(NAME qterm_session_tests COMMAND qterm_session_tests)
 add_test(NAME qterm_local_shell_tests COMMAND qterm_local_shell_tests)
 add_test(NAME qterm_serial_tests COMMAND qterm_serial_tests)

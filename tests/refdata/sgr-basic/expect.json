@@ -1,0 +1,275 @@
+{
+    "columns": 80,
+    "cursor": {
+        "column": 0,
+        "row": 3
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "bold": true,
+                    "columns": 5,
+                    "text": "bold "
+                },
+                {
+                    "bold": true,
+                    "columns": 7,
+                    "italic": true,
+                    "text": "italic "
+                },
+                {
+                    "bold": true,
+                    "columns": 6,
+                    "italic": true,
+                    "text": "under ",
+                    "underline": true
+                },
+                {
+                    "bold": true,
+                    "columns": 8,
+                    "inverse": true,
+                    "italic": true,
+                    "text": "inverse ",
+                    "underline": true
+                },
+                {
+                    "columns": 54,
+                    "text": "plain                                                 "
+                }
+            ],
+            "text": "bold italic under inverse plain"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 4,
+                    "foregroundIndex": 1,
+                    "text": "red "
+                },
+                {
+                    "backgroundIndex": 2,
+                    "columns": 9,
+                    "foregroundIndex": 1,
+                    "text": "on-green "
+                },
+                {
+                    "columns": 67,
+                    "text": "                                                                   "
+                }
+            ],
+            "text": "red on-green"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 10,
+                    "foregroundIndex": 8,
+                    "text": "bright-fg "
+                },
+                {
+                    "backgroundIndex": 15,
+                    "columns": 9,
+                    "foregroundIndex": 8,
+                    "text": "bright-bg"
+                },
+                {
+                    "columns": 61,
+                    "text": "                                                             "
+                }
+            ],
+            "text": "bright-fg bright-bg"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 24
+}

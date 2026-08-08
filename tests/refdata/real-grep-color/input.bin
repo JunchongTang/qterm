@@ -1,0 +1,21 @@
+^D/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:66:        m_cells[index] = [01;31m[KQTermCell[m[K();
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:86:        m_cells[index] = [01;31m[KQTermCell[m[K();
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:92:const [01;31m[KQTermCell[m[K &QTermLine::cellAt(int column) const
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:97:void QTermLine::setCell(int column, const [01;31m[KQTermCell[m[K &cell)
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:103:void QTermLine::setNarrowRun(int column, QStringView text, const [01;31m[KQTermCell[m[KAttributes &attributes)
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:125:        [01;31m[KQTermCell[m[K &cell = m_cells[column + offset];
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:141:        m_cells = QVector<[01;31m[KQTermCell[m[K>(columns);
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:147:        [01;31m[KQTermCell[m[K *cells = m_cells.data();
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:149:            [01;31m[KQTermCell[m[K &cell = cells[column];
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:153:            cell.attributes = [01;31m[KQTermCell[m[KAttributes();
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:172:    m_cells[baseColumn] = [01;31m[KQTermCell[m[K();
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:175:        m_cells[baseColumn + offset] = [01;31m[KQTermCell[m[K();
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:190:    [01;31m[KQTermCell[m[K &baseCell = m_cells[baseColumn];
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:199:void QTermLine::setCharacter(int column, const QString &text, int width, const [01;31m[KQTermCell[m[KAttributes &attributes)
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:212:    m_cells[column] = [01;31m[KQTermCell[m[K{text, boundedWidth, false, attributes};
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:215:        m_cells[column + offset] = [01;31m[KQTermCell[m[K{QString(), 0, true, attributes};
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:254:        const [01;31m[KQTermCell[m[K &cell = m_cells.at(column);
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:270:    for (const [01;31m[KQTermCell[m[K &cell : m_cells) {
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:283:    [01;31m[KQTermCell[m[KAttributes currentAttributes;
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:312:    for (const [01;31m[KQTermCell[m[K &cell : m_cells) {
+/Users/tangjc/1-proj/2-mygithub/qterm/src/core/QTermLine.cpp:359:    for (const [01;31m[KQTermCell[m[K &cell : m_cells) {

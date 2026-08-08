@@ -1,0 +1,65 @@
+{
+    "columns": 30,
+    "cursor": {
+        "column": 0,
+        "row": 1
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "emoji: 😀 🚀 tail             "
+                }
+            ],
+            "text": "emoji: 😀 🚀 tail"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 6
+}

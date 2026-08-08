@@ -1,0 +1,83 @@
+{
+    "columns": 24,
+    "cursor": {
+        "column": 0,
+        "row": 3
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "宽字符测试 CJK mixed    "
+                }
+            ],
+            "text": "宽字符测试 CJK mixed"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "一二三四五六七八九十    "
+                }
+            ],
+            "text": "一二三四五六七八九十"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "ascii tail              "
+                }
+            ],
+            "text": "ascii tail"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 8
+}

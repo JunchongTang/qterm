@@ -1,0 +1,6 @@
+{
+  "columns": 80,
+  "rows": 10,
+  "chunk": 4096,
+  "scrollback": 50
+}
