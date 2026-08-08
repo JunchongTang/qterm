@@ -147,6 +147,12 @@ private:
     // flags the projection stale; it is materialised when actually read.
     void setVisibleLinesProvider(std::function<QStringList()> provider);
     void markVisibleLinesDirty();
+    // Same deal for the style runs: rebuilding them costs a QVariantMap per run
+    // and a deep comparison of the whole list, while a renderer only reads them
+    // once per frame. Flagging them stale also collapses a burst of writes into
+    // a single change notification.
+    void setVisibleLineRunsProvider(std::function<QVariantList()> provider);
+    void markVisibleLineRunsDirty();
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
     void setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs);
     void setSearchHighlights(const QVariantList &highlights);
@@ -164,10 +170,14 @@ private:
     int m_selectionEndColumn = 0;
     QTermTerminal *m_selectionController = nullptr;
     QString m_selectedText;
+    void materialiseVisibleLineRuns() const;
+
     mutable QStringList m_visibleLines;
     mutable bool m_visibleLinesDirty = false;
     std::function<QStringList()> m_visibleLinesProvider;
-    QVariantList m_visibleLineRuns;
+    mutable bool m_visibleLineRunsDirty = false;
+    std::function<QVariantList()> m_visibleLineRunsProvider;
+    mutable QVariantList m_visibleLineRuns;
     QVariantList m_searchHighlights;
 };
 
