@@ -20,12 +20,16 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
 
         if (!m_pendingHighSurrogate.isNull() && m_state == State::Ground) {
             if (character.isLowSurrogate()) {
-                handleGroundTextUnit(QString(m_pendingHighSurrogate) + character, executor);
+                // The high half came from an earlier chunk, so the pair has no
+                // contiguous home in this string and must be materialised.
+                const QString pair = QString(m_pendingHighSurrogate) + character;
+                handleGroundTextUnit(pair, executor);
                 m_pendingHighSurrogate = QChar();
                 continue;
             }
 
-            handleGroundTextUnit(QString(m_pendingHighSurrogate), executor);
+            const QString orphan(m_pendingHighSurrogate);
+            handleGroundTextUnit(orphan, executor);
             m_pendingHighSurrogate = QChar();
         }
 
@@ -51,7 +55,7 @@ void QTermTextParser::parse(const QString &text, QTermInputExecutor &executor)
                 executor.printNarrowRun(QStringView(text).mid(index, runEnd - index));
                 index = runEnd - 1;
             } else {
-                handleGroundTextUnit(QString(character), executor);
+                handleGroundTextUnit(QStringView(text).sliced(index, 1), executor);
             }
             break;
         case State::Escape:
@@ -180,32 +184,55 @@ int QTermTextParser::parameterAt(const QVector<int> &parameters, int index, int 
     return parameters.at(index);
 }
 
-QVector<int> QTermTextParser::parseCsiParameters(const QString &text)
+const QVector<int> &QTermTextParser::parseCsiParameters(const QString &text)
 {
-    QString parametersText = text;
-    if (parametersText.startsWith(u'?') || parametersText.startsWith(u'>')) {
-        parametersText.remove(0, 1);
+    // Scanned in place rather than via split() + toInt(): a coloured stream
+    // carries millions of these, and the string-splitting version allocated a
+    // list plus a string per parameter for every one of them. The result buffer
+    // is a member for the same reason -- clear() keeps its capacity, so after
+    // the first sequence this path stops allocating entirely.
+    QVector<int> &parameters = m_csiParameterValues;
+    parameters.clear();
+    parameters.reserve(8); // more than any real sequence uses
+
+    QStringView view(text);
+    if (!view.isEmpty() && (view.front() == u'?' || view.front() == u'>')) {
+        view = view.sliced(1);
     }
 
-    if (parametersText.isEmpty()) {
-        return {};
+    if (view.isEmpty()) {
+        return parameters;
     }
 
-    const QStringList parts = parametersText.replace(u':', u';').split(u';');
-    QVector<int> parameters;
-    parameters.reserve(parts.size());
-    for (const QString &part : parts) {
-        if (part.isEmpty()) {
-            parameters.append(0);
+    // DEC caps a parameter at 16383 and folds anything larger down to it;
+    // clamping here also keeps a hostile stream from overflowing the counter.
+    constexpr int maximumValue = 16383;
+    int value = 0;
+    // A stray non-digit made the old toInt() fail and yield 0 for that whole
+    // parameter. Tracking validity reproduces that exactly, so a malformed
+    // sequence still parses the way it always did.
+    bool valid = true;
+    for (const QChar character : view) {
+        const char16_t unit = character.unicode();
+        if (unit >= u'0' && unit <= u'9') {
+            value = qMin(value * 10 + (unit - u'0'), maximumValue);
+        } else if (unit == u';' || unit == u':') {
+            parameters.append(valid ? value : 0);
+            value = 0;
+            valid = true;
         } else {
-            parameters.append(part.toInt());
+            valid = false;
         }
     }
+    parameters.append(valid ? value : 0);
 
     return parameters;
 }
 
-void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecutor &executor)
+// Takes a view rather than a QString because the common single-character case
+// is a control code, which is dispatched on its code unit alone -- only the
+// branches that actually print need to materialise a string.
+void QTermTextParser::handleGroundTextUnit(QStringView text, QTermInputExecutor &executor)
 {
     if (text.size() == 1) {
         switch (text.front().unicode()) {
@@ -234,19 +261,19 @@ void QTermTextParser::handleGroundTextUnit(const QString &text, QTermInputExecut
             break;
         default:
             if (text.front().unicode() >= 0x20) {
-                executor.print(text);
+                executor.print(text.toString());
             }
             break;
         }
         return;
     }
 
-    executor.print(text);
+    executor.print(text.toString());
 }
 
 void QTermTextParser::handleCsiFinal(bool privateMode, bool secondaryMode, QChar final, QTermInputExecutor &executor)
 {
-    const QVector<int> parameters = parseCsiParameters(m_csiParameters);
+    const QVector<int> &parameters = parseCsiParameters(m_csiParameters);
 
     if (privateMode) {
         switch (final.unicode()) {
@@ -360,7 +387,7 @@ void QTermTextParser::handleCsiIntermediateFinal(QChar intermediate, QChar final
 {
     if (intermediate == u' ' && final == u'q') {
         // DECSCUSR: CSI n SP q — set cursor shape
-        const QVector<int> parameters = parseCsiParameters(m_csiParameters);
+        const QVector<int> &parameters = parseCsiParameters(m_csiParameters);
         executor.setCursorShape(parameterAt(parameters, 0, 0));
     }
     // All other intermediate+final combinations are silently ignored.
