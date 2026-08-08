@@ -31,8 +31,11 @@ private:
     };
 
     static int parameterAt(const QVector<int> &parameters, int index, int defaultValue);
-    static QVector<int> parseCsiParameters(const QString &text);
-    void handleGroundTextUnit(const QString &text, QTermInputExecutor &executor);
+    // Returns a reference into a reused buffer, valid until the next call.
+    // A coloured stream carries millions of CSI sequences, so returning by
+    // value meant an allocation per sequence.
+    const QVector<int> &parseCsiParameters(const QString &text);
+    void handleGroundTextUnit(QStringView text, QTermInputExecutor &executor);
     void handleCsiFinal(bool privateMode, bool secondaryMode, QChar final, QTermInputExecutor &executor);
     void handleCsiIntermediateFinal(QChar intermediate, QChar final, QTermInputExecutor &executor);
     void handleEscapeFinal(QChar final, QTermInputExecutor &executor);
@@ -40,6 +43,7 @@ private:
 
     State m_state = State::Ground;
     QString m_csiParameters;
+    QVector<int> m_csiParameterValues;
     QChar m_csiIntermediate;
     QString m_oscData;
     QChar m_pendingHighSurrogate;
