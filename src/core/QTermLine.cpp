@@ -1,5 +1,7 @@
 #include "QTermLine.h"
 
+#include <algorithm>
+
 #include <QVariantMap>
 #include <QtGlobal>
 
@@ -121,13 +123,69 @@ void QTermLine::setNarrowRun(int column, QStringView text, const QTermCellAttrib
     clearCharacterAt(column + count - 1);
 
     markWritten(column + count);
+    QTermCell *cells = m_cells.data();
     for (int offset = 0; offset < count; ++offset) {
-        QTermCell &cell = m_cells[column + offset];
-        cell.text = text.at(offset);
+        QTermCell &cell = cells[column + offset];
+        cell.codepoint = text.at(offset).unicode();
+        cell.combiningId = 0;
         cell.width = 1;
-        cell.continuation = false;
+        cell.continuation = 0;
         cell.attributes = attributes;
     }
+}
+
+QString QTermLine::textAt(int column) const
+{
+    if (column < 0 || column >= m_cells.size()) {
+        return {};
+    }
+    const QTermCell &cell = m_cells.at(column);
+    if (cell.combiningId != 0) {
+        return m_combining.value(cell.combiningId);
+    }
+    if (cell.codepoint == 0) {
+        return {};
+    }
+    return QString::fromUcs4(&cell.codepoint, 1);
+}
+
+quint16 QTermLine::internCombining(const QString &text)
+{
+    // Combining sequences are rare; ids are line-local and reset on clear.
+    // Saturating at the maximum simply stops interning further sequences,
+    // which degrades to dropping marks rather than corrupting other cells.
+    if (m_nextCombiningId == 0xffff) {
+        return 0;
+    }
+    const quint16 id = m_nextCombiningId++;
+    m_combining.insert(id, text);
+    return id;
+}
+
+void QTermLine::writeCell(QTermCell &cell, const QString &text, int width,
+                          const QTermCellAttributes &attributes)
+{
+    cell.combiningId = 0;
+    cell.codepoint = 0;
+    if (!text.isEmpty()) {
+        const QChar first = text.at(0);
+        const bool singleUnit = text.size() == 1;
+        const bool surrogatePair = text.size() == 2 && first.isHighSurrogate();
+        if (singleUnit) {
+            cell.codepoint = first.unicode();
+        } else if (surrogatePair) {
+            cell.codepoint = QChar::surrogateToUcs4(first, text.at(1));
+        } else {
+            // Base character plus combining marks: keep the whole grapheme.
+            cell.codepoint = QChar::isHighSurrogate(first.unicode())
+                    ? QChar::surrogateToUcs4(first, text.at(1))
+                    : first.unicode();
+            cell.combiningId = internCombining(text);
+        }
+    }
+    cell.width = quint8(width);
+    cell.continuation = 0;
+    cell.attributes = attributes;
 }
 
 void QTermLine::markWritten(int endColumn)
@@ -144,15 +202,12 @@ void QTermLine::resetForReuse(int columns)
         // operator[] re-checks for detach on every index, which dominated this
         // loop when it was written the obvious way.
         const int limit = qMin(m_usedColumns, m_cells.size());
-        QTermCell *cells = m_cells.data();
-        for (int column = 0; column < limit; ++column) {
-            QTermCell &cell = cells[column];
-            cell.text.clear();
-            cell.width = 1;
-            cell.continuation = false;
-            cell.attributes = QTermCellAttributes();
-        }
+        // The cells are trivially constructible now, so the used range can be
+        // reset in bulk instead of per column.
+        std::fill_n(m_cells.data(), limit, QTermCell{});
     }
+    m_combining.clear();
+    m_nextCombiningId = 1;
     m_usedColumns = 0;
     m_wrappedToNextLine = false;
 }
@@ -168,7 +223,7 @@ void QTermLine::clearCharacterAt(int column)
         return;
     }
 
-    const int width = qMax(1, m_cells.at(baseColumn).width);
+    const int width = qMax(1, int(m_cells.at(baseColumn).width));
     m_cells[baseColumn] = QTermCell();
 
     for (int offset = 1; offset < width && baseColumn + offset < m_cells.size(); ++offset) {
@@ -188,11 +243,16 @@ bool QTermLine::appendCombiningMark(int column, const QString &mark)
     }
 
     QTermCell &baseCell = m_cells[baseColumn];
-    if (baseCell.text.isEmpty()) {
+    if (baseCell.isBlank()) {
         return false;
     }
 
-    baseCell.text.append(mark);
+    const QString combined = textAt(baseColumn) + mark;
+    if (baseCell.combiningId != 0) {
+        m_combining.insert(baseCell.combiningId, combined);
+    } else {
+        baseCell.combiningId = internCombining(combined);
+    }
     return true;
 }
 
@@ -209,10 +269,14 @@ void QTermLine::setCharacter(int column, const QString &text, int width, const Q
 
     const int boundedWidth = qBound(1, width, m_cells.size() - column);
     markWritten(column + boundedWidth);
-    m_cells[column] = QTermCell{text, boundedWidth, false, attributes};
+    writeCell(m_cells[column], text, boundedWidth, attributes);
 
     for (int offset = 1; offset < boundedWidth && column + offset < m_cells.size(); ++offset) {
-        m_cells[column + offset] = QTermCell{QString(), 0, true, attributes};
+        QTermCell &continuation = m_cells[column + offset];
+        continuation = QTermCell{};
+        continuation.width = 0;
+        continuation.continuation = 1;
+        continuation.attributes = attributes;
     }
 }
 
@@ -256,7 +320,8 @@ QString QTermLine::textInColumnRange(int startColumn, int endColumn) const
             continue;
         }
 
-        text.append(cell.text.isEmpty() ? QStringLiteral(" ") : cell.text);
+        const QString cellText = textAt(column);
+        text.append(cellText.isEmpty() ? QStringLiteral(" ") : cellText);
     }
 
     return text;
@@ -267,8 +332,11 @@ QStringList QTermLine::columnTexts() const
     QStringList columns;
     columns.reserve(m_cells.size());
 
-    for (const QTermCell &cell : m_cells) {
-        columns.append(cell.continuation ? QString() : (cell.text.isEmpty() ? QStringLiteral(" ") : cell.text));
+    for (int column = 0; column < m_cells.size(); ++column) {
+        const QTermCell &cell = m_cells.at(column);
+        const QString cellText = textAt(column);
+        columns.append(cell.continuation ? QString()
+                                         : (cellText.isEmpty() ? QStringLiteral(" ") : cellText));
     }
 
     return columns;
@@ -309,13 +377,15 @@ QVariantList QTermLine::styleRuns() const
         hasCurrentRun = false;
     };
 
-    for (const QTermCell &cell : m_cells) {
+    for (int column = 0; column < m_cells.size(); ++column) {
+        const QTermCell &cell = m_cells.at(column);
         if (cell.continuation) {
             continue;
         }
 
-        const QString cellText = cell.text.isEmpty() ? QStringLiteral(" ") : cell.text;
-        const int cellColumns = qMax(1, cell.width);
+        const QString resolved = textAt(column);
+        const QString cellText = resolved.isEmpty() ? QStringLiteral(" ") : resolved;
+        const int cellColumns = qMax(1, int(cell.width));
         if (!hasCurrentRun) {
             currentText = cellText;
             currentColumns = cellColumns;
@@ -356,11 +426,13 @@ QString QTermLine::plainText() const
     QString text;
     text.reserve(m_cells.size());
 
-    for (const QTermCell &cell : m_cells) {
+    for (int column = 0; column < m_cells.size(); ++column) {
+        const QTermCell &cell = m_cells.at(column);
         if (cell.continuation) {
             continue;
         }
-        text.append(cell.text.isEmpty() ? QStringLiteral(" ") : cell.text);
+        const QString cellText = textAt(column);
+        text.append(cellText.isEmpty() ? QStringLiteral(" ") : cellText);
     }
 
     if (!m_wrappedToNextLine) {

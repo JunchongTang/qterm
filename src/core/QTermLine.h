@@ -3,6 +3,7 @@
 
 #include <QStringList>
 #include <QVariantList>
+#include <QHash>
 #include <QVector>
 
 #include "QTermCell.h"
@@ -29,6 +30,9 @@ public:
     // skip the per-character width and continuation-cell handling in
     // setCharacter().
     void setNarrowRun(int column, QStringView text, const QTermCellAttributes &attributes);
+    // Resolves a cell to its text, joining any combining marks held in the
+    // line's side table. Blank cells return an empty string.
+    QString textAt(int column) const;
     // Prepares a recycled line for reuse as a blank row. Only the columns that
     // were actually written are reset, so a line that used a handful of columns
     // costs a handful of assignments rather than a full-width rebuild.
@@ -51,7 +55,16 @@ private:
     // still be default-constructed.
     void markWritten(int endColumn);
 
+    // Stores the full grapheme for a cell that carries combining marks and
+    // returns its key; keys are line-local and reset whenever the line is
+    // cleared or recycled.
+    quint16 internCombining(const QString &text);
+    void writeCell(QTermCell &cell, const QString &text, int width,
+                   const QTermCellAttributes &attributes);
+
     QVector<QTermCell> m_cells;
+    QHash<quint16, QString> m_combining;
+    quint16 m_nextCombiningId = 1;
     int m_usedColumns = 0;
     bool m_wrappedToNextLine = false;
 };
