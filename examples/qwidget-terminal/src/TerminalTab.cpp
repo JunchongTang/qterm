@@ -2,9 +2,12 @@
 
 #include "Theme.h"
 
+#include <QClipboard>
 #include <QDesktopServices>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QUrl>
 
 #include <QTerm/QTermLocalShellBackend.h>
@@ -112,12 +115,57 @@ TerminalTab::TerminalTab(const SessionConfig &config, QWidget *parent)
     connect(m_terminal, &QTerm::QTermTerminal::titleChanged,
             this, &TerminalTab::tabTitleChanged);
 
+    installClipboardShortcuts();
+
     m_backend = createBackend(config);
     m_session->setBackend(m_backend);
     m_terminal->setSession(m_session);
     m_session->open();
 
     updateScrollBar();
+}
+
+void TerminalTab::installClipboardShortcuts()
+{
+    // Ctrl+C has to reach the child process as an interrupt, so only macOS can
+    // use the plain Copy/Paste sequences (Cmd based there). Elsewhere terminals
+    // conventionally add Shift.
+#if defined(Q_OS_MACOS)
+    const QKeySequence copySequence(QKeySequence::Copy);
+    const QKeySequence pasteSequence(QKeySequence::Paste);
+#else
+    const QKeySequence copySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C);
+    const QKeySequence pasteSequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V);
+#endif
+
+    // Scoped to this tab so a shortcut only fires for the terminal the user is
+    // actually looking at.
+    auto *copyShortcut = new QShortcut(copySequence, this);
+    copyShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(copyShortcut, &QShortcut::activated, this, &TerminalTab::copySelection);
+
+    auto *pasteShortcut = new QShortcut(pasteSequence, this);
+    pasteShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(pasteShortcut, &QShortcut::activated, this, &TerminalTab::pasteFromClipboard);
+}
+
+void TerminalTab::copySelection()
+{
+    const QString text = m_terminal->surfaceModel()->selectedText();
+    if (text.isEmpty())
+        return;
+
+    QGuiApplication::clipboard()->setText(text);
+    emit statusMessage(tr("Copied %n character(s)", nullptr, int(text.size())));
+}
+
+void TerminalTab::pasteFromClipboard()
+{
+    const QString text = QGuiApplication::clipboard()->text();
+    if (text.isEmpty())
+        return;
+
+    m_terminal->sendPaste(text);
 }
 
 TerminalTab::~TerminalTab()

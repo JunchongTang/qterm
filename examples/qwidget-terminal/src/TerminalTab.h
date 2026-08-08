@@ -33,6 +33,9 @@ signals:
 private:
     void applyTheme();
     void updateScrollBar();
+    void installClipboardShortcuts();
+    void copySelection();
+    void pasteFromClipboard();
     QTerm::QTermSessionBackend *createBackend(const SessionConfig &config);
 
     SessionConfig m_config;
