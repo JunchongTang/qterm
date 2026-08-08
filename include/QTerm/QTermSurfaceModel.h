@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <functional>
 #include <QVariantList>
 
 namespace QTerm {
@@ -141,6 +142,11 @@ private:
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn);
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
     void setVisibleLines(const QStringList &visibleLines);
+    // The plain-text projection has no renderer consuming it, so building it on
+    // every write is wasted work. QTermTerminal installs a provider and only
+    // flags the projection stale; it is materialised when actually read.
+    void setVisibleLinesProvider(std::function<QStringList()> provider);
+    void markVisibleLinesDirty();
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
     void setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs);
     void setSearchHighlights(const QVariantList &highlights);
@@ -158,7 +164,9 @@ private:
     int m_selectionEndColumn = 0;
     QTermTerminal *m_selectionController = nullptr;
     QString m_selectedText;
-    QStringList m_visibleLines;
+    mutable QStringList m_visibleLines;
+    mutable bool m_visibleLinesDirty = false;
+    std::function<QStringList()> m_visibleLinesProvider;
     QVariantList m_visibleLineRuns;
     QVariantList m_searchHighlights;
 };

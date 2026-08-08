@@ -37,6 +37,9 @@ QTermTerminal::QTermTerminal(QObject *parent)
     , m_surfaceModel(this)
     , m_selectionModel(std::make_unique<QTermSelectionModel>())
 {
+    m_surfaceModel.setVisibleLinesProvider([this] {
+        return m_core->buffer().viewportLineTexts(m_viewportTopProjectionRow, rows());
+    });
     m_surfaceModel.setSelectionController(this);
     m_selectionModel->setTerminalSize(m_core->columns(), m_core->rows());
     m_viewportTopProjectionRow = qMax(0, m_core->buffer().projectionRowCount() - m_core->rows());
@@ -640,7 +643,7 @@ void QTermTerminal::clampViewportToBuffer()
 void QTermTerminal::syncSurfaceViewport()
 {
     QTermBuffer &buf = m_core->buffer();
-    m_surfaceModel.setVisibleLines(buf.viewportLineTexts(m_viewportTopProjectionRow, rows()));
+    m_surfaceModel.markVisibleLinesDirty();
 
     // If the viewport offset changed since last sync, or the buffer is fully dirty,
     // do a full rebuild — the incremental dirty-row set only covers buffer-write
