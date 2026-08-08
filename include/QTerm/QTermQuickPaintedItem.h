@@ -36,6 +36,15 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY metricsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
+    /*!
+        Glyph colour for reverse-video (SGR 7) cells with no explicit background
+        of their own. **Separate from \l backgroundColor on purpose**: that one may
+        carry alpha for a translucent terminal, and a translucent glyph over a
+        solid block of its own foreground renders as a smear (or vanishes at
+        alpha 0). Invalid (the default) derives it from \l backgroundColor with
+        alpha forced opaque -- the historical behaviour.
+    */
+    Q_PROPERTY(QColor inverseTextColor READ inverseTextColor WRITE setInverseTextColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
@@ -78,6 +87,8 @@ public:
     void setForegroundColor(const QColor &foregroundColor);
 
     QColor backgroundColor() const;
+    QColor inverseTextColor() const;
+    void setInverseTextColor(const QColor &inverseTextColor);
     void setBackgroundColor(const QColor &backgroundColor);
 
     QColor selectionColor() const;
@@ -162,6 +173,8 @@ private:
     // ── 调色板（渲染参数，controller 无需感知） ──────────────────────────────
     QColor m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));
     QColor m_backgroundColor = QColor(QStringLiteral("#0b1016"));
+    // Invalid = derive from m_backgroundColor with alpha forced opaque.
+    QColor      m_inverseTextColor;
     QColor m_selectionColor  = QColor(QStringLiteral("#214f76"));
     QColor m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal  m_cursorOpacity   = 1.0;

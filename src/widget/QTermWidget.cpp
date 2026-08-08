@@ -138,6 +138,16 @@ void QTermWidget::setForegroundColor(const QColor &c)
 }
 
 QColor QTermWidget::backgroundColor() const { return m_backgroundColor; }
+
+QColor QTermWidget::inverseTextColor() const { return m_inverseTextColor; }
+
+void QTermWidget::setInverseTextColor(const QColor &inverseTextColor)
+{
+    if (m_inverseTextColor == inverseTextColor) return;
+    m_inverseTextColor = inverseTextColor;
+    update();
+    emit paletteChanged();
+}
 void QTermWidget::setBackgroundColor(const QColor &c)
 {
     if (m_backgroundColor == c) return;
@@ -246,6 +256,7 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     req.baseFont      = baseFont;
     req.foreground    = m_foregroundColor;
     req.background    = m_backgroundColor;
+    req.inverseText   = m_inverseTextColor;
     req.selection     = m_selectionColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;

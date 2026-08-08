@@ -157,6 +157,16 @@ void QTermQuickPaintedItem::setForegroundColor(const QColor &foregroundColor)
 
 QColor QTermQuickPaintedItem::backgroundColor() const { return m_backgroundColor; }
 
+QColor QTermQuickPaintedItem::inverseTextColor() const { return m_inverseTextColor; }
+
+void QTermQuickPaintedItem::setInverseTextColor(const QColor &inverseTextColor)
+{
+    if (m_inverseTextColor == inverseTextColor) return;
+    m_inverseTextColor = inverseTextColor;
+    update();
+    emit paletteChanged();
+}
+
 void QTermQuickPaintedItem::setBackgroundColor(const QColor &backgroundColor)
 {
     if (m_backgroundColor == backgroundColor) return;
@@ -341,6 +351,7 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.baseFont      = baseFont;
     req.foreground    = m_foregroundColor;
     req.background    = m_backgroundColor;
+    req.inverseText   = m_inverseTextColor;
     req.selection     = m_selectionColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
