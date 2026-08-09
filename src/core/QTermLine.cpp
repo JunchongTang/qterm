@@ -162,7 +162,7 @@ quint16 QTermLine::internCombining(const QString &text)
     return id;
 }
 
-void QTermLine::writeCell(QTermCell &cell, const QString &text, int width,
+void QTermLine::writeCell(QTermCell &cell, QStringView text, int width,
                           const QTermCellAttributes &attributes)
 {
     cell.combiningId = 0;
@@ -180,7 +180,7 @@ void QTermLine::writeCell(QTermCell &cell, const QString &text, int width,
             cell.codepoint = QChar::isHighSurrogate(first.unicode())
                     ? QChar::surrogateToUcs4(first, text.at(1))
                     : first.unicode();
-            cell.combiningId = internCombining(text);
+            cell.combiningId = internCombining(text.toString());
         }
     }
     cell.width = quint8(width);
@@ -256,7 +256,7 @@ bool QTermLine::appendCombiningMark(int column, const QString &mark)
     return true;
 }
 
-void QTermLine::setCharacter(int column, const QString &text, int width, const QTermCellAttributes &attributes)
+void QTermLine::setCharacter(int column, QStringView text, int width, const QTermCellAttributes &attributes)
 {
     if (column < 0 || column >= m_cells.size()) {
         return;

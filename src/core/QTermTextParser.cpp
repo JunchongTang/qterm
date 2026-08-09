@@ -261,14 +261,14 @@ void QTermTextParser::handleGroundTextUnit(QStringView text, QTermInputExecutor 
             break;
         default:
             if (text.front().unicode() >= 0x20) {
-                executor.print(text.toString());
+                executor.print(text);
             }
             break;
         }
         return;
     }
 
-    executor.print(text.toString());
+    executor.print(text);
 }
 
 void QTermTextParser::handleCsiFinal(bool privateMode, bool secondaryMode, QChar final, QTermInputExecutor &executor)

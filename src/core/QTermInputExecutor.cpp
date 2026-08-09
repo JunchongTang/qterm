@@ -65,14 +65,39 @@ int packRgb(int red, int green, int blue)
            clampColorComponent(blue);
 }
 
-bool isCombiningMark(const QString &text)
+// Decodes the leading code point without allocating. toUcs4() builds a whole
+// QList for what is almost always a single character, and on CJK-heavy output
+// that allocation dominates the parse.
+char32_t leadingCodePoint(QStringView text, qsizetype *unitsConsumed = nullptr)
 {
-    const QList<uint> codePoints = text.toUcs4();
-    if (codePoints.size() != 1) {
+    if (text.isEmpty()) {
+        if (unitsConsumed)
+            *unitsConsumed = 0;
+        return 0;
+    }
+
+    const QChar first = text.front();
+    if (first.isHighSurrogate() && text.size() > 1 && text.at(1).isLowSurrogate()) {
+        if (unitsConsumed)
+            *unitsConsumed = 2;
+        return QChar::surrogateToUcs4(first, text.at(1));
+    }
+
+    if (unitsConsumed)
+        *unitsConsumed = 1;
+    return first.unicode();
+}
+
+bool isCombiningMark(QStringView text)
+{
+    qsizetype consumed = 0;
+    const char32_t codePoint = leadingCodePoint(text, &consumed);
+    // Only a lone mark counts; a base plus its marks is handled elsewhere.
+    if (codePoint == 0 || consumed != text.size()) {
         return false;
     }
 
-    switch (QChar::category(codePoints.front())) {
+    switch (QChar::category(codePoint)) {
     case QChar::Mark_NonSpacing:
     case QChar::Mark_SpacingCombining:
     case QChar::Mark_Enclosing:
@@ -98,10 +123,10 @@ bool isWideCodePoint(uint codePoint)
            (codePoint >= 0x20000 && codePoint <= 0x3fffd);
 }
 
-int displayWidth(const QString &text)
+int displayWidth(QStringView text)
 {
-    const QList<uint> codePoints = text.toUcs4();
-    if (codePoints.isEmpty()) {
+    const char32_t codePoint = leadingCodePoint(text);
+    if (codePoint == 0) {
         return 0;
     }
 
@@ -109,7 +134,7 @@ int displayWidth(const QString &text)
         return 0;
     }
 
-    return isWideCodePoint(codePoints.front()) ? 2 : 1;
+    return isWideCodePoint(codePoint) ? 2 : 1;
 }
 
 int consumeExtendedColor(const QVector<int> &parameters, int parameterIndex, bool foreground, QTerm::QTermCellAttributes &attributes)
@@ -269,7 +294,7 @@ void QTermInputExecutor::printNarrowRun(QStringView run)
     // DEC line drawing remaps 0x60-0x7E, so the run is not plain text then.
     if (currentScreen().lineDrawingMode) {
         for (const QChar character : run) {
-            print(QString(character));
+            print(QStringView(&character, 1));
         }
         return;
     }
@@ -324,7 +349,7 @@ void QTermInputExecutor::printNarrowRun(QStringView run)
     }
 }
 
-void QTermInputExecutor::print(const QString &text)
+void QTermInputExecutor::print(QStringView text)
 {
     // DEC line drawing translation: if active and the character is in the
     // special range 0x60-0x7e, remap to the corresponding Unicode symbol.
@@ -333,7 +358,7 @@ void QTermInputExecutor::print(const QString &text)
         if (code >= 0x60 && code <= 0x7e) {
             const QChar mapped = applyLineDrawing(text.front());
             if (mapped != text.front()) {
-                print(QString(mapped));
+                print(QStringView(&mapped, 1));
                 return;
             }
         }
@@ -347,7 +372,8 @@ void QTermInputExecutor::print(const QString &text)
             : currentScreen().cursorState.column - 1;
 
         if (targetColumn >= 0) {
-            currentScreen().buffer.lineAt(currentScreen().cursorState.row).appendCombiningMark(targetColumn, text);
+            currentScreen().buffer.lineAt(currentScreen().cursorState.row)
+                .appendCombiningMark(targetColumn, text.toString());
         }
         return;
     }
