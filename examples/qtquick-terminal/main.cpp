@@ -151,6 +151,12 @@ private:
         // The demo opens with no session, so create one the way the New Session
         // dialog does, then give the shell time to come up.
         QObject *root = engine->rootObjects().constFirst();
+        // A window macOS considers occluded has its compositing skipped, which
+        // silently makes a benchmark look faster than the app really is.
+        QQmlExpression front(qmlContext(root), root,
+                             QStringLiteral("root.raise(); root.requestActivate()"));
+        front.evaluate();
+
         if (qEnvironmentVariableIsSet("QTERM_BENCH_MAXIMIZE")) {
             QQmlExpression maximize(qmlContext(root), root,
                                     QStringLiteral("root.showMaximized()"));
