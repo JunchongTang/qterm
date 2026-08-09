@@ -38,6 +38,8 @@ class QTermWidget : public QWidget
     */
     Q_PROPERTY(QColor inverseTextColor READ inverseTextColor WRITE setInverseTextColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchHighlightColor READ searchHighlightColor WRITE setSearchHighlightColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchCurrentColor READ searchCurrentColor WRITE setSearchCurrentColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermWidget::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
@@ -102,6 +104,12 @@ public:
 
     QColor selectionColor() const;
     void setSelectionColor(const QColor &color);
+
+    QColor searchHighlightColor() const;
+    void setSearchHighlightColor(const QColor &color);
+
+    QColor searchCurrentColor() const;
+    void setSearchCurrentColor(const QColor &color);
 
     QColor cursorColor() const;
     void setCursorColor(const QColor &color);
@@ -185,6 +193,9 @@ private:
     // Invalid = derive from m_backgroundColor with alpha forced opaque.
     QColor      m_inverseTextColor;
     QColor      m_selectionColor  = QColor(QStringLiteral("#214f76"));
+    // Same amber pair as QTermQuickItem, so the two renderers agree.
+    QColor      m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};  // dim, all matches
+    QColor      m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};    // bright, current match
     QColor      m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal       m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle     = Block;

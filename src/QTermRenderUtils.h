@@ -141,6 +141,10 @@ struct QTermPaintRequest {
     // historical behaviour.
     QColor inverseText;
     QColor selection;
+    // Search matches, drawn over the selection and under the text. Invalid
+    // disables the pass, which is what a host that never calls search() gets.
+    QColor searchHighlight;
+    QColor searchCurrent;
     QColor cursor;
     qreal cursorOpacity = 1.0;
     int cursorStyle = 0;
@@ -171,6 +175,7 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
     const qreal textTopOffset = (cellH - metrics.height()) * 0.5;
     const QVariantList visibleRuns = sm->visibleLineRuns();
     const int lineCount = qMin(sm->rows(), visibleRuns.size());
+    const QVariantList searchHighlights = sm->searchHighlights();
 
     painter->setRenderHint(QPainter::TextAntialiasing, true);
 
@@ -204,6 +209,27 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
                 painter->fillRect(
                     QRectF(selStart * cellW, y, (selEnd - selStart) * cellW, cellH),
                     req.selection);
+            }
+        }
+
+        // Pass 1c: search matches. The rows carried by the highlights are
+        // viewport-relative, same as the runs, so they index directly.
+        if (req.searchHighlight.isValid() || req.searchCurrent.isValid()) {
+            for (const QVariant &hv : searchHighlights) {
+                const QVariantMap highlight = hv.toMap();
+                if (highlight.value(QStringLiteral("row")).toInt() != row)
+                    continue;
+                const bool isCurrent = highlight.value(QStringLiteral("current")).toBool();
+                const QColor tint = isCurrent ? req.searchCurrent : req.searchHighlight;
+                if (!tint.isValid())
+                    continue;
+                const int startColumn = highlight.value(QStringLiteral("startColumn")).toInt();
+                const int endColumn = highlight.value(QStringLiteral("endColumn")).toInt();
+                if (endColumn <= startColumn)
+                    continue;
+                painter->fillRect(QRectF(startColumn * cellW, y,
+                                         (endColumn - startColumn) * cellW, cellH),
+                                  tint);
             }
         }
 

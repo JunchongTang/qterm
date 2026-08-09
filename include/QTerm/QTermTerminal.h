@@ -242,6 +242,14 @@ public:
         \brief Clears the current search and its highlights.
     */
     Q_INVOKABLE void clearSearch();
+    /*!
+        \brief Returns the number of matches found by the last search().
+    */
+    int searchMatchCount() const noexcept;
+    /*!
+        \brief Returns the 1-based position of the current match, or 0 if none.
+    */
+    int searchCurrentIndex() const noexcept;
 
     /*!
         \brief Sends a key event to the attached session.
@@ -297,8 +305,6 @@ private:
     void syncSurfaceViewport();
     void syncSurfaceSelection();
 
-    int searchMatchCount() const noexcept;
-    int searchCurrentIndex() const noexcept;
     // Project stored matches (projection-row coords) onto the current viewport
     // and push to the surface model; called on every viewport change + on search.
     void syncSurfaceSearch();

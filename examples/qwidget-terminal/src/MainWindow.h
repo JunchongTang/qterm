@@ -5,11 +5,13 @@
 #include "SessionConfig.h"
 
 class QLabel;
+class QMenu;
 class QPushButton;
 class QStackedWidget;
 class QTabBar;
 class QToolButton;
 
+class SplitButton;
 class TerminalTab;
 
 // Tab strip plus a stack of terminal sessions, matching the Qt Quick demo's
@@ -22,7 +24,10 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 private:
-    void openNewSessionDialog();
+    void openNewSessionDialog(int type);
+    // A terminal with no explicit program: the backend falls back to the
+    // platform's default shell.
+    void addDefaultTerminal();
     void addTab(const SessionConfig &config);
     void closeTab(int index);
     void applyTheme();
@@ -31,7 +36,8 @@ private:
     void updateTabCloseIcons();
 
     QTabBar *m_tabBar = nullptr;
-    QPushButton *m_newTabButton = nullptr;
+    SplitButton *m_newTabButton = nullptr;
+    QMenu *m_sessionTypeMenu = nullptr;
     QPushButton *m_themeButton = nullptr;
     QStackedWidget *m_stack = nullptr;
     QWidget *m_emptyState = nullptr;

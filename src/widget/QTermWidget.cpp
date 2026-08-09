@@ -161,6 +161,20 @@ void QTermWidget::setSelectionColor(const QColor &c)
     m_selectionColor = c; update(); emit paletteChanged();
 }
 
+QColor QTermWidget::searchHighlightColor() const { return m_searchHighlightColor; }
+void QTermWidget::setSearchHighlightColor(const QColor &c)
+{
+    if (m_searchHighlightColor == c) return;
+    m_searchHighlightColor = c; update(); emit paletteChanged();
+}
+
+QColor QTermWidget::searchCurrentColor() const { return m_searchCurrentColor; }
+void QTermWidget::setSearchCurrentColor(const QColor &c)
+{
+    if (m_searchCurrentColor == c) return;
+    m_searchCurrentColor = c; update(); emit paletteChanged();
+}
+
 QColor QTermWidget::cursorColor() const { return m_cursorColor; }
 void QTermWidget::setCursorColor(const QColor &c)
 {
@@ -258,6 +272,8 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     req.background    = m_backgroundColor;
     req.inverseText   = m_inverseTextColor;
     req.selection     = m_selectionColor;
+    req.searchHighlight = m_searchHighlightColor;
+    req.searchCurrent = m_searchCurrentColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
     req.cursorStyle   = static_cast<int>(m_cursorStyle);

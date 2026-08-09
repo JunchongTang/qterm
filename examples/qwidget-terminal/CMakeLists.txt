@@ -2,9 +2,15 @@ qt_add_executable(qwidget_terminal
     main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
+    src/MenuItemWidget.cpp
+    src/MenuItemWidget.h
     src/NewSessionDialog.cpp
     src/NewSessionDialog.h
+    src/SearchBar.cpp
+    src/SearchBar.h
     src/SessionConfig.h
+    src/SplitButton.cpp
+    src/SplitButton.h
     src/TerminalTab.cpp
     src/TerminalTab.h
     src/Theme.cpp
@@ -24,6 +30,7 @@ qt_add_resources(qwidget_terminal "assets"
         assets/icons/chevron-down-dark.svg
         assets/icons/chevron-down-light.svg
         assets/icons/chevron-down.svg
+        assets/icons/chevron-up.svg
         assets/icons/close-dark.svg
         assets/icons/close-light.svg
         assets/icons/layers.svg

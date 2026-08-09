@@ -209,6 +209,90 @@ QDialog {
     background: %16;
 }
 
+/* Split button: one shared outline, each half hovering on its own. The halves
+   square off the edge they meet at so they read as a single control. */
+QWidget#splitButton {
+    background: transparent;
+    border: 1px solid %11;
+    border-radius: %7px;
+}
+QWidget#splitSeparator {
+    background: %11;
+    margin: 4px 0;
+}
+QToolButton#splitPrimary, QToolButton#splitMenu {
+    background: transparent;
+    border: none;
+}
+QToolButton#splitPrimary {
+    border-top-left-radius: %23px;
+    border-bottom-left-radius: %23px;
+}
+QToolButton#splitMenu {
+    border-top-right-radius: %23px;
+    border-bottom-right-radius: %23px;
+}
+QToolButton#splitPrimary:hover, QToolButton#splitMenu:hover {
+    background: %12;
+}
+
+/* Menus: the popover surface from the Qt Quick demo. QMenu draws its own frame,
+   so the padding keeps the items clear of the rounded corners. */
+QMenu {
+    background: %16;
+    color: %2;
+    border: 1px solid %11;
+    border-radius: %17px;
+    padding: %18px;
+}
+QMenu::item {
+    background: transparent;
+    border-radius: %24px;
+    padding: 6px %8px;
+    /* Reserves the gap between the label and the right-aligned shortcut hint. */
+    margin: 0;
+}
+QMenu::item:selected {
+    background: %12;
+}
+QMenu::item:disabled {
+    color: %4;
+}
+QMenu::separator {
+    height: 1px;
+    background: %22;
+    margin: %18px %8px;
+}
+
+/* Find bar: a floating popover over the terminal rather than a layout row,
+   which would resize the terminal and reflow the text being searched. */
+QWidget#searchBar {
+    background: %16;
+    border: 1px solid %11;
+    border-radius: %7px;
+}
+QLabel[invalid="true"] {
+    color: %15;
+}
+QToolButton#barButton, QToolButton#caseToggle {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: %24px;
+    color: %4;
+}
+QToolButton#barButton:hover, QToolButton#caseToggle:hover {
+    background: %12;
+}
+QToolButton#barButton:disabled {
+    /* QSS cannot fade an icon, so the disabled state reads from the frame. */
+    background: transparent;
+}
+QToolButton#caseToggle:checked {
+    background: %12;
+    border: 1px solid %10;
+    color: %2;
+}
+
 QToolTip {
     background: %16;
     color: %2;
@@ -239,7 +323,9 @@ QToolTip {
             .arg(css(QColor(m_dark ? QColor(255, 255, 255, 110)
                                    : QColor(0, 0, 0, 110))))   // 20
             .arg(m_dark ? QStringLiteral("dark") : QStringLiteral("light")) // 21
-            .arg(brd);                                 // 22
+            .arg(brd)                                  // 22
+            .arg(radiusMd() - 1)                       // 23: inside the 1px outline
+            .arg(radiusSm());                          // 24
 }
 
 QIcon Theme::icon(const QString &name, const QColor &color, int size) const

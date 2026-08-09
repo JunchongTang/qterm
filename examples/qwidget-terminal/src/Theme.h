@@ -30,6 +30,13 @@ public:
     QColor input() const { return m_dark ? QColor(255, 255, 255, 38) : QColor("#e5e5e5"); }
     QColor ring() const { return m_dark ? QColor("#737373") : QColor("#a1a1a1"); }
     QColor destructive() const { return m_dark ? QColor("#ff6467") : QColor("#e7000b"); }
+    /*
+        mutedForeground faded towards the surface. A style sheet cannot dim a
+        button's icon -- QStyleSheetStyle skips the style's generated disabled
+        pixmap -- so anything icon-only has to paint this tint itself to read as
+        unavailable.
+    */
+    QColor disabledForeground() const { return m_dark ? QColor("#55555c") : QColor("#c2c2c6"); }
 
     // Radii and spacing, mirroring the QML Theme singleton.
     int radiusSm() const { return 6; }

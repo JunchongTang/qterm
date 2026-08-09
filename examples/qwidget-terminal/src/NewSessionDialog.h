@@ -23,6 +23,10 @@ public:
 
     SessionConfig sessionConfig() const;
 
+    // Opens straight onto one of the three forms, so the dropdown's entries
+    // land on the page they name.
+    void selectType(int index) { selectPage(index); }
+
 private:
     QWidget *buildPtyPage();
     QWidget *buildSerialPage();

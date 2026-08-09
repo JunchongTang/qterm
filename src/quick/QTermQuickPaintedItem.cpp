@@ -175,6 +175,26 @@ void QTermQuickPaintedItem::setBackgroundColor(const QColor &backgroundColor)
     emit paletteChanged();
 }
 
+QColor QTermQuickPaintedItem::searchHighlightColor() const { return m_searchHighlightColor; }
+
+void QTermQuickPaintedItem::setSearchHighlightColor(const QColor &color)
+{
+    if (m_searchHighlightColor == color) return;
+    m_searchHighlightColor = color;
+    update();
+    emit paletteChanged();
+}
+
+QColor QTermQuickPaintedItem::searchCurrentColor() const { return m_searchCurrentColor; }
+
+void QTermQuickPaintedItem::setSearchCurrentColor(const QColor &color)
+{
+    if (m_searchCurrentColor == color) return;
+    m_searchCurrentColor = color;
+    update();
+    emit paletteChanged();
+}
+
 QColor QTermQuickPaintedItem::selectionColor() const { return m_selectionColor; }
 
 void QTermQuickPaintedItem::setSelectionColor(const QColor &selectionColor)
@@ -353,6 +373,8 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.background    = m_backgroundColor;
     req.inverseText   = m_inverseTextColor;
     req.selection     = m_selectionColor;
+    req.searchHighlight = m_searchHighlightColor;
+    req.searchCurrent = m_searchCurrentColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
     req.cursorStyle   = surfaceModel
