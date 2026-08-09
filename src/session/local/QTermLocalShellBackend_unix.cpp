@@ -5,20 +5,16 @@
 
 #include <QCoreApplication>
 #include <QFile>
+#include <QSocketNotifier>
 #include <QTimer>
 
 #include <cerrno>
-#include <condition_variable>
 #include <cstring>
 #include <fcntl.h>
-#include <functional>
-#include <mutex>
-#include <poll.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <thread>
 #include <unistd.h>
 
 #if defined(Q_OS_MACOS) || defined(Q_OS_FREEBSD)
@@ -46,191 +42,21 @@ QString childExitMessage(int status)
     return QString();
 }
 
-// Reading is throttled once this much delivered-but-unparsed data is
-// outstanding. A pty normally throttles a chatty program by blocking its
-// writes when the buffer fills; draining the master as fast as possible
-// removes that brake, so without a limit here an endless producer such as
-// yes(1) would queue without bound.
-constexpr qsizetype kMaximumPendingBytes = 4 * 1024 * 1024;
-
-constexpr qsizetype kReadChunkSize = 65536;
-
 } // namespace
 
 namespace QTerm {
 
-/*
-    Drains a pty master on a dedicated thread.
-
-    A QSocketNotifier is simpler and was what this backend used originally, but
-    on macOS it wakes the GUI thread through CFSocket. Sampling a 1M-line stream
-    showed that wake-up dominating: the GUI thread spent 258 of 516 samples in
-    __CFSocketPerformV0 and another 123 waiting in mach_msg, leaving only about
-    half its time for actual parsing. Reading with a blocking poll() here and
-    posting the bytes across took the same stream from 0.441 s to 0.116 s.
-
-    A self-pipe rather than closing the fd is used to unblock poll() on stop,
-    so there is no window in which a recycled descriptor could be read.
-*/
-class QTermPtyReader
-{
-public:
-    using DataHandler = std::function<void(const QByteArray &)>;
-    using EndHandler = std::function<void(int)>; // errno, or 0 for a clean EOF
-
-    ~QTermPtyReader() { stop(); }
-
-    // Handlers run on the thread owning `context`.
-    void start(int masterFd, QObject *context, DataHandler onData, EndHandler onEnd)
-    {
-        stop();
-        if (::pipe(m_wakePipe) != 0) {
-            m_wakePipe[0] = m_wakePipe[1] = -1;
-            return;
-        }
-        m_stopping = false;
-        m_pending = 0;
-        m_thread = std::thread([this, masterFd, context,
-                                onData = std::move(onData), onEnd = std::move(onEnd)] {
-            run(masterFd, context, onData, onEnd);
-        });
-    }
-
-    void stop()
-    {
-        if (!m_thread.joinable())
-            return;
-        {
-            const std::lock_guard<std::mutex> guard(m_mutex);
-            m_stopping = true;
-        }
-        m_space.notify_all();
-        if (m_wakePipe[1] >= 0) {
-            const char byte = 0;
-            while (::write(m_wakePipe[1], &byte, 1) < 0 && errno == EINTR) { }
-        }
-        m_thread.join();
-        closeWakePipe();
-    }
-
-    // Called on the consumer thread once a delivered chunk has been parsed.
-    void acknowledge(qsizetype bytes)
-    {
-        {
-            const std::lock_guard<std::mutex> guard(m_mutex);
-            m_pending -= bytes;
-        }
-        m_space.notify_all();
-    }
-
-private:
-    void closeWakePipe()
-    {
-        for (int &fd : m_wakePipe) {
-            if (fd >= 0) {
-                ::close(fd);
-                fd = -1;
-            }
-        }
-    }
-
-    // Blocks while the consumer is behind. Returns false if asked to stop.
-    bool awaitCapacity()
-    {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_space.wait(lock, [this] {
-            return m_stopping || m_pending < kMaximumPendingBytes;
-        });
-        return !m_stopping;
-    }
-
-    void run(int masterFd, QObject *context,
-             const DataHandler &onData, const EndHandler &onEnd)
-    {
-        QByteArray buffer(kReadChunkSize, Qt::Uninitialized);
-        int endReason = 0;
-
-        for (;;) {
-            if (!awaitCapacity())
-                return; // stopping: the consumer is going away, stay silent
-
-            struct pollfd fds[2] = {};
-            fds[0].fd = masterFd;
-            fds[0].events = POLLIN;
-            fds[1].fd = m_wakePipe[0];
-            fds[1].events = POLLIN;
-
-            const int ready = ::poll(fds, 2, -1);
-            if (ready < 0) {
-                if (errno == EINTR)
-                    continue;
-                endReason = errno;
-                break;
-            }
-            if (fds[1].revents != 0)
-                return; // asked to stop
-
-            bool ended = false;
-            for (;;) {
-                const ssize_t bytesRead =
-                    ::read(masterFd, buffer.data(), static_cast<size_t>(buffer.size()));
-                if (bytesRead > 0) {
-                    QByteArray chunk(buffer.constData(), static_cast<qsizetype>(bytesRead));
-                    {
-                        const std::lock_guard<std::mutex> guard(m_mutex);
-                        m_pending += chunk.size();
-                    }
-                    const qsizetype delivered = chunk.size();
-                    QMetaObject::invokeMethod(context,
-                        [this, onData, chunk = std::move(chunk), delivered] {
-                            onData(chunk);
-                            acknowledge(delivered);
-                        }, Qt::QueuedConnection);
-                    continue;
-                }
-                if (bytesRead == 0) {
-                    ended = true; // EOF
-                    break;
-                }
-                if (errno == EINTR)
-                    continue;
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    break; // drained; back to poll()
-                // EIO is how a pty reports that the child closed its side.
-                ended = true;
-                endReason = (errno == EIO) ? 0 : errno;
-                break;
-            }
-            if (ended)
-                break;
-
-            // POLLHUP on its own (no data left) also means the child is gone.
-            if ((fds[0].revents & (POLLHUP | POLLERR)) != 0
-                && (fds[0].revents & POLLIN) == 0) {
-                break;
-            }
-        }
-
-        // Queued behind every chunk already posted, so the consumer sees all
-        // the data before it sees the end.
-        QMetaObject::invokeMethod(context, [onEnd, endReason] { onEnd(endReason); },
-                                  Qt::QueuedConnection);
-    }
-
-    std::thread m_thread;
-    std::mutex m_mutex;
-    std::condition_variable m_space;
-    qsizetype m_pending = 0;
-    bool m_stopping = false;
-    int m_wakePipe[2] = {-1, -1};
-};
-
 QTermLocalShellBackend::QTermLocalShellBackend(QObject *parent)
     : QTermSessionBackend(parent)
-    , m_reader(std::make_unique<QTermPtyReader>())
+    , m_readNotifier(new QSocketNotifier(QSocketNotifier::Read, this))
     , m_resizeDebounceTimer(new QTimer(this))
     , m_childExitPollTimer(new QTimer(this))
 {
+    m_readNotifier->setEnabled(false);
+    connect(m_readNotifier, &QSocketNotifier::activated, this, [this]() {
+        handleReadable();
+    });
+
     m_resizeDebounceTimer->setSingleShot(true);
     m_resizeDebounceTimer->setInterval(kResizeDebounceIntervalMs);
     connect(m_resizeDebounceTimer, &QTimer::timeout, this, [this]() {
@@ -343,13 +169,8 @@ void QTermLocalShellBackend::open()
     if (flags >= 0)
         ::fcntl(m_masterFd, F_SETFL, flags | O_NONBLOCK);
 
-    m_childReaped = false;
-    m_readEnded = false;
-    m_childExitMessage.clear();
-
-    m_reader->start(m_masterFd, this,
-                    [this](const QByteArray &data) { handleReadData(data); },
-                    [this](int error) { handleReadEnded(error); });
+    m_readNotifier->setSocket(m_masterFd);
+    m_readNotifier->setEnabled(true);
     m_childExitPollTimer->start();
     setState(Open);
 }
@@ -364,10 +185,6 @@ void QTermLocalShellBackend::close()
 
     if (state() != Closed)
         setState(Closing);
-
-    // An explicit close is a decision to stop now, so unlike an exiting child
-    // this does not wait for buffered output to drain.
-    m_readEnded = true;
 
     if (m_childPid > 0)
         ::kill(static_cast<pid_t>(m_childPid), SIGHUP);
@@ -430,58 +247,58 @@ void QTermLocalShellBackend::applyPendingResize()
     ::ioctl(m_masterFd, TIOCSWINSZ, &winsizeData);
 }
 
-void QTermLocalShellBackend::handleReadData(const QByteArray &data)
+void QTermLocalShellBackend::handleReadable()
 {
-    if (data.isEmpty())
+    if (m_masterFd < 0)
         return;
 
-    emitDataReceived(data);
-}
+    QByteArray chunk(65536, Qt::Uninitialized);
+    QByteArray batch;
 
-// Posted by the reader thread after every chunk it read, so all output has
-// already been delivered by the time this runs.
-void QTermLocalShellBackend::handleReadEnded(int error)
-{
-    if (m_readEnded)
-        return;
-    m_readEnded = true;
+    for (;;) {
+        const ssize_t bytesRead = ::read(m_masterFd, chunk.data(), static_cast<size_t>(chunk.size()));
+        if (bytesRead > 0) {
+            batch.append(chunk.constData(), static_cast<qsizetype>(bytesRead));
+            continue;
+        }
 
-    if (error != 0) {
-        emitErrorOccurred(ConnectionLost,
-                          QStringLiteral("PTY read failed: %1")
-                              .arg(QString::fromLocal8Bit(std::strerror(error))));
+        if (bytesRead == 0) {
+            if (!batch.isEmpty())
+                emitDataReceived(batch);
+            closeMasterFd();
+            pollChildExit();
+            return;
+        }
+
+        if (errno == EINTR)
+            continue;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            break;
+
+        if (errno == EIO) {
+            if (!batch.isEmpty())
+                emitDataReceived(batch);
+            closeMasterFd();
+            pollChildExit();
+            return;
+        }
+
+        if (!batch.isEmpty())
+            emitDataReceived(batch);
+        emitErrorOccurred(ConnectionLost, QStringLiteral("PTY read failed: %1").arg(QString::fromLocal8Bit(std::strerror(errno))));
         close();
         return;
     }
 
-    // Clean EOF, or EIO which is how a pty reports the child closing its side.
-    closeMasterFd();
-    finishIfDrained();
-}
-
-void QTermLocalShellBackend::finishIfDrained()
-{
-    if (!m_childReaped || !m_readEnded)
-        return;
-
-    stopRuntimeWatchers();
-
-    if (!m_childExitMessage.isEmpty()) {
-        const QString message = m_childExitMessage;
-        m_childExitMessage.clear();
-        emitErrorOccurred(ConnectionLost, message);
-        return;
-    }
-
-    setState(Closed);
+    if (!batch.isEmpty())
+        emitDataReceived(batch);
 }
 
 void QTermLocalShellBackend::pollChildExit()
 {
     if (m_childPid < 0) {
-        m_childReaped = true;
-        m_childExitPollTimer->stop();
-        finishIfDrained();
+        stopRuntimeWatchers();
         return;
     }
 
@@ -490,32 +307,36 @@ void QTermLocalShellBackend::pollChildExit()
     if (waitResult == 0)
         return;
 
-    // The child is gone, but output it wrote before exiting may still be in the
-    // pty buffer. Stop polling and leave the reader running: the session is not
-    // finished until that output has been read, or it would be lost.
-    m_childExitPollTimer->stop();
+    stopRuntimeWatchers();
     m_childPid = -1;
-    m_childReaped = true;
-    if (waitResult > 0)
-        m_childExitMessage = childExitMessage(status);
 
-    finishIfDrained();
+    if (waitResult < 0) {
+        setState(Closed);
+        return;
+    }
+
+    const QString exitMessage = childExitMessage(status);
+    if (!exitMessage.isEmpty()) {
+        emitErrorOccurred(ConnectionLost, exitMessage);
+        return;
+    }
+
+    setState(Closed);
 }
 
 void QTermLocalShellBackend::closeMasterFd()
 {
     if (m_masterFd < 0)
         return;
-    // The reader thread is using this descriptor, so it has to be joined before
-    // the descriptor is closed and possibly recycled.
-    m_reader->stop();
+    m_readNotifier->setEnabled(false);
+    m_readNotifier->setSocket(-1);
     ::close(m_masterFd);
     m_masterFd = -1;
 }
 
 void QTermLocalShellBackend::stopRuntimeWatchers()
 {
-    m_reader->stop();
+    m_readNotifier->setEnabled(false);
     m_resizeDebounceTimer->stop();
     m_childExitPollTimer->stop();
 }
