@@ -194,6 +194,8 @@ const QVector<int> &QTermTextParser::parseCsiParameters(const QString &text)
     QVector<int> &parameters = m_csiParameterValues;
     parameters.clear();
     parameters.reserve(8); // more than any real sequence uses
+    m_csiParameterIsSub.clear();
+    m_csiParameterIsSub.reserve(8);
 
     QStringView view(text);
     if (!view.isEmpty() && (view.front() == u'?' || view.front() == u'>')) {
@@ -212,19 +214,24 @@ const QVector<int> &QTermTextParser::parseCsiParameters(const QString &text)
     // parameter. Tracking validity reproduces that exactly, so a malformed
     // sequence still parses the way it always did.
     bool valid = true;
+    // Whether the value being accumulated was introduced by a colon.
+    bool isSub = false;
     for (const QChar character : view) {
         const char16_t unit = character.unicode();
         if (unit >= u'0' && unit <= u'9') {
             value = qMin(value * 10 + (unit - u'0'), maximumValue);
         } else if (unit == u';' || unit == u':') {
             parameters.append(valid ? value : 0);
+            m_csiParameterIsSub.append(isSub ? 1 : 0);
             value = 0;
             valid = true;
+            isSub = (unit == u':');
         } else {
             valid = false;
         }
     }
     parameters.append(valid ? value : 0);
+    m_csiParameterIsSub.append(isSub ? 1 : 0);
 
     return parameters;
 }
@@ -360,7 +367,7 @@ void QTermTextParser::handleCsiFinal(bool privateMode, bool secondaryMode, QChar
         executor.linePositionAbsolute(parameterAt(parameters, 0, 1) - 1);
         break;
     case 'm':
-        executor.characterAttributes(parameters);
+        executor.characterAttributes(parameters, csiSubParameterFlags());
         break;
     case 'n':
         if (parameterAt(parameters, 0, 0) == 6) {
