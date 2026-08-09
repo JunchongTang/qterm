@@ -59,7 +59,7 @@ QTermViewController::QTermViewController(QObject *parent)
         syncTerminalSize();
     });
 
-    // 点击连击重置：360ms 内无新点击则归零
+    // A click run ends when nothing follows within 360 ms.
     m_clickResetTimer->setSingleShot(true);
     m_clickResetTimer->setInterval(360);
     connect(m_clickResetTimer, &QTimer::timeout, this, [this]() {
@@ -68,7 +68,7 @@ QTermViewController::QTermViewController(QObject *parent)
         m_lastClickColumn = -1;
     });
 
-    // 选区超出边界时自动滚动，35ms 一次
+    // While a drag is past an edge, auto-scroll every 35 ms.
     m_selectionAutoScrollTimer->setSingleShot(false);
     m_selectionAutoScrollTimer->setInterval(35);
     connect(m_selectionAutoScrollTimer, &QTimer::timeout, this, [this]() {
@@ -93,7 +93,7 @@ QTermViewController::QTermViewController(QObject *parent)
 #endif
 }
 
-// ── Terminal 绑定 ──────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermViewController::terminal() const noexcept
 {
@@ -125,7 +125,7 @@ void QTermViewController::setTerminal(QTermTerminal *terminal)
     emit scrollChanged();
 }
 
-// ── 字体 / 尺寸 ───────────────────────────────────────────────────────────────
+// ── Font and metrics ─────────────────────────────────────────────────────────
 
 QString QTermViewController::fontFamily() const
 {
@@ -164,7 +164,7 @@ qreal QTermViewController::cellHeight() const noexcept
     return m_cellHeight;
 }
 
-// ── 几何通知 ──────────────────────────────────────────────────────────────────
+// ── Geometry ─────────────────────────────────────────────────────────────────
 
 void QTermViewController::notifyGeometryChanged(qreal w, qreal h)
 {
@@ -174,13 +174,13 @@ void QTermViewController::notifyGeometryChanged(qreal w, qreal h)
 
     if (w > 0.0 && h > 0.0) {
         if (wasEmpty)
-            syncTerminalSize();       // 第一次真实尺寸：立即同步
+            syncTerminalSize();        // first real size: apply it at once
         else
-            scheduleTerminalSizeSync(); // 后续尺寸变化：防抖
+            scheduleTerminalSizeSync(); // later changes: debounce, a drag sends many
     }
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermViewController::scrollSize() const noexcept
 {
@@ -196,7 +196,7 @@ qreal QTermViewController::scrollPosition() const noexcept
     if (!m_terminal || m_terminal->maxScrollOffset() <= 0) return 0.0;
     const qreal trackSpan = 1.0 - scrollSize();
     if (trackSpan <= 0.0) return 0.0;
-    // scrollOffset=0 → 底部 → position=trackSpan；scrollOffset=max → 顶部 → position=0
+    // scrollOffset 0 is the bottom (position = trackSpan); max is the top (0).
     return trackSpan * (1.0 - static_cast<qreal>(m_terminal->scrollOffset())
                                    / m_terminal->maxScrollOffset());
 }
@@ -212,7 +212,7 @@ void QTermViewController::setScrollPosition(qreal position)
     if (delta != 0) m_terminal->scrollByLines(delta);
 }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermViewController::rowAtPosition(qreal y) const
 {
@@ -249,7 +249,7 @@ int QTermViewController::hyperlinkIdAtPosition(int row, int col) const
     return 0;
 }
 
-// ── 鼠标协议状态查询 ──────────────────────────────────────────────────────────
+// ── Mouse protocol state ─────────────────────────────────────────────────────
 
 bool QTermViewController::mouseProtocolEnabled() const
 {
@@ -263,7 +263,7 @@ bool QTermViewController::hoverEventsNeeded() const
     return m_terminal->isHoverTrackingActive();
 }
 
-// ── IME 光标矩形 ──────────────────────────────────────────────────────────────
+// ── IME cursor rectangle ─────────────────────────────────────────────────────
 
 QRectF QTermViewController::cursorRect() const
 {
@@ -276,7 +276,7 @@ QRectF QTermViewController::cursorRect() const
                   m_cellHeight);
 }
 
-// ── 输入事件分发 ──────────────────────────────────────────────────────────────
+// ── Input dispatch ───────────────────────────────────────────────────────────
 
 bool QTermViewController::handleKeyPress(QKeyEvent *event)
 {
@@ -284,7 +284,8 @@ bool QTermViewController::handleKeyPress(QKeyEvent *event)
 
     if (m_terminal->scrollOffset() > 0)
         m_terminal->scrollToBottom();
-    // macOS 下 Ctrl+字母 的 text 可能为空，sendKey 的 encoder 会合成控制字符
+    // On macOS Ctrl+letter can arrive with empty text; the encoder in sendKey
+    // synthesises the control character from the key and modifiers instead.
     m_terminal->sendKey(event->key(), event->text());
     return true;
 }
@@ -299,7 +300,8 @@ bool QTermViewController::handleInputMethod(QInputMethodEvent *event)
             m_terminal->scrollToBottom();
         m_terminal->sendPaste(commit);
     }
-    // preedit 由 Qt 平台插件在候选框中显示，无需额外处理
+    // Preedit text is drawn by the platform plugin in its own candidate window,
+    // so there is nothing to do here.
     return true;
 }
 
@@ -320,7 +322,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
     const int row = rowAtPosition(event->position().y());
     const int col = columnAtPosition(event->position().x());
 
-    // OSC 8 超链接：Cmd+单击（macOS: ControlModifier = ⌘）
+    // OSC 8 hyperlink activation is Cmd+click (Qt maps ControlModifier to Cmd).
     if (event->modifiers() & Qt::ControlModifier) {
         const int hyperlinkId = hyperlinkIdAtPosition(row, col);
         if (hyperlinkId > 0) {
@@ -332,7 +334,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
         }
     }
 
-    // 连击检测
+    // Click-run detection
     if (m_clickResetTimer->isActive() && m_lastClickRow == row && m_lastClickColumn == col)
         m_clickStreak += 1;
     else
@@ -343,7 +345,7 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
     m_clickResetTimer->start();
 
     if (m_clickStreak >= 3) {
-        // 三击：选整逻辑行
+        // Triple click selects the whole logical line.
         m_selectionAnchorRow    = -1;
         m_selectionAnchorColumn = -1;
         m_selectionAnchorProjectionRow = -1;
@@ -408,9 +410,9 @@ bool QTermViewController::handleMouseMove(QMouseEvent *event)
     updateSelectionFromDrag(m_dragX, m_dragY);
 
     if (m_dragY < 0)
-        m_autoScrollDirection = 1;           // 超出上边界 → 向上滚
+        m_autoScrollDirection = 1;           // past the top edge: scroll up
     else if (m_dragY > m_viewHeight)
-        m_autoScrollDirection = -1;          // 超出下边界 → 向下滚
+        m_autoScrollDirection = -1;          // past the bottom edge: scroll down
     else
         m_autoScrollDirection = 0;
 
@@ -500,7 +502,8 @@ bool QTermViewController::handleWheel(QWheelEvent *event)
     }
 
     if (m_terminal->isMouseProtocolActive() && angleDelta.y() != 0) {
-        // 鼠标协议启用：虚拟按钮码 64=向上、65=向下（X10/SGR 滚轮约定）
+        // With mouse reporting on, a wheel event is a button press: the X10 and
+        // SGR conventions use the synthetic codes 64 for up and 65 for down.
         const int wheelButton = angleDelta.y() > 0 ? 64 : 65;
         m_terminal->sendMouse(
             rowAtPosition(event->position().y()),

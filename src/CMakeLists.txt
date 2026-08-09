@@ -54,7 +54,8 @@ qt_add_library(qterm STATIC
     session/QTermSessionBackend.cpp
 )
 
-# QTermWidget 是 QWidget 版本——纯 QML app 不用它，关掉可以省 QtWidgets。
+# QTermWidget is the QWidget frontend. A pure QML application does not need
+# it, and turning it off drops the dependency on QtWidgets.
 if(QTERM_WITH_WIDGETS)
     target_sources(qterm PRIVATE
         ../include/QTerm/QTermWidget.h

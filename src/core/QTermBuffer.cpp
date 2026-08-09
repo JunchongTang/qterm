@@ -571,7 +571,8 @@ QByteArray sgrTransition(const QTermCellAttributes *prev,
 
 QByteArray QTermBuffer::dumpAnsi(int maxLines) const
 {
-    // 把 scrollback + visible 一起拼成 projection list；保留指针避免拷贝大 line。
+    // Scrollback and visible rows form one projection list. Pointers are kept
+    // rather than copies, since a line can be large.
     QVector<const QTermLine *> projection;
     projection.reserve(m_historyLines.size() + m_visibleLines.size());
     for (const QTermLine &l : m_historyLines) projection.append(&l);
@@ -595,7 +596,7 @@ QByteArray QTermBuffer::dumpAnsi(int maxLines) const
     for (int i = firstIndex; i <= lastRelevantIndex; ++i) {
         const QTermLine &line = *projection.at(i);
         const int cols = line.columns();
-        // 行末空白裁掉——找最后一个真正写过的列。
+        // Trim trailing blanks by finding the last column actually written.
         int lineEnd = -1;
         for (int c = 0; c < cols; ++c) {
             const QString cellText = line.textAt(c);
@@ -604,7 +605,8 @@ QByteArray QTermBuffer::dumpAnsi(int maxLines) const
         }
         for (int c = 0; c <= lineEnd; ++c) {
             const QTermCell &cell = line.cellAt(c);
-            // 宽字符的第二列已被前一格的 text（含两列宽字）覆盖，跳过。
+            // The second half of a wide character was already emitted with the
+            // first, so skip it.
             if (cell.continuation)
                 continue;
             out.append(sgrTransition(havePrev ? &prevAttrs : nullptr, cell.attributes));
@@ -612,17 +614,17 @@ QByteArray QTermBuffer::dumpAnsi(int maxLines) const
             havePrev = true;
             const QString cellText = line.textAt(c);
             if (cellText.isEmpty())
-                out.append(' ');             // 空格补位
+                out.append(' ');             // pad the gap
             else
                 out.append(cellText.toUtf8());
         }
-        // 软换行（line wrap）不发 \r\n，让 feedText 自己继续接；
-        // 末行也不发 \r\n，免得多一行空行。
+        // A soft wrap emits no CRLF, so feeding the dump back re-wraps it the
+        // same way. The final line omits it too, to avoid a trailing blank row.
         const bool isLast = (i == lastRelevantIndex);
         if (!isLast && !line.wrappedToNextLine())
             out.append("\r\n", 2);
     }
-    // 收尾 reset，免得后续真实输出继承我们的 SGR 状态。
+    // Reset at the end so real output afterwards does not inherit this SGR state.
     if (havePrev)
         out.append("\x1b[0m", 4);
     return out;

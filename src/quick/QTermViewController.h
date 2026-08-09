@@ -28,11 +28,11 @@ class QTermViewController : public QObject
 public:
     explicit QTermViewController(QObject *parent = nullptr);
 
-    // ── Terminal 绑定 ──────────────────────────────────────────────────────
+    // ── Terminal binding ───────────────────────────────────────────────────
     QTermTerminal *terminal() const noexcept;
     void setTerminal(QTermTerminal *terminal);
 
-    // ── 字体 / 字元尺寸 ────────────────────────────────────────────────────
+    // ── Font and cell metrics ──────────────────────────────────────────────
     QString fontFamily() const;
     void setFontFamily(const QString &family);
 
@@ -42,27 +42,27 @@ public:
     qreal cellWidth() const noexcept;
     qreal cellHeight() const noexcept;
 
-    // ── 几何通知（Widget 在 geometryChange / resizeEvent 里调用） ──────────
+    // ── Geometry, reported from geometryChange() / resizeEvent() ───────────
     void notifyGeometryChanged(qreal w, qreal h);
 
-    // ── 滚动位置（对接 QML ScrollBar 的 position / size） ─────────────────
+    // ── Scroll position, matching QML ScrollBar's position / size ──────────
     qreal scrollPosition() const noexcept;
     void setScrollPosition(qreal position);
     qreal scrollSize() const noexcept;
 
-    // ── 坐标辅助 ───────────────────────────────────────────────────────────
+    // ── Coordinate helpers ─────────────────────────────────────────────────
     int rowAtPosition(qreal y) const;
     int columnAtPosition(qreal x) const;
     int hyperlinkIdAtPosition(int row, int col) const;
 
-    // ── 鼠标协议状态（Widget 据此设置 setAcceptedMouseButtons / setAcceptHoverEvents） ──
+    // ── Mouse protocol state, driving the view's accepted buttons and hovering ──
     bool mouseProtocolEnabled() const;
     bool hoverEventsNeeded() const;
 
-    // ── IME 光标矩形（用于 Qt::ImCursorRectangle 查询） ───────────────────
+    // ── IME cursor rectangle, answering Qt::ImCursorRectangle ──────────────
     QRectF cursorRect() const;
 
-    // ── 输入事件分发（返回 true = 事件已消耗，Widget 调用 event->accept()） ─
+    // ── Input dispatch; true means handled, so the view accepts the event ───
     bool handleKeyPress(QKeyEvent *event);
     bool handleInputMethod(QInputMethodEvent *event);
     bool handleMousePress(QMouseEvent *event);
@@ -74,7 +74,7 @@ public:
 
 signals:
     void terminalChanged();
-    void metricsChanged();          // cellWidth/Height 变化 → Widget 需要 repaint + resize
+    void metricsChanged();          // cell metrics changed: repaint and resize
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
     // Ctrl (⌘ on macOS) + wheel "zoom intent": steps>0 zoom in, <0 zoom out
@@ -83,12 +83,12 @@ signals:
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
-    void mouseAcceptanceChanged();  // Widget 应重新调用 updateMouseAcceptance()
-    void focusRequested();          // Widget 应调用 forceActiveFocus()
-    void repaintNeeded();           // surface 内容或滚动变化 → Widget 调用 update()
-    void cursorUpdateNeeded();      // 光标位置/可见性变化 → Widget 更新 delegate 几何
-    void selectionChanged();        // 选区变化 → SG Widget 仅更新 selection geometry
-    void contentRowsDirty(QVector<int> rows); // 增量更新：部分行内容变化
+    void mouseAcceptanceChanged();  // the view should call updateMouseAcceptance()
+    void focusRequested();          // the view should call forceActiveFocus()
+    void repaintNeeded();           // surface content or scroll changed: update()
+    void cursorUpdateNeeded();      // cursor moved or changed visibility
+    void selectionChanged();        // selection changed; the SG path redraws only that
+    void contentRowsDirty(QVector<int> rows); // only these rows changed
 
 private:
     void reconnectSurfaceModel();
@@ -98,7 +98,7 @@ private:
     void syncTerminalSize();
     void updateSelectionFromDrag(qreal x, qreal y);
 
-    // ── signal 连接句柄 ─────────────────────────────────────────────────────
+    // ── Signal connection handles ──────────────────────────────────────────
     QMetaObject::Connection m_viewportConnection;
     QMetaObject::Connection m_modeStateConnection;
     QMetaObject::Connection m_surfaceSizeConnection;
@@ -109,7 +109,7 @@ private:
     QMetaObject::Connection m_surfacePartialRunsConnection;
     QMetaObject::Connection m_surfaceDestroyedConnection;
 
-    // ── 状态 ────────────────────────────────────────────────────────────────
+    // ── State ──────────────────────────────────────────────────────────────
     QPointer<QTermTerminal> m_terminal;
 
     QTimer *m_resizeDebounceTimer    = nullptr;
@@ -129,7 +129,7 @@ private:
     qreal   m_viewWidth     = 0.0;
     qreal   m_viewHeight    = 0.0;
 
-    // ── 鼠标 / 选区内部状态 ─────────────────────────────────────────────────
+    // ── Mouse and selection internals ──────────────────────────────────────
     int   m_clickStreak            = 0;
     int   m_lastClickRow           = -1;
     int   m_lastClickColumn        = -1;
@@ -142,7 +142,7 @@ private:
     bool  m_suppressSelectionRelease = false;
     qreal m_dragX                  = 0.0;
     qreal m_dragY                  = 0.0;
-    int   m_autoScrollDirection    = 0; // +1 = 向上, -1 = 向下
+    int   m_autoScrollDirection    = 0; // +1 = up, -1 = down
     // The wheel scrolls by "rows", but trackpads/Magic Mouse send high-resolution
     // pixel deltas (and fire high-frequency events during momentum). Pixels are
     // converted to fractional rows and accumulated here, scrolling only once a whole

@@ -200,7 +200,7 @@ private:
             ::exit(1);
         }
 
-        qInfo().noquote() << QStringLiteral("  grid %1x%2  渲染器 %3")
+        qInfo().noquote() << QStringLiteral("  grid %1x%2  renderer %3")
                                  .arg(m_terminal->columns()).arg(m_terminal->rows())
                                  .arg(qEnvironmentVariableIsSet("QTERM_BENCH_PAINTER")
                                           ? "QPainter" : "SceneGraph");
@@ -255,7 +255,7 @@ private:
                     if (!line.contains(u"total"))
                         continue;
                     qInfo().noquote()
-                        << QStringLiteral("  末行显示 %1 s   shell 报告: %2")
+                        << QStringLiteral("  last line on screen %1 s   shell reported: %2")
                                .arg(m_lastLineAt, 0, 'f', 3).arg(line.trimmed());
                     ::exit(0);
                 }

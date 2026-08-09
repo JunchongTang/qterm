@@ -550,7 +550,7 @@ void QTermQuickItem::scheduleRowsDirty(QVector<int> rows)
     requestFrame();
 }
 
-// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermQuickItem::terminal() const noexcept
 {
@@ -563,7 +563,7 @@ void QTermQuickItem::setTerminal(QTermTerminal *terminal)
     scheduleFullDirty();
 }
 
-// ── 字体 ──────────────────────────────────────────────────────────────────────
+// ── Font ─────────────────────────────────────────────────────────────────────
 
 QString QTermQuickItem::fontFamily() const
 {
@@ -597,7 +597,7 @@ void QTermQuickItem::setFontPixelSize(int fontPixelSize)
 qreal QTermQuickItem::cellWidth() const noexcept { return m_controller->cellWidth(); }
 qreal QTermQuickItem::cellHeight() const noexcept { return m_controller->cellHeight(); }
 
-// ── 调色板 ────────────────────────────────────────────────────────────────────
+// ── Palette ──────────────────────────────────────────────────────────────────
 
 QColor QTermQuickItem::foregroundColor() const { return m_foregroundColor; }
 
@@ -697,7 +697,7 @@ void QTermQuickItem::setCursorOpacity(qreal cursorOpacity)
     emit cursorOpacityChanged();
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermQuickItem::scrollSize() const noexcept { return m_controller->scrollSize(); }
 qreal QTermQuickItem::scrollPosition() const noexcept { return m_controller->scrollPosition(); }
@@ -707,7 +707,7 @@ void QTermQuickItem::setScrollPosition(qreal position)
     m_controller->setScrollPosition(position);
 }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermQuickItem::rowAtPosition(qreal y) const { return m_controller->rowAtPosition(y); }
 int QTermQuickItem::columnAtPosition(qreal x) const { return m_controller->columnAtPosition(x); }

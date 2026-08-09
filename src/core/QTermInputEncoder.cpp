@@ -69,12 +69,12 @@ QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton b
                                            Qt::KeyboardModifiers modifiers, bool isPress,
                                            const QTermModeState &modeState, bool isMotion)
 {
-    // 鼠标跟踪禁用则不编码
+    // Nothing to encode while mouse tracking is off.
     if (modeState.mouseTracking == MouseTracking::Disabled) {
         return QByteArray();
     }
 
-    // 确定基础按钮码（与 isPress/isMotion 无关）
+    // Base button code, independent of press versus motion.
     int buttonCode;
     switch (button) {
     case Qt::LeftButton:   buttonCode = 0; break;
@@ -82,28 +82,29 @@ QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton b
     case Qt::RightButton:  buttonCode = 2; break;
     case Qt::NoButton:     buttonCode = 3; break;
     default:
-        if (static_cast<int>(button) == 64)       buttonCode = 64;  // 滚轮向上
-        else if (static_cast<int>(button) == 65)  buttonCode = 65;  // 滚轮向下
+        if (static_cast<int>(button) == 64)       buttonCode = 64;  // wheel up
+        else if (static_cast<int>(button) == 65)  buttonCode = 65;  // wheel down
         else                                       buttonCode = 3;
         break;
     }
 
-    // 移动事件（拖拽/悬停）：在按钮码上加 32
-    // buttonCode 3（NoButton）+ 32 = 35（无按键移动）
-    // buttonCode 0（左键）  + 32 = 32（左键拖拽）
+    // Motion (a drag or a hover) adds 32 to the button code:
+    //   3 (no button) + 32 = 35, motion with nothing held
+    //   0 (left)      + 32 = 32, a left-button drag
     if (isMotion) {
         buttonCode += 32;
     }
 
-    // X10/基础格式下，释放事件统一编码为 button=3（不区分具体按键）
-    // SGR/URXVT 格式保留原始按钮码，用 M/m 区分按下/释放
+    // The X10 format cannot say which button was released, so every release is
+    // reported as button 3. SGR and URXVT keep the real code and tell a press
+    // from a release with the final M or m.
     const bool isSGRFamily = (modeState.mouseEncoding == MouseEncoding::SGR ||
                               modeState.mouseEncoding == MouseEncoding::URXVT);
     if (!isPress && !isMotion && !isSGRFamily) {
         buttonCode = 3;
     }
 
-    // 修饰符编码（Shift +4, Ctrl +8, Alt +16）
+    // Modifiers: Shift adds 4, Ctrl 8, Alt 16.
     int modifierCode = 0;
     if (modifiers & Qt::ShiftModifier) {
         modifierCode += 4;
@@ -118,7 +119,7 @@ QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton b
     const int x = column + 1;
     const int y = row + 1;
 
-    // SGR 扩展格式 (?1006)
+    // SGR extended format (?1006)
     if (modeState.mouseEncoding == MouseEncoding::SGR) {
         // ESC [ < button ; x ; y M/m
         return QByteArray("\x1b[<") + QByteArray::number(buttonCode + modifierCode) +
@@ -127,7 +128,7 @@ QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton b
                (isPress ? 'M' : 'm');
     }
 
-    // URXVT 格式 (?1015)
+    // URXVT format (?1015)
     if (modeState.mouseEncoding == MouseEncoding::URXVT) {
         // ESC [ button ; x ; y M
         return QByteArray("\x1b[") + QByteArray::number(buttonCode + modifierCode) +
@@ -136,10 +137,10 @@ QByteArray QTermInputEncoder::encodeMouse(int row, int column, Qt::MouseButton b
                'M';
     }
 
-    // 基础格式 X10/Button/AnyEvent (?1000, ?1002, ?1003)
+    // Base X10 / Button / AnyEvent formats (?1000, ?1002, ?1003)
     // ESC [ M <button> <x> <y>
-    // button/x/y are 单字节，范围 0-255（通常映射到 ASCII）
-    // x = column + 33, y = row + 33（VT100 编码）
+    // Button and coordinates are single bytes, so each is offset by 33 to keep
+    // it in printable ASCII: x = column + 33, y = row + 33 (the VT100 encoding).
     const unsigned char buttonByte = static_cast<unsigned char>(buttonCode + modifierCode + 0x20);
     const unsigned char xByte = static_cast<unsigned char>(std::min(255, column + 33));
     const unsigned char yByte = static_cast<unsigned char>(std::min(255, row + 33));

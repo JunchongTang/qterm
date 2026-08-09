@@ -82,7 +82,7 @@ private slots:
     void togglesMouseModeSGR();
     void encodesMouseEventX10();
     void encodesMouseEventSGR();
-    // tmux 支持回归测试
+    // tmux support regression tests
     void decawmDisablesPendingWrap();
     void decstbmMovesCursorToHomeNotScrollTop();
     void lineFeedOutsideScrollRegionDoesNotScroll();
@@ -1065,11 +1065,11 @@ void QTermCoreTest::togglesMouseModeX10()
     QTermCore core;
     QCOMPARE(core.modeState().mouseTracking, MouseTracking::Disabled);
 
-    // 启用 X10 鼠标模式：ESC[?1000h
+    // Enable X10 mouse mode: ESC[?1000h
     core.writePlainText("\x1b[?1000h"_L1);
     QCOMPARE(core.modeState().mouseTracking, MouseTracking::X10);
 
-    // 禁用鼠标模式：ESC[?1000l
+    // Disable mouse mode: ESC[?1000l
     core.writePlainText("\x1b[?1000l"_L1);
     QCOMPARE(core.modeState().mouseTracking, MouseTracking::Disabled);
 }
@@ -1079,11 +1079,11 @@ void QTermCoreTest::togglesMouseModeSGR()
     QTermCore core;
     QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::Default);
 
-    // 启用 SGR 编码：ESC[?1006h
+    // Enable SGR encoding: ESC[?1006h
     core.writePlainText("\x1b[?1006h"_L1);
     QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::SGR);
 
-    // 禁用 SGR 编码：ESC[?1006l
+    // Disable SGR encoding: ESC[?1006l
     core.writePlainText("\x1b[?1006l"_L1);
     QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::Default);
 }
@@ -1091,13 +1091,13 @@ void QTermCoreTest::togglesMouseModeSGR()
 void QTermCoreTest::encodesMouseEventX10()
 {
     QTermCore core;
-    core.writePlainText("\x1b[?1000h"_L1);  // 启用 X10 模式
+    core.writePlainText("\x1b[?1000h"_L1);  // enable X10 mode
 
-    // 编码鼠标按下事件：左键按下在 (5, 10)
+    // Encode a press: left button at (5, 10)
     const QByteArray encoded = QTermInputEncoder::encodeMouse(
         10, 5, Qt::LeftButton, Qt::NoModifier, true, core.modeState());
     
-    // X10 格式：ESC[M<button><x><y>
+    // X10 format: ESC[M<button><x><y>
     // button = 0 + 0x20 = 0x20 (' ')
     // x = 5 + 33 = 38 = 0x26 ('&')
     // y = 10 + 33 = 43 = 0x2B ('+')
@@ -1109,15 +1109,15 @@ void QTermCoreTest::encodesMouseEventX10()
 void QTermCoreTest::encodesMouseEventSGR()
 {
     QTermCore core;
-    core.writePlainText("\x1b[?1006h"_L1);  // 启用 SGR 编码格式
-    core.writePlainText("\x1b[?1002h"_L1);  // 启用 Button 事件跟踪
+    core.writePlainText("\x1b[?1006h"_L1);  // enable SGR encoding
+    core.writePlainText("\x1b[?1002h"_L1);  // enable button-event tracking
 
-    // 编码鼠标按下事件：右键按下在 (5, 10)，带 Shift 修饰符
+    // Encode a press: right button at (5, 10) with Shift held
     const QByteArray encoded = QTermInputEncoder::encodeMouse(
         10, 5, Qt::RightButton, Qt::ShiftModifier, true, core.modeState());
     
-    // SGR 格式：ESC[<button>;<x>;<y>M
-    // button = 2 (右键) + 4 (Shift) = 6
+    // SGR format: ESC[<button>;<x>;<y>M
+    // button = 2 (right) + 4 (Shift) = 6
     // x = 5 + 1 = 6
     // y = 10 + 1 = 11
     const QByteArray expected = QByteArray("\x1b[<6;6;11M");
