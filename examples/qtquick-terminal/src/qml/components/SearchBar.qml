@@ -95,6 +95,7 @@ Rectangle {
         }
 
         IconButton {
+            objectName: "prevButton"
             Layout.alignment: Qt.AlignVCenter
             iconName: "chevron-up"
             size: IconButton.Small
@@ -104,6 +105,7 @@ Rectangle {
         }
 
         IconButton {
+            objectName: "nextButton"
             Layout.alignment: Qt.AlignVCenter
             iconName: "chevron-down"
             size: IconButton.Small
