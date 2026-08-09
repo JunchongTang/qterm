@@ -325,15 +325,16 @@ bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
         const auto style = QTermGlyphAtlas::Style(
             (bold ? QTermGlyphAtlas::Bold : 0) | (italic ? QTermGlyphAtlas::Italic : 0));
 
-        // Underline and strike-through are not glyphs; a row needing them goes
-        // through the general path, which already draws them.
         const bool hasHyperlink = run.value(QStringLiteral("hyperlinkId")).toInt() > 0;
-        if (run.value(QStringLiteral("underline")).toBool() || hasHyperlink
-            || run.value(QStringLiteral("strikethrough")).toBool()) {
-            return false;
-        }
+        const bool underline = run.value(QStringLiteral("underline")).toBool() || hasHyperlink;
+        const bool strikeOut = run.value(QStringLiteral("strikethrough")).toBool();
 
         QColor fg = qtermEffectiveForeground(run, termFg, inverseTextColor, palette16);
+        if (hasHyperlink
+            && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
+            && run.value(QStringLiteral("foregroundRgb"), -1).toInt() < 0) {
+            fg = hyperlinkTint.isValid() ? hyperlinkTint : QColor(QStringLiteral("#6ab0f5"));
+        }
         if (run.value(QStringLiteral("dim")).toBool())
             fg.setAlphaF(0.65);
 
@@ -354,6 +355,30 @@ bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
                 units = 2;
             }
             i += units;
+
+            // A base character followed by combining marks is one grapheme and
+            // has to be positioned as a unit. The atlas holds single code
+            // points, so the whole cluster goes to the general path.
+            qsizetype clusterEnd = i;
+            while (clusterEnd < text.size()) {
+                const QChar next = text.at(clusterEnd);
+                const QChar::Category category = next.category();
+                if (category != QChar::Mark_NonSpacing
+                    && category != QChar::Mark_SpacingCombining
+                    && category != QChar::Mark_Enclosing) {
+                    break;
+                }
+                ++clusterEnd;
+            }
+            if (clusterEnd > i) {
+                const qsizetype start = i - units;
+                fallbacks.append(FallbackGlyph{
+                    QPointF(penX, row * cellH + topOffset),
+                    text.mid(start, clusterEnd - start), fg, bold, italic});
+                penX += cellW * (codePoint >= 0x1100 ? 2 : 1);
+                i = clusterEnd;
+                continue;
+            }
 
             // A space contributes nothing to draw; skip the lookup entirely.
             if (codePoint == U' ') {
@@ -390,6 +415,30 @@ bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
             // accounts for that, so advance by the glyph's own width in cells.
             penX += (codePoint >= 0x1100 && glyph->region.width() > cellW * 1.2)
                     ? cellW * 2 : cellW;
+        }
+
+        if ((underline || strikeOut) && penX > x) {
+            const QRect solid = atlas.solidRegion();
+            if (solid.isNull())
+                return false; // atlas full; the general path draws the row
+
+            const float su = float(solid.x() + 1) / float(atlasSize.width());
+            const float sv = float(solid.y() + 1) / float(atlasSize.height());
+            const float thickness = qMax(1.0f, float(cellH / 14.0));
+
+            const auto appendLine = [&](float top) {
+                const float x0 = float(x);
+                const float x1 = float(penX);
+                const QTermTextMaterial::Vertex tl{x0, top, su, sv, cr, cg, cb, ca};
+                const QTermTextMaterial::Vertex tr{x1, top, su, sv, cr, cg, cb, ca};
+                const QTermTextMaterial::Vertex bl{x0, top + thickness, su, sv, cr, cg, cb, ca};
+                const QTermTextMaterial::Vertex br{x1, top + thickness, su, sv, cr, cg, cb, ca};
+                vertices << tl << tr << bl << tr << br << bl;
+            };
+            if (underline)
+                appendLine(float(baseline + qMax(1.0, cellH / 10.0)));
+            if (strikeOut)
+                appendLine(float(baseline - ascent * 0.30));
         }
 
         x += cols * cellW;
