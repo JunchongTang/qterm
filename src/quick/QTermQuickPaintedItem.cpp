@@ -89,7 +89,7 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     });
 }
 
-// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermQuickPaintedItem::terminal() const noexcept
 {
@@ -102,7 +102,7 @@ void QTermQuickPaintedItem::setTerminal(QTermTerminal *terminal)
     update();
 }
 
-// ── 字体 ──────────────────────────────────────────────────────────────────────
+// ── Font ─────────────────────────────────────────────────────────────────────
 
 QString QTermQuickPaintedItem::fontFamily() const
 {
@@ -143,7 +143,7 @@ qreal QTermQuickPaintedItem::cellHeight() const noexcept
     return m_controller->cellHeight();
 }
 
-// ── 调色板 ────────────────────────────────────────────────────────────────────
+// ── Palette ──────────────────────────────────────────────────────────────────
 
 QColor QTermQuickPaintedItem::foregroundColor() const { return m_foregroundColor; }
 
@@ -207,7 +207,7 @@ void QTermQuickPaintedItem::setCursorOpacity(qreal cursorOpacity)
     emit cursorOpacityChanged();
 }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermQuickPaintedItem::rowAtPosition(qreal y) const
 {
@@ -219,7 +219,7 @@ int QTermQuickPaintedItem::columnAtPosition(qreal x) const
     return m_controller->columnAtPosition(x);
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermQuickPaintedItem::scrollSize() const noexcept
 {

@@ -871,7 +871,7 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         case 2004:
             m_modeState.bracketedPaste = enabled;
             break;
-        // 鼠标事件类型：?1000, ?1002, ?1003
+        // Which mouse events to report: ?1000, ?1002, ?1003
         case 1000:
             m_modeState.mouseTracking = enabled ? MouseTracking::X10 : MouseTracking::Disabled;
             break;
@@ -881,9 +881,9 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         case 1003:
             m_modeState.mouseTracking = enabled ? MouseTracking::AnyEvent : MouseTracking::Disabled;
             break;
-        // 鼠标编码格式：?1005（UTF-8，忽略），?1006（SGR），?1015（URXVT）
+        // Report encoding: ?1005 (UTF-8, ignored), ?1006 (SGR), ?1015 (URXVT)
         case 1005:
-            break;  // UTF-8 编码忽略，不影响事件类型
+            break;  // UTF-8 encoding is ignored; it does not change which events fire
         case 1006:
             m_modeState.mouseEncoding = enabled ? MouseEncoding::SGR : MouseEncoding::Default;
             break;

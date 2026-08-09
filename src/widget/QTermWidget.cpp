@@ -82,7 +82,7 @@ QTermWidget::QTermWidget(QWidget *parent)
     });
 }
 
-// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermWidget::terminal() const noexcept
 {
@@ -96,7 +96,7 @@ void QTermWidget::setTerminal(QTermTerminal *terminal)
     update();
 }
 
-// ── 字体 ──────────────────────────────────────────────────────────────────────
+// ── Font ─────────────────────────────────────────────────────────────────────
 
 QString QTermWidget::fontFamily() const
 {
@@ -128,7 +128,7 @@ void QTermWidget::setFontPixelSize(int size)
 qreal QTermWidget::cellWidth() const noexcept  { return m_controller->cellWidth(); }
 qreal QTermWidget::cellHeight() const noexcept { return m_controller->cellHeight(); }
 
-// ── 调色板 ────────────────────────────────────────────────────────────────────
+// ── Palette ──────────────────────────────────────────────────────────────────
 
 QColor QTermWidget::foregroundColor() const { return m_foregroundColor; }
 void QTermWidget::setForegroundColor(const QColor &c)
@@ -183,13 +183,13 @@ void QTermWidget::setCursorStyle(CursorStyle style)
     m_cursorStyle = style; update(); emit cursorStyleChanged();
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermWidget::scrollPosition() const noexcept { return m_controller->scrollPosition(); }
 qreal QTermWidget::scrollSize() const noexcept     { return m_controller->scrollSize(); }
 void QTermWidget::setScrollPosition(qreal pos)     { m_controller->setScrollPosition(pos); }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermWidget::rowAtPosition(qreal y) const    { return m_controller->rowAtPosition(y); }
 int QTermWidget::columnAtPosition(qreal x) const { return m_controller->columnAtPosition(x); }

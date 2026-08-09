@@ -50,7 +50,7 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermQuickPaintedItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
-    // 标准化滚动属性，直接对接 QML ScrollBar 的 position / size
+    // Normalised scroll properties, matching QML ScrollBar's position / size.
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
     Q_PROPERTY(QTerm::QTermTheme theme READ theme WRITE setTheme NOTIFY themeChanged)
@@ -61,9 +61,9 @@ public:
         \brief Built-in cursor rendering styles.
     */
     enum CursorStyle {
-        Block,      // 填充块（默认）
-        Underline,  // 单元格底部下划线
-        Bar         // 左侧竖线（I-beam）
+        Block,      // filled block (default)
+        Underline,  // underline along the bottom of the cell
+        Bar         // vertical bar at the left edge (I-beam)
     };
     Q_ENUM(CursorStyle)
 
@@ -139,9 +139,9 @@ signals:
     void cursorDelegateChanged();
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
-    // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
+    // Asks the host to put text on the system clipboard; connect from QML or C++.
     void copyRequested(const QString &text);
-    // OSC 8 超链接被激活（Cmd+单击），外部决定如何打开 URL
+    // An OSC 8 hyperlink was activated (Cmd+click); the host decides how to open it.
     void hyperlinkActivated(const QString &url);
     void themeChanged();
 
@@ -157,20 +157,20 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    // 鼠标模式变化时同步 setAcceptedMouseButtons / setAcceptHoverEvents
+    // Keeps setAcceptedMouseButtons / setAcceptHoverEvents in step with the mouse mode.
     void updateMouseAcceptance();
 
-    // 创建 / 更新 delegate item 的位置、尺寸、透明度
+    // Creates or updates the delegate item's position, size and opacity.
     void recreateCursorDelegateItem();
     void updateCursorDelegateGeometry();
 
-    // ── 共享控制器（输入处理 + 尺寸/滚动逻辑） ───────────────────────────────
+    // ── Shared controller: input handling plus size and scroll logic ─────────
     QTermViewController *m_controller = nullptr;
 
-    // ── 主题（包含调色板和超链接色） ────────────────────────────────────────
+    // ── Theme, including the palette and the hyperlink colour ────────────────
     QTermTheme m_theme;
 
-    // ── 调色板（渲染参数，controller 无需感知） ──────────────────────────────
+    // ── Palette: rendering only, of no concern to the controller ─────────────
     QColor m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));
     QColor m_backgroundColor = QColor(QStringLiteral("#0b1016"));
     // Invalid = derive from m_backgroundColor with alpha forced opaque.
@@ -180,11 +180,11 @@ private:
     qreal  m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle = Block;
 
-    // ── 光标 delegate ─────────────────────────────────────────────────────────
+    // ── Cursor delegate ──────────────────────────────────────────────────────
     QQmlComponent *m_cursorDelegate     = nullptr;
     QQuickItem    *m_cursorDelegateItem = nullptr;
 
-    // ── 增量脏行集合（行号，0-based visible row） ────────────────────────────
+    // ── Incremental dirty rows, as 0-based visible row numbers ───────────────
     // Non-empty only when contentRowsDirty was fired without a full repaint.
     QVector<int> m_dirtyRows;
 };
