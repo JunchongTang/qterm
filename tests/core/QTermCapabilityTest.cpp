@@ -128,9 +128,21 @@ QString lineAt(const QTermCore &core, int row)
     return row < lines.size() ? lines.at(row) : QString();
 }
 
-QByteArray outboundFor(QTermCore &core, int key, const QString &text = QString())
+QByteArray outboundFor(QTermCore &core, int key, const QString &text = QString(),
+                       Qt::KeyboardModifiers modifiers = Qt::NoModifier)
 {
-    return core.encodeKey(key, text);
+    return core.encodeKey(key, text, modifiers);
+}
+
+// Qt reports the physical Control key as MetaModifier on macOS, so a test that
+// hard-codes ControlModifier would exercise Command instead.
+constexpr Qt::KeyboardModifier controlModifier()
+{
+#if defined(Q_OS_MACOS)
+    return Qt::MetaModifier;
+#else
+    return Qt::ControlModifier;
+#endif
 }
 
 } // namespace
@@ -560,7 +572,6 @@ void QTermCapabilityTest::keyFunctionF1toF4()
 {
     CAPABILITY("key.f1-f4", "Keyboard", "F1-F4", "SS3 P/Q/R/S");
     QTermCore core;
-    QEXPECT_FAIL("", "Function keys are not encoded", Abort);
     QCOMPARE(outboundFor(core, Qt::Key_F1), QByteArray("\x1bOP"));
     QCOMPARE(outboundFor(core, Qt::Key_F4), QByteArray("\x1bOS"));
 }
@@ -569,7 +580,6 @@ void QTermCapabilityTest::keyFunctionF5toF12()
 {
     CAPABILITY("key.f5-f12", "Keyboard", "F5-F12", "CSI 15~ .. CSI 24~");
     QTermCore core;
-    QEXPECT_FAIL("", "Function keys are not encoded", Abort);
     QCOMPARE(outboundFor(core, Qt::Key_F5), QByteArray("\x1b[15~"));
     QCOMPARE(outboundFor(core, Qt::Key_F12), QByteArray("\x1b[24~"));
 }
@@ -578,7 +588,6 @@ void QTermCapabilityTest::keyInsertDelete()
 {
     CAPABILITY("key.insert-delete", "Keyboard", "Insert and Delete", "CSI 2~ / CSI 3~");
     QTermCore core;
-    QEXPECT_FAIL("", "Editing keys are not encoded -- Delete does nothing", Abort);
     QCOMPARE(outboundFor(core, Qt::Key_Insert), QByteArray("\x1b[2~"));
     QCOMPARE(outboundFor(core, Qt::Key_Delete), QByteArray("\x1b[3~"));
 }
@@ -587,7 +596,6 @@ void QTermCapabilityTest::keyPageUpDown()
 {
     CAPABILITY("key.page-up-down", "Keyboard", "PageUp and PageDown", "CSI 5~ / CSI 6~");
     QTermCore core;
-    QEXPECT_FAIL("", "Paging keys are not encoded", Abort);
     QCOMPARE(outboundFor(core, Qt::Key_PageUp), QByteArray("\x1b[5~"));
     QCOMPARE(outboundFor(core, Qt::Key_PageDown), QByteArray("\x1b[6~"));
 }
@@ -596,10 +604,12 @@ void QTermCapabilityTest::keyModifiedCursor()
 {
     CAPABILITY("key.modified-cursor", "Keyboard", "Modifier + arrow keys", "CSI 1 ; Ps A");
     QTermCore core;
-    // encodeKey() takes no modifier argument at all, so this cannot be
-    // expressed today; the assertion documents the target encoding.
-    QEXPECT_FAIL("", "encodeKey() takes no modifiers, so this cannot be expressed", Continue);
-    QCOMPARE(outboundFor(core, Qt::Key_Right), QByteArray("\x1b[1;5C"));
+    QCOMPARE(outboundFor(core, Qt::Key_Right, QString(), controlModifier()),
+             QByteArray("\x1b[1;5C"));
+    QCOMPARE(outboundFor(core, Qt::Key_Up, QString(), Qt::ShiftModifier),
+             QByteArray("\x1b[1;2A"));
+    QCOMPARE(outboundFor(core, Qt::Key_End, QString(), controlModifier() | Qt::ShiftModifier),
+             QByteArray("\x1b[1;6F"));
 }
 
 void QTermCapabilityTest::keyApplicationKeypad()
@@ -608,23 +618,23 @@ void QTermCapabilityTest::keyApplicationKeypad()
     QTermCore core;
     core.writePlainText(u"\x1b="_s);
     QVERIFY(core.modeState().applicationKeypad);
-    QEXPECT_FAIL("", "applicationKeypad is tracked but the encoder never reads it", Continue);
-    QCOMPARE(outboundFor(core, Qt::Key_0), QByteArray("\x1bOp"));
+    QCOMPARE(outboundFor(core, Qt::Key_0, u"0"_s, Qt::KeypadModifier), QByteArray("\x1bOp"));
+    // The number row is unaffected: only the keypad switches encoding.
+    QCOMPARE(outboundFor(core, Qt::Key_0, u"0"_s), QByteArray("0"));
 }
 
 void QTermCapabilityTest::keyAltMeta()
 {
     CAPABILITY("key.alt-meta", "Keyboard", "Alt/Meta prefix", "ESC + key");
     QTermCore core;
-    QEXPECT_FAIL("", "Alt/Meta prefixing is not implemented", Continue);
-    QCOMPARE(outboundFor(core, Qt::Key_B), QByteArray("\x1b" "b"));
+    // macOS composes Option+b into a different character; readline wants ESC b.
+    QCOMPARE(outboundFor(core, Qt::Key_B, u"∫"_s, Qt::AltModifier), QByteArray("\x1b" "b"));
 }
 
 void QTermCapabilityTest::keyShiftTab()
 {
     CAPABILITY("key.shift-tab", "Keyboard", "Shift+Tab (back tab)", "CSI Z");
     QTermCore core;
-    QEXPECT_FAIL("", "Backtab is not encoded", Continue);
     QCOMPARE(outboundFor(core, Qt::Key_Backtab), QByteArray("\x1b[Z"));
 }
 

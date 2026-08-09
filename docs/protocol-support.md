@@ -6,7 +6,7 @@ Generated from the results of `qterm_capability_tests`. Every entry below
 reflects an assertion that ran against this build, so the table cannot claim
 support the code does not have.
 
-**46 of 57 assessed capabilities supported.**
+**54 of 57 assessed capabilities supported.**
 
 A capability that is absent from this table has not been assessed — which is
 not the same as unsupported. The enumeration covers what the target
@@ -109,19 +109,19 @@ applications exercise; it is not the whole of ECMA-48.
 
 | | Capability | Sequence | Notes |
 |---|---|---|---|
-| ❌ | Alt/Meta prefix | `ESC + key` | Alt/Meta prefixing is not implemented |
-| ❌ | Application keypad | `DECKPAM / SS3 p-y` | applicationKeypad is tracked but the encoder never reads it |
+| ✅ | Alt/Meta prefix | `ESC + key` |  |
+| ✅ | Application keypad | `DECKPAM / SS3 p-y` |  |
 | ✅ | Return, Backspace, Tab, Escape | `CR / DEL / HT / ESC` |  |
 | ✅ | Ctrl+letter control codes | `0x01-0x1A` |  |
 | ✅ | Arrow keys, application mode | `SS3 A/B/C/D` |  |
 | ✅ | Arrow keys, normal mode | `CSI A/B/C/D` |  |
-| ❌ | F1-F4 | `SS3 P/Q/R/S` | Function keys are not encoded |
-| ❌ | F5-F12 | `CSI 15~ .. CSI 24~` | Function keys are not encoded |
+| ✅ | F1-F4 | `SS3 P/Q/R/S` |  |
+| ✅ | F5-F12 | `CSI 15~ .. CSI 24~` |  |
 | ✅ | Home and End | `CSI H / CSI F` |  |
-| ❌ | Insert and Delete | `CSI 2~ / CSI 3~` | Editing keys are not encoded -- Delete does nothing |
-| ❌ | Modifier + arrow keys | `CSI 1 ; Ps A` | encodeKey() takes no modifiers, so this cannot be expressed |
-| ❌ | PageUp and PageDown | `CSI 5~ / CSI 6~` | Paging keys are not encoded |
-| ❌ | Shift+Tab (back tab) | `CSI Z` | Backtab is not encoded |
+| ✅ | Insert and Delete | `CSI 2~ / CSI 3~` |  |
+| ✅ | Modifier + arrow keys | `CSI 1 ; Ps A` |  |
+| ✅ | PageUp and PageDown | `CSI 5~ / CSI 6~` |  |
+| ✅ | Shift+Tab (back tab) | `CSI Z` |  |
 
 ## Input
 

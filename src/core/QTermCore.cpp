@@ -87,9 +87,10 @@ const QTermModeState &QTermCore::modeState() const noexcept
     return m_modeState;
 }
 
-QByteArray QTermCore::encodeKey(int key, const QString &text) const
+QByteArray QTermCore::encodeKey(int key, const QString &text,
+                                Qt::KeyboardModifiers modifiers) const
 {
-    return QTermInputEncoder::encodeKey(m_modeState, key, text);
+    return QTermInputEncoder::encodeKey(m_modeState, key, text, modifiers);
 }
 
 QByteArray QTermCore::encodePaste(const QString &text) const
@@ -233,9 +234,9 @@ void QTermCore::setTerminalSize(int columns, int rows)
     emit cursorStateChanged();
 }
 
-void QTermCore::sendKey(int key, const QString &text)
+void QTermCore::sendKey(int key, const QString &text, Qt::KeyboardModifiers modifiers)
 {
-    const QByteArray encoded = encodeKey(key, text);
+    const QByteArray encoded = encodeKey(key, text, modifiers);
     if (encoded.isEmpty()) {
         return;
     }

@@ -532,9 +532,9 @@ void QTermTerminal::syncSurfaceSearch()
     m_surfaceModel.setSearchHighlights(highlights);
 }
 
-void QTermTerminal::sendKey(int key, const QString &text)
+void QTermTerminal::sendKey(int key, const QString &text, Qt::KeyboardModifiers modifiers)
 {
-    m_core->sendKey(key, text);
+    m_core->sendKey(key, text, modifiers);
 }
 
 void QTermTerminal::sendPaste(const QString &text)

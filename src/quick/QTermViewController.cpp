@@ -286,7 +286,7 @@ bool QTermViewController::handleKeyPress(QKeyEvent *event)
         m_terminal->scrollToBottom();
     // On macOS Ctrl+letter can arrive with empty text; the encoder in sendKey
     // synthesises the control character from the key and modifiers instead.
-    m_terminal->sendKey(event->key(), event->text());
+    m_terminal->sendKey(event->key(), event->text(), event->modifiers());
     return true;
 }
 
