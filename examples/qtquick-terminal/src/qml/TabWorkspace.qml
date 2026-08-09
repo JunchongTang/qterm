@@ -17,6 +17,8 @@ Item {
 
     function addTab(config) {
         const tab = tabComponent.createObject(stack, { sessionConfig: config })
+        tab.newTabRequested.connect(() => newSessionDialog.open())
+        tab.closeTabRequested.connect(() => root.closeTab(root.tabs.indexOf(tab)))
         tabs = tabs.concat([tab])
         currentIndex = tabs.length - 1
     }

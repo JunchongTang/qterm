@@ -27,6 +27,9 @@ qt_add_qml_module(qtquick_terminal
         src/qml/components/Theme.qml
         src/qml/components/AppState.qml
         src/qml/components/Icon.qml
+        src/qml/components/Menu.qml
+        src/qml/components/MenuItem.qml
+        src/qml/components/SearchBar.qml
         src/qml/components/FocusRing.qml
         src/qml/components/Label.qml
         src/qml/components/Button.qml
@@ -39,6 +42,8 @@ qt_add_qml_module(qtquick_terminal
     RESOURCES
         src/qml/assets/icons/x.svg
         src/qml/assets/icons/plus.svg
+        src/qml/assets/icons/chevron-up.svg
+        src/qml/assets/icons/search.svg
         src/qml/assets/icons/check.svg
         src/qml/assets/icons/chevron-down.svg
         src/qml/assets/icons/terminal.svg
