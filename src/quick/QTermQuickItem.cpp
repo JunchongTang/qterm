@@ -3,6 +3,8 @@
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
 
+#include "QTermGlyphAtlas.h"
+#include "QTermTextMaterial.h"
 #include "QTermViewController.h"
 #include "../QTermRenderUtils.h"
 
@@ -47,6 +49,8 @@ struct QTermSGRootNode : public QSGNode
     QSGNode *textGroupNode = nullptr;
     QSGGeometryNode *cursorNode = nullptr;
     QVector<QSGTextNode *> textNodes; // parallel to visible rows, NOT OwnedByParent
+    // Atlas path: every glyph on screen in one geometry node, one draw call.
+    QSGGeometryNode *atlasTextNode = nullptr;
 };
 
 namespace {
@@ -271,6 +275,128 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
     }
 }
 
+// ── Atlas text geometry ───────────────────────────────────────────────────────
+
+// A character the atlas cannot draw, to be handed to the general text path at
+// this exact position. Colour emoji are the common case, so falling back per
+// glyph rather than per row matters: one emoji per line would otherwise send
+// every line down the slow path.
+struct FallbackGlyph
+{
+    QPointF position;
+    QString text;
+    QColor color;
+    bool bold = false;
+    bool italic = false;
+};
+
+// Builds glyph quads for one row, appending to `vertices`.
+//
+// Returns false only when the row needs decorations the atlas does not draw
+// (underline, strike-through), in which case the caller renders the whole row
+// through the general path. Individual characters without an atlas glyph are
+// collected into `fallbacks` instead.
+bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
+                    QVector<FallbackGlyph> &fallbacks,
+                    QTermGlyphAtlas &atlas, const QSizeF &atlasSize,
+                    int row, const QVariantList &lineRuns,
+                    qreal cellW, qreal cellH, qreal topOffset, qreal ascent,
+                    const QColor &termFg, const QColor &inverseTextColor,
+                    const QColor &hyperlinkTint, const QColor *palette16)
+{
+    if (row >= lineRuns.size())
+        return true;
+
+    const QVariantList runs = lineRuns.at(row).toList();
+    const qreal baseline = row * cellH + topOffset + ascent;
+    qreal x = 0.0;
+
+    for (const QVariant &rv : runs) {
+        const QVariantMap run = rv.toMap();
+        const int cols = qtermRunColumns(run);
+        const QString text = run.value(QStringLiteral("text")).toString();
+        if (text.isEmpty()) {
+            x += cols * cellW;
+            continue;
+        }
+
+        const bool bold = run.value(QStringLiteral("bold")).toBool();
+        const bool italic = run.value(QStringLiteral("italic")).toBool();
+        const auto style = QTermGlyphAtlas::Style(
+            (bold ? QTermGlyphAtlas::Bold : 0) | (italic ? QTermGlyphAtlas::Italic : 0));
+
+        // Underline and strike-through are not glyphs; a row needing them goes
+        // through the general path, which already draws them.
+        const bool hasHyperlink = run.value(QStringLiteral("hyperlinkId")).toInt() > 0;
+        if (run.value(QStringLiteral("underline")).toBool() || hasHyperlink
+            || run.value(QStringLiteral("strikethrough")).toBool()) {
+            return false;
+        }
+
+        QColor fg = qtermEffectiveForeground(run, termFg, inverseTextColor, palette16);
+        if (run.value(QStringLiteral("dim")).toBool())
+            fg.setAlphaF(0.65);
+
+        // Premultiplied, to match the atlas and the shader.
+        const float alpha = float(fg.alphaF());
+        const uchar cr = uchar(qRound(fg.red() * alpha));
+        const uchar cg = uchar(qRound(fg.green() * alpha));
+        const uchar cb = uchar(qRound(fg.blue() * alpha));
+        const uchar ca = uchar(qRound(255.0 * alpha));
+
+        qreal penX = x;
+        for (qsizetype i = 0; i < text.size(); ) {
+            char32_t codePoint = text.at(i).unicode();
+            qsizetype units = 1;
+            if (QChar::isHighSurrogate(codePoint) && i + 1 < text.size()
+                && text.at(i + 1).isLowSurrogate()) {
+                codePoint = QChar::surrogateToUcs4(text.at(i), text.at(i + 1));
+                units = 2;
+            }
+            i += units;
+
+            // A space contributes nothing to draw; skip the lookup entirely.
+            if (codePoint == U' ') {
+                penX += cellW;
+                continue;
+            }
+
+            const QTermGlyphAtlas::Glyph *glyph = atlas.glyphFor(codePoint, style);
+            if (!glyph) {
+                // Colour emoji and anything no installed font covers.
+                fallbacks.append(FallbackGlyph{
+                    QPointF(penX, row * cellH + topOffset),
+                    QString::fromUcs4(&codePoint, 1), fg, bold, italic});
+                penX += cellW * (codePoint >= 0x1100 ? 2 : 1);
+                continue;
+            }
+
+            const float gx = float(penX + glyph->bearing.x());
+            const float gy = float(baseline + glyph->bearing.y());
+            const float gw = float(glyph->region.width());
+            const float gh = float(glyph->region.height());
+            const float u0 = float(glyph->region.x()) / float(atlasSize.width());
+            const float v0 = float(glyph->region.y()) / float(atlasSize.height());
+            const float u1 = float(glyph->region.right() + 1) / float(atlasSize.width());
+            const float v1 = float(glyph->region.bottom() + 1) / float(atlasSize.height());
+
+            const QTermTextMaterial::Vertex tl{gx,      gy,      u0, v0, cr, cg, cb, ca};
+            const QTermTextMaterial::Vertex tr{gx + gw, gy,      u1, v0, cr, cg, cb, ca};
+            const QTermTextMaterial::Vertex bl{gx,      gy + gh, u0, v1, cr, cg, cb, ca};
+            const QTermTextMaterial::Vertex br{gx + gw, gy + gh, u1, v1, cr, cg, cb, ca};
+            vertices << tl << tr << bl << tr << br << bl;
+
+            // Wide characters occupy two columns; the run's column count already
+            // accounts for that, so advance by the glyph's own width in cells.
+            penX += (codePoint >= 0x1100 && glyph->region.width() > cellW * 1.2)
+                    ? cellW * 2 : cellW;
+        }
+
+        x += cols * cellW;
+    }
+    return true;
+}
+
 // ── Selection geometry ────────────────────────────────────────────────────────
 
 void rebuildSelection(QSGGeometryNode *node, QTermSurfaceModel *sm,
@@ -466,6 +592,11 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     connect(m_controller, &QTermViewController::selectionChanged, this, [this]() {
         scheduleSelectionDirty();
     });
+}
+
+QTermQuickItem::~QTermQuickItem()
+{
+    delete m_atlasTexture;
 }
 
 // ── Dirty flag helpers ────────────────────────────────────────────────────────
@@ -952,6 +1083,11 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     // QTextLayout position is the top-left of the text block.
     const qreal topOffset = (cellH - fm.height()) * 0.5;
 
+    // ── Glyph atlas path ─────────────────────────────────────────────────────
+    static const bool useAtlas = qEnvironmentVariableIsSet("QTERM_GLYPH_ATLAS");
+    if (useAtlas && !m_glyphAtlas)
+        m_glyphAtlas = std::make_unique<QTermGlyphAtlas>();
+
     const bool rowCountChanged = (root->textNodes.size() != rows);
     const bool needTextRebuild = m_fullDirty || m_contentDirty || rowCountChanged;
     const bool hasPartialRows = !m_dirtyRowSet.isEmpty() && !needTextRebuild;
@@ -974,7 +1110,104 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         recreateTextRowNodes(root, window(), rows);
     }
 
-    if (needTextRebuild) {
+    if (useAtlas && (needTextRebuild || hasPartialRows)) {
+        // The whole screen is rebuilt even for a partial update: the vertex
+        // buffer is one flat array, so patching a few rows is no cheaper than
+        // refilling it, and it keeps the row-to-vertex mapping out of the code.
+        m_glyphAtlas->setFont(baseFont);
+
+        const QVariantList lineRuns = sm->visibleLineRuns();
+        const qreal ascent = fm.ascent();
+        QVector<QTermTextMaterial::Vertex> vertices;
+        vertices.reserve(rows * sm->columns() * 6);
+
+        QVector<int> fallbackRows;
+        QVector<QVector<FallbackGlyph>> rowFallbacks(rows);
+        for (int row = 0; row < rows; ++row) {
+            const qsizetype mark = vertices.size();
+            if (!buildRowGlyphs(vertices, rowFallbacks[row], *m_glyphAtlas,
+                                QSizeF(m_glyphAtlas->image().size()),
+                                row, lineRuns, cellW, cellH, topOffset, ascent,
+                                m_foregroundColor, effectiveInverseTextColor(),
+                                m_theme.hyperlinkTint(), m_theme.palette16())) {
+                // Underline or strike-through: the atlas draws glyphs only, so
+                // the whole row goes to the general path.
+                vertices.resize(mark);
+                rowFallbacks[row].clear();
+                fallbackRows.append(row);
+            }
+        }
+
+        if (!root->atlasTextNode) {
+            root->atlasTextNode = new QSGGeometryNode;
+            auto *geometry = new QSGGeometry(QTermTextMaterial::attributes(), 0);
+            geometry->setDrawingMode(QSGGeometry::DrawTriangles);
+            root->atlasTextNode->setGeometry(geometry);
+            root->atlasTextNode->setFlag(QSGNode::OwnsGeometry);
+            auto *material = new QTermTextMaterial;
+            material->setFlag(QSGMaterial::Blending);
+            root->atlasTextNode->setMaterial(material);
+            root->atlasTextNode->setFlag(QSGNode::OwnsMaterial);
+            root->textGroupNode->appendChildNode(root->atlasTextNode);
+        }
+
+        // Re-upload only when the atlas actually grew.
+        if (m_atlasTextureGeneration != m_glyphAtlas->generation()
+            && !m_glyphAtlas->image().isNull()) {
+            delete m_atlasTexture;
+            m_atlasTexture = window()->createTextureFromImage(
+                m_glyphAtlas->image(), QQuickWindow::TextureHasAlphaChannel);
+            m_atlasTextureGeneration = m_glyphAtlas->generation();
+        }
+        static_cast<QTermTextMaterial *>(root->atlasTextNode->material())
+            ->setTexture(m_atlasTexture);
+
+        QSGGeometry *geometry = root->atlasTextNode->geometry();
+        geometry->allocate(int(vertices.size()));
+        if (!vertices.isEmpty()) {
+            memcpy(geometry->vertexData(), vertices.constData(),
+                   vertices.size() * sizeof(QTermTextMaterial::Vertex));
+        }
+        root->atlasTextNode->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
+
+        // Whatever the atlas could not draw goes through the general path: a
+        // whole row when decorations are involved, otherwise just the odd glyph.
+        for (int row = 0; row < rows; ++row) {
+            QSGTextNode *node = root->textNodes[row];
+            if (fallbackRows.contains(row)) {
+                populateRowTextNode(node, row, lineRuns,
+                                    cellW, cellH, baseFont, topOffset,
+                                    m_foregroundColor, effectiveInverseTextColor(),
+                                    m_theme.hyperlinkTint(), m_theme.palette16());
+                continue;
+            }
+
+            node->clear();
+            for (const FallbackGlyph &fallback : std::as_const(rowFallbacks[row])) {
+                QFont glyphFont = baseFont;
+                glyphFont.setBold(fallback.bold);
+                glyphFont.setItalic(fallback.italic);
+
+                QTextLayout layout(fallback.text, glyphFont);
+                QTextOption option = layout.textOption();
+                option.setWrapMode(QTextOption::NoWrap);
+                layout.setTextOption(option);
+
+                QTextCharFormat format;
+                format.setForeground(fallback.color);
+                layout.setFormats({QTextLayout::FormatRange{0, int(fallback.text.size()), format}});
+
+                layout.beginLayout();
+                QTextLine textLine = layout.createLine();
+                if (textLine.isValid()) {
+                    textLine.setLineWidth(cellW * 2);
+                    textLine.setPosition(QPointF(0.0, 0.0));
+                }
+                layout.endLayout();
+                node->addTextLayout(fallback.position, &layout);
+            }
+        }
+    } else if (needTextRebuild) {
         const QVariantList lineRuns = sm->visibleLineRuns();
         for (int row = 0; row < rows; ++row) {
             populateRowTextNode(root->textNodes[row], row, lineRuns,
