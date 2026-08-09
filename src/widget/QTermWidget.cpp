@@ -14,6 +14,8 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QResizeEvent>
+#include <QScreen>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include <limits>
@@ -32,15 +34,19 @@ QTermWidget::QTermWidget(QWidget *parent)
     setAutoFillBackground(false);
     setMouseTracking(false); // updated dynamically by updateMouseAcceptance()
 
+    m_repaintTimer = new QTimer(this);
+    m_repaintTimer->setSingleShot(true);
+    connect(m_repaintTimer, &QTimer::timeout, this, &QTermWidget::flushPendingUpdate);
+
     connect(m_controller, &QTermViewController::repaintNeeded, this, [this]() {
         m_dirtyRows.clear();
-        update();
+        scheduleUpdate();
     });
     connect(m_controller, &QTermViewController::contentRowsDirty, this, [this](QVector<int> rows) {
         const qreal cellH = m_controller->cellHeight();
         if (cellH <= 0.0) {
             m_dirtyRows.clear();
-            update();
+            scheduleUpdate();
             return;
         }
         for (int r : rows) {
@@ -53,7 +59,7 @@ QTermWidget::QTermWidget(QWidget *parent)
             yMin = qMin(yMin, r * cellH);
             yMax = qMax(yMax, (r + 1) * cellH);
         }
-        update(QRect(0, int(yMin), width(), int(yMax - yMin)));
+        scheduleUpdate(QRect(0, int(yMin), width(), int(yMax - yMin)));
     });
     connect(m_controller, &QTermViewController::mouseAcceptanceChanged,
             this, &QTermWidget::updateMouseAcceptance);
@@ -247,6 +253,49 @@ QSize QTermWidget::sizeHint() const
                  static_cast<int>(24 * m_controller->cellHeight()));
 }
 
+// ── Repaint coalescing ────────────────────────────────────────────────────────
+
+int QTermWidget::frameIntervalMs() const
+{
+    // Following the display means a fast panel still gets its extra frames and
+    // a slow one is not asked for frames it cannot show.
+    const qreal refreshRate = screen() ? screen()->refreshRate() : 60.0;
+    const int interval = refreshRate > 1.0 ? int(1000.0 / refreshRate) : 16;
+    return qBound(4, interval, 32);
+}
+
+void QTermWidget::scheduleUpdate(const QRect &rect)
+{
+    if (rect.isNull())
+        m_pendingFull = true;
+    else if (!m_pendingFull)
+        m_pendingRect = m_pendingRect.united(rect);
+
+    // Already waiting on the frame deadline: the region above is enough, the
+    // timer will pick it up.
+    if (m_repaintTimer->isActive())
+        return;
+
+    const int interval = frameIntervalMs();
+    const qint64 sinceLastPaint = m_sinceLastPaint.isValid() ? m_sinceLastPaint.elapsed()
+                                                             : interval;
+    if (sinceLastPaint >= interval)
+        flushPendingUpdate();          // idle until now: paint straight away
+    else
+        m_repaintTimer->start(int(interval - sinceLastPaint));
+}
+
+void QTermWidget::flushPendingUpdate()
+{
+    if (m_pendingFull)
+        update();
+    else if (!m_pendingRect.isNull())
+        update(m_pendingRect);
+
+    m_pendingFull = false;
+    m_pendingRect = QRect();
+}
+
 // ── paintEvent ────────────────────────────────────────────────────────────────
 
 void QTermWidget::paintEvent(QPaintEvent *event)
@@ -285,6 +334,8 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     qtermPaintTerminal(&painter, req);
 
     m_dirtyRows.clear();
+    // Anchors the next frame deadline; scheduleUpdate() measures from here.
+    m_sinceLastPaint.restart();
 }
 
 // ── resizeEvent ───────────────────────────────────────────────────────────────

@@ -1,13 +1,19 @@
 #pragma once
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QPointer>
+#include <QRect>
 #include <QString>
 #include <QVector>
 #include <QWidget>
 
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermTheme.h>
+
+QT_BEGIN_NAMESPACE
+class QTimer;
+QT_END_NAMESPACE
 
 namespace QTerm {
 
@@ -202,6 +208,31 @@ private:
 
     // Incremental dirty-row set; non-empty only between contentRowsDirty and paint.
     QVector<int> m_dirtyRows;
+
+    /*
+        Repaint coalescing.
+
+        QQuickItem::update() only sets a dirty flag and the scene graph decides
+        when to render, so a Qt Quick view repaints at most once per vsync no
+        matter how often the terminal changes. QWidget::update() posts an
+        UpdateRequest that the event loop delivers on its very next pass, so a
+        widget repaints roughly once per PTY read -- on a 16 MB payload that
+        measured 16680 full-screen repaints against the ~70 the scene graph
+        needed, and 93% of the wall time went into paintEvent.
+
+        Updates are therefore held back to one per frame interval. The first
+        change after an idle period still paints immediately, so typing latency
+        is unaffected; only a burst is throttled, and the trailing timer
+        guarantees the final state is drawn.
+    */
+    void scheduleUpdate(const QRect &rect = QRect());
+    void flushPendingUpdate();
+    int frameIntervalMs() const;
+
+    QTimer *m_repaintTimer = nullptr;
+    QElapsedTimer m_sinceLastPaint;
+    QRect m_pendingRect;
+    bool m_pendingFull = false;
 };
 
 } // namespace QTerm
