@@ -48,7 +48,24 @@ void QTermGlyphAtlas::clear()
     m_shelfX = 0;
     m_shelfY = 0;
     m_shelfHeight = 0;
+    m_full = false;
+    m_solidRegion = QRect();
     ++m_generation;
+}
+
+QRect QTermGlyphAtlas::solidRegion()
+{
+    if (m_solidRegion.isValid())
+        return m_solidRegion;
+
+    // 2x2 rather than a single pixel so sampling anywhere inside it, including
+    // under linear filtering, stays fully opaque.
+    QImage block(2, 2, QImage::Format_Alpha8);
+    block.fill(255);
+    QRect region;
+    if (packInto(block, &region))
+        m_solidRegion = region;
+    return m_solidRegion;
 }
 
 QRawFont &QTermGlyphAtlas::faceFor(Style style)
@@ -84,8 +101,10 @@ bool QTermGlyphAtlas::packInto(const QImage &rasterIn, QRect *region)
         m_shelfY += m_shelfHeight;
         m_shelfHeight = 0;
     }
-    if (m_shelfY + h > kAtlasHeight)
-        return false; // full; caller falls back to the general path
+    if (m_shelfY + h > kAtlasHeight) {
+        m_full = true;
+        return false;
+    }
 
     const QRect target(m_shelfX, m_shelfY, raster.width(), raster.height());
 
@@ -161,6 +180,9 @@ const QTermGlyphAtlas::Glyph *QTermGlyphAtlas::glyphFor(char32_t codePoint, Styl
             }
         }
     }
+
+    if (!glyph.valid && m_full)
+        return nullptr; // transient: retry after the reset, do not cache
 
     const auto inserted = m_glyphs.insert(key, glyph);
     return inserted->valid ? &inserted.value() : nullptr;

@@ -60,6 +60,16 @@ public:
     // font, an empty raster, or no room left in the atlas.
     const Glyph *glyphFor(char32_t codePoint, Style style);
 
+    // A fully opaque block, so solid shapes (underlines, strike-through) can be
+    // drawn by the same material and end up in the same draw call as the text.
+    // Returns a null rect only if the atlas is full.
+    QRect solidRegion();
+
+    // Set once packing has failed for lack of room. The renderer checks this at
+    // a frame boundary and calls clear(): resetting mid-frame would invalidate
+    // the regions already written into the vertex buffer.
+    bool isFull() const noexcept { return m_full; }
+
     // The packed image. Its generation counter changes whenever the contents
     // grow, which is the cue for the renderer to re-upload the texture.
     const QImage &image() const { return m_image; }
@@ -106,6 +116,8 @@ private:
     int m_shelfX = 0;
     int m_shelfY = 0;
     int m_shelfHeight = 0;
+    bool m_full = false;
+    QRect m_solidRegion;
 };
 
 } // namespace QTerm
