@@ -16,6 +16,9 @@ qt_standard_project_setup(REQUIRES 6.8)
 
 option(QTERM_BUILD_EXAMPLES "Build QTerm examples" ON)
 option(QTERM_BUILD_TESTS "Build QTerm tests" ON)
+# Off by default: the benchmarks need a real window and a few hundred MB of
+# generated payloads, and they report numbers rather than asserting them.
+option(QTERM_BUILD_BENCHMARKS "Build QTerm throughput benchmarks" OFF)
 
 enable_testing()
 
