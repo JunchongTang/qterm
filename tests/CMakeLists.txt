@@ -39,6 +39,21 @@ qt_add_executable(qterm_quick_item_tests
     quick/QTermQuickPaintedItemTest.cpp
 )
 
+qt_add_executable(qterm_widget_repaint_tests
+    widget/QTermWidgetRepaintTest.cpp
+)
+
+target_link_libraries(qterm_widget_repaint_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Test
+        Qt6::Widgets
+        QTerm::qterm
+)
+
+add_test(NAME qterm_widget_repaint_tests COMMAND qterm_widget_repaint_tests)
+
 qt_add_executable(qterm_inverse_text_tests
     quick/QTermInverseTextTest.cpp
 )
@@ -114,3 +129,6 @@ add_test(NAME qterm_session_tests COMMAND qterm_session_tests)
 add_test(NAME qterm_local_shell_tests COMMAND qterm_local_shell_tests)
 add_test(NAME qterm_serial_tests COMMAND qterm_serial_tests)
 add_test(NAME qterm_quick_item_tests COMMAND qterm_quick_item_tests)
+if(QTERM_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
