@@ -1,12 +1,15 @@
 #include "MainWindow.h"
 
+#include "MenuItemWidget.h"
 #include "NewSessionDialog.h"
+#include "SplitButton.h"
 #include "TerminalTab.h"
 #include "Theme.h"
 
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QSize>
@@ -39,11 +42,19 @@ MainWindow::MainWindow(QWidget *parent)
     m_tabBar->setDrawBase(false);
     m_tabBar->setFocusPolicy(Qt::NoFocus);
 
-    m_newTabButton = new QPushButton;
-    m_newTabButton->setProperty("variant", "ghost");
-    m_newTabButton->setFixedSize(28, 28);
-    m_newTabButton->setIconSize(QSize(14, 14));
-    m_newTabButton->setToolTip(tr("New session"));
+    // The dropdown half's entries open the dialog on the matching form, so the
+    // details are still filled in there; the plus half skips it entirely.
+    m_sessionTypeMenu = new QMenu(this);
+    const QStringList typeNames = { tr("Terminal…"), tr("Serial…"), tr("Telnet…") };
+    for (int i = 0; i < typeNames.size(); ++i) {
+        connect(MenuItemWidget::addTo(m_sessionTypeMenu, typeNames.at(i)), &QAction::triggered,
+                this, [this, i] { openNewSessionDialog(i); });
+    }
+
+    m_newTabButton = new SplitButton;
+    m_newTabButton->setMenu(m_sessionTypeMenu);
+    m_newTabButton->setPrimaryToolTip(tr("New terminal"));
+    m_newTabButton->setMenuToolTip(tr("New session…"));
 
     m_themeButton = new QPushButton;
     m_themeButton->setProperty("variant", "ghost");
@@ -80,7 +91,7 @@ MainWindow::MainWindow(QWidget *parent)
     auto *emptyHint = new QLabel(tr("Start a local shell, serial or telnet session."));
     emptyHint->setAlignment(Qt::AlignHCenter);
     emptyHint->setProperty("muted", true);
-    auto *emptyButton = new QPushButton(tr("New Session"));
+    auto *emptyButton = new QPushButton(tr("New Terminal"));
     emptyButton->setIconSize(QSize(14, 14));
     m_newSessionButtons.append(emptyButton);
     emptyLayout->addWidget(m_emptyIcon);
@@ -101,8 +112,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_statusLabel->setFixedHeight(20);
     root->addWidget(m_statusLabel);
 
-    connect(m_newTabButton, &QPushButton::clicked, this, &MainWindow::openNewSessionDialog);
-    connect(emptyButton, &QPushButton::clicked, this, &MainWindow::openNewSessionDialog);
+    connect(m_newTabButton, &SplitButton::primaryClicked, this, &MainWindow::addDefaultTerminal);
+    connect(emptyButton, &QPushButton::clicked, this, &MainWindow::addDefaultTerminal);
     connect(m_themeButton, &QPushButton::clicked, this, [] {
         Theme::instance()->setDark(!Theme::instance()->isDark());
     });
@@ -117,13 +128,26 @@ MainWindow::MainWindow(QWidget *parent)
     applyTheme();
     updateEmptyState();
     updateWindowTitle();
+
+    // Opening to an empty window means every launch starts with a detour
+    // through the dialog, so the common case is set up up front.
+    addDefaultTerminal();
 }
 
-void MainWindow::openNewSessionDialog()
+void MainWindow::openNewSessionDialog(int type)
 {
     NewSessionDialog dialog(this);
+    dialog.selectType(type);
     if (dialog.exec() == QDialog::Accepted)
         addTab(dialog.sessionConfig());
+}
+
+void MainWindow::addDefaultTerminal()
+{
+    SessionConfig config;
+    config.type = SessionConfig::Pty;
+    config.label = tr("Terminal");
+    addTab(config);
 }
 
 void MainWindow::addTab(const SessionConfig &config)
@@ -169,6 +193,11 @@ void MainWindow::addTab(const SessionConfig &config)
     connect(tab, &TerminalTab::statusMessage, this, [this](const QString &message) {
         m_statusLabel->setText(message);
     });
+    connect(tab, &TerminalTab::newTabRequested, this, &MainWindow::addDefaultTerminal);
+    connect(tab, &TerminalTab::closeTabRequested, this, [this, tab] {
+        // The index shifts as tabs come and go, so resolve it at signal time.
+        closeTab(m_tabs.indexOf(tab));
+    });
 
     updateEmptyState();
     updateWindowTitle();
@@ -198,7 +227,8 @@ void MainWindow::applyTheme()
     const Theme *t = Theme::instance();
     m_themeButton->setIcon(t->icon(t->isDark() ? QStringLiteral("sun")
                                                : QStringLiteral("moon")));
-    m_newTabButton->setIcon(t->icon(QStringLiteral("plus")));
+    m_newTabButton->setIcons(t->icon(QStringLiteral("plus")),
+                             t->icon(QStringLiteral("chevron-down"), t->mutedForeground(), 10));
     m_emptyIcon->setPixmap(t->icon(QStringLiteral("terminal"),
                                    t->mutedForeground(), 32).pixmap(32, 32));
     // New-session buttons carry the same leading icon as the QML demo.

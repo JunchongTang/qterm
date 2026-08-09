@@ -345,6 +345,18 @@ Item {
     }
 
     Shortcut {
+        sequence: "Ctrl+T"
+        enabled: rendererLoader.activeFocus
+        onActivated: root.newTabRequested()
+    }
+
+    Shortcut {
+        sequence: StandardKey.Close
+        enabled: rendererLoader.activeFocus
+        onActivated: root.closeTabRequested()
+    }
+
+    Shortcut {
         sequence: StandardKey.Copy
         enabled: rendererLoader.activeFocus
         onActivated: {
