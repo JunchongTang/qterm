@@ -24,7 +24,7 @@ public:
     void deleteCells(int column, int count);
     void clearCharacterAt(int column);
     bool appendCombiningMark(int column, const QString &mark);
-    void setCharacter(int column, const QString &text, int width, const QTermCellAttributes &attributes);
+    void setCharacter(int column, QStringView text, int width, const QTermCellAttributes &attributes);
     // Writes a run of single-width characters starting at \a column. The caller
     // guarantees every character is narrow and non-combining, which lets this
     // skip the per-character width and continuation-cell handling in
@@ -59,7 +59,7 @@ private:
     // returns its key; keys are line-local and reset whenever the line is
     // cleared or recycled.
     quint16 internCombining(const QString &text);
-    void writeCell(QTermCell &cell, const QString &text, int width,
+    void writeCell(QTermCell &cell, QStringView text, int width,
                    const QTermCellAttributes &attributes);
 
     QVector<QTermCell> m_cells;
