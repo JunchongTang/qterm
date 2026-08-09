@@ -137,35 +137,81 @@ int displayWidth(QStringView text)
     return isWideCodePoint(codePoint) ? 2 : 1;
 }
 
-int consumeExtendedColor(const QVector<int> &parameters, int parameterIndex, bool foreground, QTerm::QTermCellAttributes &attributes)
+void applyExtendedColor(bool foreground, int rgb, int index,
+                        QTerm::QTermCellAttributes &attributes)
+{
+    if (foreground) {
+        attributes.foregroundIndex = index;
+        attributes.foregroundRgb = rgb;
+    } else {
+        attributes.backgroundIndex = index;
+        attributes.backgroundRgb = rgb;
+    }
+}
+
+// Applies a 38/48 extended-colour sequence and returns how many parameters it
+// consumed.
+//
+// Two spellings exist. The common one separates everything with semicolons:
+//
+//     ESC[38;2;r;g;bm       ESC[38;5;nm
+//
+// ITU T.416 instead makes the components sub-parameters of the 38, separated by
+// colons, with a slot for a colour space that is normally left empty:
+//
+//     ESC[38:2::r:g:bm      ESC[38:2:r:g:bm      ESC[38:5:nm
+//
+// The two cannot be folded together: the colon form may carry one extra slot,
+// which shifts the components by one. subParameterFlags marks which values
+// arrived after a colon, which is what tells the forms apart.
+int consumeExtendedColor(const QVector<int> &parameters,
+                         const QVector<quint8> &subParameterFlags,
+                         int parameterIndex, bool foreground,
+                         QTerm::QTermCellAttributes &attributes)
 {
     if (parameterIndex + 1 >= parameters.size()) {
         return 1;
     }
 
+    int subCount = 0;
+    while (parameterIndex + 1 + subCount < parameters.size()
+           && parameterIndex + 1 + subCount < subParameterFlags.size()
+           && subParameterFlags.at(parameterIndex + 1 + subCount) != 0) {
+        ++subCount;
+    }
+
     const int colorMode = parameters.at(parameterIndex + 1);
-    if (colorMode == 5 && parameterIndex + 2 < parameters.size()) {
-        if (foreground) {
-            attributes.foregroundIndex = qBound(0, parameters.at(parameterIndex + 2), 255);
-            attributes.foregroundRgb = -1;
-        } else {
-            attributes.backgroundIndex = qBound(0, parameters.at(parameterIndex + 2), 255);
-            attributes.backgroundRgb = -1;
+
+    if (subCount > 0) {
+        // Colon form: everything after the mode belongs to this parameter, so
+        // the count itself says whether the colour-space slot is present.
+        if (colorMode == 2 && subCount >= 4) {
+            const int first = parameterIndex + (subCount >= 5 ? 3 : 2);
+            applyExtendedColor(foreground,
+                               packRgb(parameters.at(first),
+                                       parameters.at(first + 1),
+                                       parameters.at(first + 2)),
+                               -1, attributes);
+        } else if (colorMode == 5 && subCount >= 2) {
+            applyExtendedColor(foreground, -1,
+                               qBound(0, parameters.at(parameterIndex + 2), 255),
+                               attributes);
         }
+        return 1 + subCount;
+    }
+
+    if (colorMode == 5 && parameterIndex + 2 < parameters.size()) {
+        applyExtendedColor(foreground, -1,
+                           qBound(0, parameters.at(parameterIndex + 2), 255), attributes);
         return 3;
     }
 
     if (colorMode == 2 && parameterIndex + 4 < parameters.size()) {
-        const int rgb = packRgb(parameters.at(parameterIndex + 2),
-                                parameters.at(parameterIndex + 3),
-                                parameters.at(parameterIndex + 4));
-        if (foreground) {
-            attributes.foregroundIndex = -1;
-            attributes.foregroundRgb = rgb;
-        } else {
-            attributes.backgroundIndex = -1;
-            attributes.backgroundRgb = rgb;
-        }
+        applyExtendedColor(foreground,
+                           packRgb(parameters.at(parameterIndex + 2),
+                                   parameters.at(parameterIndex + 3),
+                                   parameters.at(parameterIndex + 4)),
+                           -1, attributes);
         return 5;
     }
 
@@ -581,7 +627,8 @@ void QTermInputExecutor::eraseInDisplay(int mode)
     }
 }
 
-void QTermInputExecutor::characterAttributes(const QVector<int> &parameters)
+void QTermInputExecutor::characterAttributes(const QVector<int> &parameters,
+                                             const QVector<quint8> &subParameterFlags)
 {
     const QVector<int> normalized = parameters.isEmpty() ? QVector<int>{0} : parameters;
 
@@ -661,10 +708,12 @@ void QTermInputExecutor::characterAttributes(const QVector<int> &parameters)
                 currentScreen().currentAttributes.backgroundIndex = 8 + (parameter - 100);
                 currentScreen().currentAttributes.backgroundRgb = -1;
             } else if (parameter == 38) {
-                parameterIndex += consumeExtendedColor(normalized, parameterIndex, true, currentScreen().currentAttributes);
+                parameterIndex += consumeExtendedColor(normalized, subParameterFlags, parameterIndex,
+                                                      true, currentScreen().currentAttributes);
                 continue;
             } else if (parameter == 48) {
-                parameterIndex += consumeExtendedColor(normalized, parameterIndex, false, currentScreen().currentAttributes);
+                parameterIndex += consumeExtendedColor(normalized, subParameterFlags, parameterIndex,
+                                                      false, currentScreen().currentAttributes);
                 continue;
             }
             ++parameterIndex;

@@ -22,6 +22,7 @@ private slots:
     void keepsPartialCsiStateAcrossWrites();
     void ignoresUnsupportedControlStrings();
     void supportsColonSeparatedTrueColorSgr();
+    void supportsColonSeparatedSgrVariants();
     void treatsVerticalTabAndFormFeedAsLineFeeds();
     void supportsCsiCursorPosition();
     void supportsCsiEraseInLine();
@@ -225,6 +226,42 @@ void QTermCoreTest::supportsColonSeparatedTrueColorSgr()
 
     QCOMPARE(core.dumpPlainText(), "red"_L1);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0xff0000);
+}
+
+// The colon form comes in two lengths (with and without the colour-space slot)
+// and also covers indexed colour and backgrounds, none of which the
+// semicolon-folding parser could tell apart.
+void QTermCoreTest::supportsColonSeparatedSgrVariants()
+{
+    {   // truecolour without the empty colour-space slot
+        QTermCore core;
+        core.writePlainText("\x1b[38:2:0:255:0mgreen"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0x00ff00);
+    }
+    {   // indexed colour
+        QTermCore core;
+        core.writePlainText("\x1b[38:5:196mred"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundIndex, 196);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, -1);
+    }
+    {   // background, with the colour-space slot
+        QTermCore core;
+        core.writePlainText("\x1b[48:2::0:0:255mblue"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.backgroundRgb, 0x0000ff);
+    }
+    {   // the semicolon form must keep working unchanged
+        QTermCore core;
+        core.writePlainText("\x1b[38;2;255;128;0morange"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0xff8000);
+    }
+    {   // a colon sequence followed by more attributes on the same escape
+        QTermCore core;
+        core.writePlainText("\x1b[1;38:2::255:0:0;4mred"_L1);
+        const auto attributes = core.buffer().lineAt(0).cellAt(0).attributes;
+        QCOMPARE(attributes.foregroundRgb, 0xff0000);
+        QVERIFY(attributes.bold);
+        QVERIFY(attributes.underline);
+    }
 }
 
 void QTermCoreTest::treatsVerticalTabAndFormFeedAsLineFeeds()

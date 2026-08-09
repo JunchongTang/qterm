@@ -50,7 +50,11 @@ public:
     void cursorPosition(int row, int column);
     void eraseInLine(int mode);
     void eraseInDisplay(int mode);
-    void characterAttributes(const QVector<int> &parameters);
+    // subParameterFlags marks values introduced by a colon rather than a
+    // semicolon; see consumeExtendedColor(). Empty means the whole sequence
+    // used semicolons.
+    void characterAttributes(const QVector<int> &parameters,
+                             const QVector<quint8> &subParameterFlags = {});
     void insertCharacters(int count);
     void deleteCharacters(int count);
     void insertLines(int count);
