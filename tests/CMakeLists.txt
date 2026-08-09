@@ -39,6 +39,38 @@ qt_add_executable(qterm_quick_item_tests
     quick/QTermQuickPaintedItemTest.cpp
 )
 
+qt_add_executable(qterm_capability_tests
+    core/QTermCapabilityTest.cpp
+)
+
+target_include_directories(qterm_capability_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(qterm_capability_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_capability_tests COMMAND qterm_capability_tests)
+
+# Regenerates docs/protocol-support.md from a real run of the capability tests.
+# The table is never hand-edited: the previous hand-maintained one had drifted
+# into claiming support the code did not have.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_custom_target(qterm_protocol_support
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/generate_protocol_support.py
+                $<TARGET_FILE:qterm_capability_tests>
+        DEPENDS qterm_capability_tests
+        COMMENT "Generating docs/protocol-support.md from the capability tests"
+        VERBATIM)
+endif()
+
 qt_add_executable(qterm_widget_repaint_tests
     widget/QTermWidgetRepaintTest.cpp
 )
