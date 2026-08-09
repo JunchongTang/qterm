@@ -9,11 +9,27 @@ import QtQuickTerminal
 Item {
     id: root
 
+    // Exposed for the demo screenshot probe.
+    property alias sessionTypeMenu: sessionTypeMenu
     property var tabs: []
     property int currentIndex: -1
 
     readonly property var activeTab: currentIndex >= 0 && currentIndex < tabs.length
                                      ? tabs[currentIndex] : null
+
+    // A terminal with no explicit program: the backend falls back to the
+    // platform's default shell.
+    readonly property var defaultPtyConfig: ({
+        type: "pty",
+        label: qsTr("Terminal"),
+        program: "",
+        arguments: [],
+        workingDirectory: ""
+    })
+
+    // Opening to an empty window means every launch starts with a detour
+    // through the dialog, so the common case is set up up front.
+    Component.onCompleted: root.addTab(root.defaultPtyConfig)
 
     function addTab(config) {
         const tab = tabComponent.createObject(stack, { sessionConfig: config })
@@ -38,6 +54,26 @@ Item {
     Component {
         id: tabComponent
         TerminalTab {}
+    }
+
+    // The dropdown half of the new-session button. Each entry opens the dialog
+    // on the matching tab, so the details are still filled in there.
+    Menu {
+        id: sessionTypeMenu
+        implicitWidth: 180
+
+        MenuItem {
+            text: qsTr("Terminal…")
+            onTriggered: newSessionDialog.openWithType(0)
+        }
+        MenuItem {
+            text: qsTr("Serial…")
+            onTriggered: newSessionDialog.openWithType(1)
+        }
+        MenuItem {
+            text: qsTr("Telnet…")
+            onTriggered: newSessionDialog.openWithType(2)
+        }
     }
 
     ColumnLayout {
@@ -115,9 +151,15 @@ Item {
                     }
                 }
 
-                IconButton {
+                SplitButton {
+                    objectName: "newSessionSplit"
                     iconName: "plus"
-                    onClicked: newSessionDialog.open()
+                    onPrimaryClicked: root.addTab(root.defaultPtyConfig)
+                    onMenuRequested: function(anchorItem) {
+                        const point = anchorItem.mapToItem(root, 0, anchorItem.height)
+                        sessionTypeMenu.popup(point.x - sessionTypeMenu.width + anchorItem.width,
+                                              point.y + Theme.space1)
+                    }
                 }
 
                 Item { Layout.fillWidth: true }
@@ -188,9 +230,9 @@ Item {
                 Button {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: Theme.space2
-                    text: qsTr("New Session")
+                    text: qsTr("New Terminal")
                     iconName: "plus"
-                    onClicked: newSessionDialog.open()
+                    onClicked: root.addTab(root.defaultPtyConfig)
                 }
             }
         }
