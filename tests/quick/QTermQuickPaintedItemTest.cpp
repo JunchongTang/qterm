@@ -36,7 +36,7 @@ class QTermQuickPaintedItemTest : public QObject
 
 private slots:
     // Geometry → terminal size propagation
-    void syncsSizeImmediatelyOnGeometryChange();
+    void syncsSizeOnGeometryChange();
     void clampsSizeToMinimumColumnsAndRows();
 
     // The core resize-regression bug: prompt lines must survive repeated
@@ -46,10 +46,14 @@ private slots:
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QTermQuickPaintedItem::geometryChange must call syncTerminalSize() synchronously
-// (no debounce) so the terminal column count reflects the new width immediately.
+// A geometry change must reach the terminal's column and row count.
+//
+// The first real size is applied synchronously: there is nothing on screen yet,
+// so there is no reason to make the caller wait. Later changes are debounced,
+// because dragging a window edge produces a geometry change per frame and each
+// resize reflows the whole scrollback.
 // ─────────────────────────────────────────────────────────────────────────────
-void QTermQuickPaintedItemTest::syncsSizeImmediatelyOnGeometryChange()
+void QTermQuickPaintedItemTest::syncsSizeOnGeometryChange()
 {
     QTermTerminal terminal;
     QTermQuickPaintedItem item;
@@ -65,13 +69,13 @@ void QTermQuickPaintedItemTest::syncsSizeImmediatelyOnGeometryChange()
     QCOMPARE(terminal.columns(), expectedColumns(item, 800));
     QCOMPARE(terminal.rows(),    expectedRows(item, 480));
 
-    // Narrow: geometry change must propagate synchronously.
+    // Narrow: propagates once the debounce interval has elapsed.
     item.setWidth(400);
-    QCOMPARE(terminal.columns(), expectedColumns(item, 400));
+    QTRY_COMPARE(terminal.columns(), expectedColumns(item, 400));
 
     // Widen back.
     item.setWidth(800);
-    QCOMPARE(terminal.columns(), expectedColumns(item, 800));
+    QTRY_COMPARE(terminal.columns(), expectedColumns(item, 800));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
