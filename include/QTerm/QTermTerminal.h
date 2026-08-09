@@ -256,7 +256,8 @@ public:
         \param key The key code.
         \param text Optional text payload for printable keys.
     */
-    Q_INVOKABLE void sendKey(int key, const QString &text = QString());
+    Q_INVOKABLE void sendKey(int key, const QString &text = QString(),
+                             Qt::KeyboardModifiers modifiers = Qt::NoModifier);
 
     /*!
         \brief Sends pasted text to the attached session.
