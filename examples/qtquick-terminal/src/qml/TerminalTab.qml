@@ -63,8 +63,18 @@ Item {
 
     Component.onDestruction: termSession.close()
 
+    // Forwarded so the context menu can reach the workspace, which owns the
+    // tab list.
+    signal newTabRequested()
+    signal closeTabRequested()
+
+    property alias pane: pane
+
     TerminalPane {
+        id: pane
         anchors.fill: parent
         terminal: term
+        onNewTabRequested: root.newTabRequested()
+        onCloseTabRequested: root.closeTabRequested()
     }
 }

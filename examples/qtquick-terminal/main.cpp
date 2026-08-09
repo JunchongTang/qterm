@@ -140,6 +140,7 @@ public:
             return;
 
         m_runsLeft = qEnvironmentVariableIntValue("QTERM_BENCH_WARMUP") + 1;
+        m_uiProbe = qEnvironmentVariable("QTERM_BENCH_UI");
         QTimer::singleShot(1500, this, [this, engine] { openSession(engine); });
     }
 
@@ -186,6 +187,7 @@ private:
 
     void begin(QQmlApplicationEngine *engine)
     {
+        m_engine = engine;
         for (QObject *root : engine->rootObjects()) {
             if (auto *item = root->findChild<QTerm::QTermQuickItem *>()) {
                 m_terminal = item->terminal();
@@ -231,6 +233,28 @@ private:
         });
     }
 
+    // Opens a piece of UI and screenshots it, so menu and find-bar appearance
+    // can be reviewed without driving the app by hand.
+    void probeUi(QQmlApplicationEngine *engine)
+    {
+        QObject *root = engine->rootObjects().constFirst();
+        const QString script = (m_uiProbe == u"menu")
+            ? QStringLiteral("workspace.activeTab.pane.contextMenu.popup(260, 200)")
+            : QStringLiteral("workspace.activeTab.pane.openFind(\"line\")");
+        QQmlExpression expr(qmlContext(root), root, script);
+        expr.evaluate();
+        if (expr.hasError())
+            qInfo().noquote() << QStringLiteral("  ui probe: %1").arg(expr.error().toString());
+
+        QTimer::singleShot(600, this, [] {
+            const QString shot = qEnvironmentVariable("QTERM_BENCH_SHOT");
+            if (auto *w = qobject_cast<QQuickWindow *>(qApp->topLevelWindows().value(0)))
+                w->grabWindow().save(shot);
+            qInfo().noquote() << QStringLiteral("  saved %1").arg(shot);
+            ::exit(0);
+        });
+    }
+
     void checkForMarker()
     {
         if (!m_awaitingMarker)
@@ -246,7 +270,11 @@ private:
             return;
 
         m_awaitingMarker = false;
-        if (--m_runsLeft <= 0) {
+        if (--m_runsLeft <= 0 && !m_uiProbe.isEmpty()) {
+            probeUi(m_engine);
+            return;
+        }
+        if (m_runsLeft <= 0) {
             m_lastLineAt = m_timer.elapsed() / 1000.0;
             // The shell prints its timing after the payload, so wait for it.
             auto *wait = new QTimer(this);
@@ -279,6 +307,8 @@ private:
 
     QString m_payload;
     QString m_marker;
+    QString m_uiProbe;
+    QQmlApplicationEngine *m_engine = nullptr;
     QElapsedTimer m_timer;
     QTerm::QTermTerminal *m_terminal = nullptr;
     int m_runsLeft = 1;
