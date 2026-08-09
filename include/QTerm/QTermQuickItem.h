@@ -6,6 +6,8 @@
 #include <QQmlComponent>
 #include <QQuickItem>
 #include <QTimer>
+
+#include <memory>
 #include <QElapsedTimer>
 #include <QString>
 #include <QVector>
@@ -15,7 +17,13 @@
 
 #include <QtQml/qqmlregistration.h>
 
+QT_BEGIN_NAMESPACE
+class QSGTexture;
+QT_END_NAMESPACE
+
 namespace QTerm {
+
+class QTermGlyphAtlas;
 
 class QTermViewController;
 
@@ -78,6 +86,9 @@ public:
     Q_ENUM(CursorStyle)
 
     explicit QTermQuickItem(QQuickItem *parent = nullptr);
+    // Defined in the .cpp: m_glyphAtlas holds an incomplete type here, since
+    // the atlas is an implementation detail rather than part of the API.
+    ~QTermQuickItem() override;
 
     /*! \brief Returns the terminal attached to this item. */
     QTermTerminal *terminal() const noexcept;
@@ -215,6 +226,13 @@ private:
     bool m_hasFocus = false;
     // Rows that need incremental rebuild (only used when !m_contentDirty).
     QVector<int> m_dirtyRowSet;
+
+    // ── Glyph atlas text path (opt-in via QTERM_GLYPH_ATLAS) ─────────────────
+    // A terminal is a fixed grid, so the shaping QTextLayout performs on every
+    // rebuild cannot change the result. This path looks glyphs up instead.
+    std::unique_ptr<QTermGlyphAtlas> m_glyphAtlas;
+    QSGTexture *m_atlasTexture = nullptr;
+    quint32 m_atlasTextureGeneration = 0;
 };
 
 } // namespace QTerm

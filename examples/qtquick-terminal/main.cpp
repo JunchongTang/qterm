@@ -5,6 +5,7 @@
 #include <QQmlContext>
 #include <QQmlExpression>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QStyleHints>
 #include <QTimer>
 
@@ -257,6 +258,16 @@ private:
                     qInfo().noquote()
                         << QStringLiteral("  last line on screen %1 s   shell reported: %2")
                                .arg(m_lastLineAt, 0, 'f', 3).arg(line.trimmed());
+                    // Optional screenshot, so a rendering change can be checked
+                    // for correctness and not just for speed.
+                    const QString shot = qEnvironmentVariable("QTERM_BENCH_SHOT");
+                    if (!shot.isEmpty()) {
+                        if (auto *w = qobject_cast<QQuickWindow *>(
+                                qApp->topLevelWindows().value(0))) {
+                            w->grabWindow().save(shot);
+                            qInfo().noquote() << QStringLiteral("  saved %1").arg(shot);
+                        }
+                    }
                     ::exit(0);
                 }
             });
