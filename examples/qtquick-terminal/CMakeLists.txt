@@ -30,6 +30,7 @@ qt_add_qml_module(qtquick_terminal
         src/qml/components/Menu.qml
         src/qml/components/MenuItem.qml
         src/qml/components/SearchBar.qml
+        src/qml/components/SplitButton.qml
         src/qml/components/FocusRing.qml
         src/qml/components/Label.qml
         src/qml/components/Button.qml

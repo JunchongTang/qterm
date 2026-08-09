@@ -175,13 +175,8 @@ private:
                 qInfo().noquote() << QStringLiteral("  bench: %1").arg(renderer.error().toString());
         }
 
-        QQmlExpression open(qmlContext(root), root,
-                            QStringLiteral("workspace.addTab({type: 'pty', label: 'bench',"
-                                           " program: '', arguments: [], workingDirectory: ''})"));
-        open.evaluate();
-        if (open.hasError())
-            qInfo().noquote() << QStringLiteral("  bench: %1").arg(open.error().toString());
-
+        // The workspace opens a default terminal on startup, so there is
+        // nothing to create here -- doing so would leave two tabs open.
         QTimer::singleShot(1500, this, [this, engine] { begin(engine); });
     }
 
@@ -238,7 +233,9 @@ private:
     void probeUi(QQmlApplicationEngine *engine)
     {
         QObject *root = engine->rootObjects().constFirst();
-        const QString script = (m_uiProbe == u"menu")
+        const QString script = (m_uiProbe == u"types")
+            ? QStringLiteral("workspace.sessionTypeMenu.popup(320, 60)")
+            : (m_uiProbe == u"menu")
             ? QStringLiteral("workspace.activeTab.pane.contextMenu.popup(260, 200)")
             : QStringLiteral("workspace.activeTab.pane.openFind(\"line\")");
         QQmlExpression expr(qmlContext(root), root, script);

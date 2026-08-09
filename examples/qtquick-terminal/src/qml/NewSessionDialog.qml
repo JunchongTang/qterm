@@ -11,6 +11,12 @@ Dialog {
 
     readonly property var activeForm: [ptyForm, serialForm, telnetForm][typeTabs.currentIndex]
 
+    // Opens straight onto one session type, for the split button's dropdown.
+    function openWithType(index) {
+        typeTabs.currentIndex = index
+        open()
+    }
+
     title: qsTr("New Session")
     description: qsTr("Configure and start a new terminal session.")
     implicitWidth: 480

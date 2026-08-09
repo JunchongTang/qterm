@@ -20,7 +20,7 @@ C.MenuItem {
     // A layout rather than hand-computed widths: the hint has to keep its own
     // width and stay right-aligned while the label takes the remaining space.
     contentItem: RowLayout {
-        spacing: Theme.space5
+        spacing: Theme.space6
 
         Text {
             Layout.fillWidth: true
