@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QSocketNotifier>
+#include <QVarLengthArray>
 #include <QTimer>
 
 #include <cerrno>
@@ -24,8 +25,10 @@
 #endif
 
 #if defined(Q_OS_MACOS)
-#include <libproc.h>     // proc_name — foreground process name
+#include <libproc.h>     // proc_name / proc_listchildpids — foreground process name
 #include <sys/param.h>   // MAXCOMLEN
+#else
+#include <QDir>          // /proc scan — see childOf()
 #endif
 
 namespace {
@@ -397,6 +400,85 @@ QTermSessionBackend::WorkState QTermLocalShellBackend::workState() const
     return (fg == static_cast<pid_t>(m_childPid)) ? WorkIdle : WorkBusy;
 }
 
+namespace {
+
+// Name of a pid, or an empty string when it cannot be read.
+QString processName(pid_t pid)
+{
+    if (pid <= 0)
+        return {};
+#if defined(Q_OS_MACOS)
+    char name[2 * MAXCOMLEN + 1] = {0};
+    if (::proc_name(pid, name, sizeof(name)) > 0)
+        return QString::fromLocal8Bit(name);
+    return {};
+#else // Linux and other platforms exposing /proc
+    QFile comm(QStringLiteral("/proc/%1/comm").arg(pid));
+    if (comm.open(QIODevice::ReadOnly))
+        return QString::fromLocal8Bit(comm.readAll()).trimmed();
+    return {};
+#endif
+}
+
+// First child of `pid`, or 0. Used to look past wrappers — see below.
+pid_t childOf(pid_t pid)
+{
+    if (pid <= 0)
+        return 0;
+#if defined(Q_OS_MACOS)
+    // Ask for the size first: a wrapper normally has exactly one child, but a
+    // fixed-size buffer would silently truncate on the odd case that it does not.
+    const int bytes = ::proc_listchildpids(pid, nullptr, 0);
+    if (bytes <= 0)
+        return 0;
+    QVarLengthArray<pid_t, 8> kids(bytes / static_cast<int>(sizeof(pid_t)));
+    const int got = ::proc_listchildpids(pid, kids.data(), bytes);
+    if (got <= 0)
+        return 0;
+    return kids.at(0);
+#else
+    // No cheap "list my children" call; scan /proc for a matching PPid.
+    const QStringList entries =
+        QDir(QStringLiteral("/proc")).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &entry : entries) {
+        bool isPid = false;
+        const int candidate = entry.toInt(&isPid);
+        if (!isPid || candidate <= 0)
+            continue;
+        QFile stat(QStringLiteral("/proc/%1/stat").arg(candidate));
+        if (!stat.open(QIODevice::ReadOnly))
+            continue;
+        // "<pid> (<comm>) <state> <ppid> ..." — comm may contain spaces and
+        // parentheses, so split after the last ')'.
+        const QByteArray line = stat.readAll();
+        const int close = line.lastIndexOf(')');
+        if (close < 0)
+            continue;
+        const QList<QByteArray> rest =
+            line.mid(close + 1).simplified().split(' ');
+        if (rest.size() < 2)
+            continue;
+        if (rest.at(1).toInt() == pid)
+            return candidate;
+    }
+    return 0;
+#endif
+}
+
+// Wrappers that run the interesting command as a child. Without looking past
+// them a screenful of tabs all read "sudo".
+bool isWrapper(const QString &name)
+{
+    static const QStringList wrappers = {
+        QStringLiteral("sudo"),   QStringLiteral("doas"),  QStringLiteral("env"),
+        QStringLiteral("nice"),   QStringLiteral("nohup"), QStringLiteral("stdbuf"),
+        QStringLiteral("time"),   QStringLiteral("timeout"),
+    };
+    return wrappers.contains(name);
+}
+
+} // namespace
+
 QString QTermLocalShellBackend::foregroundProcessName() const
 {
     if (m_masterFd < 0 || m_childPid <= 0)
@@ -404,18 +486,26 @@ QString QTermLocalShellBackend::foregroundProcessName() const
     const pid_t fg = ::tcgetpgrp(m_masterFd);
     if (fg <= 0 || fg == static_cast<pid_t>(m_childPid))
         return {};   // idle: foreground is the shell itself, no running program
-    // fg is a process-group id == the leader's (i.e. the command's) pid; name it.
-#if defined(Q_OS_MACOS)
-    char name[2 * MAXCOMLEN + 1] = {0};
-    if (::proc_name(fg, name, sizeof(name)) > 0)
-        return QString::fromLocal8Bit(name);
-    return {};
-#else // Linux / other platforms exposing /proc
-    QFile comm(QStringLiteral("/proc/%1/comm").arg(fg));
-    if (comm.open(QIODevice::ReadOnly))
-        return QString::fromLocal8Bit(comm.readAll()).trimmed();
-    return {};
-#endif
+
+    // fg is a process-group id == the leader's (i.e. the command's) pid.
+    //
+    // Walk past wrappers: `sudo make` puts sudo in the foreground and make below
+    // it, so naming the group leader would label every such tab "sudo". The loop
+    // is bounded because `sudo -E env FOO=1 make` nests more than once, and a
+    // bound (rather than a single step) keeps a pathological chain from spinning.
+    pid_t pid = fg;
+    QString name = processName(pid);
+    for (int depth = 0; depth < 4 && isWrapper(name); ++depth) {
+        const pid_t kid = childOf(pid);
+        if (kid <= 0)
+            break;                  // wrapper with no child yet — keep its name
+        const QString kidName = processName(kid);
+        if (kidName.isEmpty())
+            break;
+        pid = kid;
+        name = kidName;
+    }
+    return name;
 }
 
 } // namespace QTerm
