@@ -120,10 +120,18 @@ qt_add_executable(qterm_pointer_shape_tests
 target_link_libraries(qterm_pointer_shape_tests
     PRIVATE
         Qt6::Gui
+        Qt6::Qml
         Qt6::Quick
         Qt6::Test
         QTerm::qterm
+        # The QML plugin is static: linking it is what registers the types for
+        # `import QTerm` (hosts do the same).
+        qtermplugin
 )
+
+# The QML-built case imports the module the way a host does: the QML plugin is
+# static, so linking it is what registers the types (same as the examples).
+qt_import_qml_plugins(qterm_pointer_shape_tests)
 
 add_test(NAME qterm_pointer_shape_tests COMMAND qterm_pointer_shape_tests)
 
