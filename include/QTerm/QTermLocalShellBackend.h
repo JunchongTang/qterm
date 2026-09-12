@@ -110,6 +110,19 @@ public:
     WorkState workState() const override;
     QString foregroundProcessName() const override;
 
+    /*!
+        \brief Exit code of the shell, or -1 while it is still running.
+
+        Set when the child is reaped. Kept as a property rather than only in the
+        \c errorOccurred message because a host that wants to show it (a tooltip,
+        a status line) should not have to parse prose — and a clean exit produces
+        no error at all, yet 0 is still information worth showing.
+
+        A shell killed by a signal reports 128 + signal number, the convention
+        shells themselves use for \c $?.
+    */
+    Q_INVOKABLE int exitCode() const { return m_exitCode; }
+
 signals:
     void programChanged();
     void argumentsChanged();
@@ -161,6 +174,7 @@ private:
 
     int m_masterFd = -1;
     qint64 m_childPid = -1;
+    int m_exitCode = -1;
     QSocketNotifier *m_readNotifier = nullptr;
     QTimer *m_resizeDebounceTimer = nullptr;
     QTimer *m_childExitPollTimer = nullptr;
