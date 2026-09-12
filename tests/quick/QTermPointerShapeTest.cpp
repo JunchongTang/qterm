@@ -12,6 +12,8 @@
 // the widget-default arrow for its whole life.
 #include <QtTest>
 
+#include <QQuickWindow>
+
 #include <QTerm/QTermQuickItem.h>
 #include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermTerminal.h>
@@ -27,6 +29,7 @@ private slots:
     void thePaintedItemStartsWithAnIBeam();
     void anApplicationThatGrabsTheMouseGetsTheArrowBack();
     void releasingTheMouseRestoresTheIBeam();
+    void theWindowActuallyShowsTheBeamUnderThePointer();
 };
 
 void QTermPointerShapeTest::theSceneGraphItemStartsWithAnIBeam()
@@ -61,6 +64,27 @@ void QTermPointerShapeTest::releasingTheMouseRestoresTheIBeam()
     terminal.feedText(QStringLiteral("\x1b[?1002h"));
     terminal.feedText(QStringLiteral("\x1b[?1002l"));
     QCOMPARE(item.cursor().shape(), Qt::IBeamCursor);
+}
+
+// The three cases above pin the item's own cursor. This one pins the thing the
+// user actually sees: a window only adopts an item's cursor if the item is
+// registered as a cursor owner and the window recomputes on mouse move. An item
+// that "has" the right cursor while the window keeps drawing the arrow would pass
+// every check above and still look broken.
+void QTermPointerShapeTest::theWindowActuallyShowsTheBeamUnderThePointer()
+{
+    QQuickWindow window;
+    window.resize(200, 120);
+
+    QTermQuickItem item(window.contentItem());
+    item.setSize(QSizeF(200, 120));
+
+    window.show();
+    if (!QTest::qWaitForWindowExposed(&window))
+        QSKIP("the window was never exposed -- no compositor for this run");
+
+    QTest::mouseMove(&window, QPoint(100, 60));
+    QTRY_COMPARE(window.cursor().shape(), Qt::IBeamCursor);
 }
 
 QTEST_MAIN(QTermPointerShapeTest)
