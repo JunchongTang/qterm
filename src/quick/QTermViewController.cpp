@@ -307,7 +307,28 @@ bool QTermViewController::handleInputMethod(QInputMethodEvent *event)
 
 bool QTermViewController::handleMousePress(QMouseEvent *event)
 {
-    if (!m_terminal || event->button() != Qt::LeftButton)
+    if (!m_terminal)
+        return false;
+
+    // Right button: the host's context menu, or the application's if it has taken
+    // the mouse over. Handling it here is what lets a host drop the MouseArea it
+    // would otherwise lay over the terminal -- an overlay that quietly steals the
+    // pointer shape (it claims the cursor even with no cursorShape set) and has to
+    // re-derive the cell under the click by hand.
+    if (event->button() == Qt::RightButton) {
+        emit focusRequested();
+        const int row = rowAtPosition(event->position().y());
+        const int col = columnAtPosition(event->position().x());
+        if (m_terminal->isMouseProtocolActive()) {
+            m_terminal->sendMouse(row, col, event->button(), event->modifiers(), true);
+            return true;
+        }
+        emit contextMenuRequested(event->position(), row, col,
+                                  hyperlinkIdAtPosition(row, col));
+        return true;
+    }
+
+    if (event->button() != Qt::LeftButton)
         return false;
 
     emit focusRequested();

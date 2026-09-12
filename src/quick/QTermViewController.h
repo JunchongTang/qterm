@@ -83,6 +83,11 @@ signals:
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
+    // Right-click on the terminal. Carries everything a host needs to raise a menu
+    // without laying its own MouseArea over the view: where to pop it up, which
+    // cell it was over, and the OSC 8 link under it (0 when there is none).
+    void contextMenuRequested(const QPointF &position, int row, int column,
+                              int hyperlinkId);
     void mouseAcceptanceChanged();  // the view should call updateMouseAcceptance()
     void focusRequested();          // the view should call forceActiveFocus()
     void repaintNeeded();           // surface content or scroll changed: update()

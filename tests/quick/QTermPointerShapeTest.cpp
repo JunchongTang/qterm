@@ -31,6 +31,10 @@ private slots:
     void anApplicationThatGrabsTheMouseGetsTheArrowBack();
     void releasingTheMouseRestoresTheIBeam();
     void aQmlCreatedTerminalAlsoGetsTheBeam();
+    void aHostCanPinTheShapeAndHandItBack();
+    void rightClickAsksTheHostForAMenu();
+    void anApplicationWithTheMouseKeepsTheRightButton();
+    void thePaintedItemCarriesTheSameApi();
 };
 
 void QTermPointerShapeTest::theSceneGraphItemStartsWithAnIBeam()
@@ -90,16 +94,11 @@ void QTermPointerShapeTest::aQmlCreatedTerminalAlsoGetsTheBeam()
             width: 200; height: 120; visible: true
             QTermTerminal { id: term }
             QTermQuickItem { anchors.fill: parent; terminal: term }
-            // Hosts overlay the terminal with a right-click-only MouseArea (both
-            // the example and XPort do). **A MouseArea claims the pointer even when
-            // it never assigns a cursorShape**, which silently overrode the beam --
-            // that is the bug this case exists for. The cure is for the overlay to
-            // carry the shape itself, in step with the mouse protocol.
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                cursorShape: term.mouseProtocolActive ? Qt.ArrowCursor : Qt.IBeamCursor
-            }
+            // **No MouseArea over the terminal.** Hosts used to lay one there for the
+            // right-click menu, and it silently replaced the beam with an arrow: a
+            // MouseArea claims the pointer even when it assigns no cursorShape. The
+            // menu now arrives as contextMenuRequested, so the overlay -- and with it
+            // the whole class of bug -- is gone.
         }
     )");
     QVERIFY2(!engine.rootObjects().isEmpty(), "the QML did not load -- import path wrong?");
@@ -111,6 +110,95 @@ void QTermPointerShapeTest::aQmlCreatedTerminalAlsoGetsTheBeam()
 
     QTest::mouseMove(window, QPoint(100, 60));
     QTRY_COMPARE(window->cursor().shape(), Qt::IBeamCursor);
+}
+
+// A host that wants a different pointer must be able to say so: the automatic shape
+// is a default, not a decree. Assigning pins it (even against the mouse protocol),
+// resetting hands control back.
+void QTermPointerShapeTest::aHostCanPinTheShapeAndHandItBack()
+{
+    QTermTerminal terminal;
+    QTermQuickItem item;
+    item.setTerminal(&terminal);
+
+    item.setCursorShape(Qt::PointingHandCursor);
+    QCOMPARE(item.cursorShape(), Qt::PointingHandCursor);
+
+    // The protocol flipping must not walk over the host's choice.
+    terminal.feedText(QStringLiteral("\x1b[?1002h"));
+    QCOMPARE(item.cursorShape(), Qt::PointingHandCursor);
+
+    item.resetCursorShape();
+    QCOMPARE(item.cursorShape(), Qt::ArrowCursor);   // back under the protocol
+    terminal.feedText(QStringLiteral("\x1b[?1002l"));
+    QCOMPARE(item.cursorShape(), Qt::IBeamCursor);
+}
+
+// The right button raises a signal carrying the cell under it, so a host can pop a
+// menu without covering the terminal with a MouseArea.
+void QTermPointerShapeTest::rightClickAsksTheHostForAMenu()
+{
+    QTermTerminal terminal;
+    QTermQuickItem item;
+    item.setTerminal(&terminal);
+    item.setSize(QSizeF(200, 120));
+
+    QSignalSpy spy(&item, &QTermQuickItem::contextMenuRequested);
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(10, 10), QPointF(10, 10),
+                      Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&item, &press);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.first().at(0).toPointF(), QPointF(10, 10));
+    QVERIFY(press.isAccepted());
+}
+
+// ... except while an application has taken the mouse over: there the click belongs
+// to the program, and a menu would eat it.
+void QTermPointerShapeTest::anApplicationWithTheMouseKeepsTheRightButton()
+{
+    QTermTerminal terminal;
+    QTermQuickItem item;
+    item.setTerminal(&terminal);
+    item.setSize(QSizeF(200, 120));
+    terminal.feedText(QStringLiteral("\x1b[?1002h"));
+
+    QSignalSpy spy(&item, &QTermQuickItem::contextMenuRequested);
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(10, 10), QPointF(10, 10),
+                      Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&item, &press);
+
+    QCOMPARE(spy.count(), 0);
+}
+
+// The painted renderer is a separate implementation of the same two APIs, so it
+// needs its own check -- the first cut of it silently never landed and every other
+// test here stayed green, because they all exercise QTermQuickItem.
+void QTermPointerShapeTest::thePaintedItemCarriesTheSameApi()
+{
+    QTermTerminal terminal;
+    QTermQuickPaintedItem item;
+    item.setTerminal(&terminal);
+    item.setSize(QSizeF(200, 120));
+
+    item.setCursorShape(Qt::PointingHandCursor);
+    QCOMPARE(item.cursorShape(), Qt::PointingHandCursor);
+    item.resetCursorShape();
+    QCOMPARE(item.cursorShape(), Qt::IBeamCursor);
+
+    QSignalSpy spy(&item, &QTermQuickPaintedItem::contextMenuRequested);
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(10, 10), QPointF(10, 10),
+                      Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&item, &press);
+    QCOMPARE(spy.count(), 1);
+
+    // ... and the same exception while an application owns the mouse.
+    terminal.feedText(QStringLiteral("\x1b[?1002h"));
+    QMouseEvent grabbed(QEvent::MouseButtonPress, QPointF(10, 10), QPointF(10, 10),
+                        Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&item, &grabbed);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(item.cursorShape(), Qt::ArrowCursor);
 }
 
 QTEST_MAIN(QTermPointerShapeTest)

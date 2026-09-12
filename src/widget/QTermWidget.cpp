@@ -37,7 +37,7 @@ QTermWidget::QTermWidget(QWidget *parent)
     // updateMouseAcceptance() only runs when the mode changes, so the initial shape
     // has to be set here -- otherwise a terminal that never enables mouse reporting
     // keeps the default arrow for its whole life.
-    setCursor(Qt::IBeamCursor);
+    applyCursorShape();
 
     m_repaintTimer = new QTimer(this);
     m_repaintTimer->setSingleShot(true);
@@ -68,6 +68,8 @@ QTermWidget::QTermWidget(QWidget *parent)
     });
     connect(m_controller, &QTermViewController::mouseAcceptanceChanged,
             this, &QTermWidget::updateMouseAcceptance);
+    connect(m_controller, &QTermViewController::contextMenuRequested,
+            this, &QTermWidget::contextMenuRequested);
     connect(m_controller, &QTermViewController::focusRequested, this, [this]() {
         setFocus(Qt::MouseFocusReason);
     });
@@ -419,13 +421,42 @@ void QTermWidget::updateMouseAcceptance()
     // In QWidget, all mouse buttons are always delivered; no per-button filter.
     // Only mouse tracking (no-button moves) needs to be toggled.
     setMouseTracking(m_controller->hoverEventsNeeded());
+    applyCursorShape();
+}
 
+Qt::CursorShape QTermWidget::cursorShape() const
+{
+    return cursor().shape();
+}
+
+void QTermWidget::setCursorShape(Qt::CursorShape shape)
+{
+    if (m_explicitCursorShape && *m_explicitCursorShape == shape)
+        return;
+    m_explicitCursorShape = shape;
+    applyCursorShape();
+}
+
+void QTermWidget::resetCursorShape()
+{
+    if (!m_explicitCursorShape)
+        return;
+    m_explicitCursorShape.reset();
+    applyCursorShape();
+}
+
+void QTermWidget::applyCursorShape()
+{
     // Pointer shape: a terminal is a text surface, so the pointer is an I-beam --
     // every terminal emulator does this, and the arrow reads as "nothing here is
-    // selectable". The exception is an application that has taken over the mouse
+    // selectable". The exception is an application that has taken the mouse over
     // (DECSET 1000/1002/1003: vim, htop, tmux): clicks go to it rather than to a
     // selection, so an I-beam would promise something that does not happen.
-    setCursor(m_controller->mouseProtocolEnabled() ? Qt::ArrowCursor : Qt::IBeamCursor);
+    const Qt::CursorShape shape =
+        m_explicitCursorShape ? *m_explicitCursorShape
+        : (m_controller->mouseProtocolEnabled() ? Qt::ArrowCursor : Qt::IBeamCursor);
+    if (cursor().shape() != shape)
+        setCursor(shape);
 }
 
 } // namespace QTerm

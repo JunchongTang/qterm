@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QColor>
+
+#include <optional>
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QRect>
@@ -126,6 +128,12 @@ public:
     CursorStyle cursorStyle() const noexcept;
     void setCursorStyle(CursorStyle style);
 
+    // See QTermQuickItem::cursorShape. Widget hosts should use this rather than
+    // QWidget::setCursor(), which the mouse-mode tracking would overwrite.
+    Qt::CursorShape cursorShape() const;
+    void setCursorShape(Qt::CursorShape shape);
+    void resetCursorShape();
+
     qreal scrollPosition() const noexcept;
     void setScrollPosition(qreal position);
     qreal scrollSize() const noexcept;
@@ -173,6 +181,10 @@ signals:
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
+    // See QTermQuickItem::contextMenuRequested. A widget host can connect this
+    // instead of reimplementing contextMenuEvent() and re-deriving the cell.
+    void contextMenuRequested(const QPointF &position, int row, int column,
+                              int hyperlinkId);
     void themeChanged();
 
 protected:
@@ -190,6 +202,8 @@ protected:
 
 private:
     void updateMouseAcceptance();
+    // Applies the host's shape when it set one, the automatic shape otherwise.
+    void applyCursorShape();
 
     QTermViewController *m_controller  = nullptr;
 
@@ -205,6 +219,8 @@ private:
     QColor      m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal       m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle     = Block;
+    // Unset means "follow the terminal"; a host assignment pins it.
+    std::optional<Qt::CursorShape> m_explicitCursorShape;
 
     // Incremental dirty-row set; non-empty only between contentRowsDirty and paint.
     QVector<int> m_dirtyRows;

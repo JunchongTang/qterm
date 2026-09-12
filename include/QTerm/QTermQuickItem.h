@@ -2,6 +2,8 @@
 #define QTERM_QTERMQUICKITEM_H
 
 #include <QColor>
+
+#include <optional>
 #include <QPointer>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -70,6 +72,8 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermQuickItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
+    Q_PROPERTY(Qt::CursorShape cursorShape READ cursorShape WRITE setCursorShape
+               RESET resetCursorShape NOTIFY cursorShapeChanged)
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
 
@@ -155,6 +159,22 @@ public:
     /*! \brief Applies a resolved theme to the item. */
     Q_INVOKABLE void loadTheme(const QTerm::QTermTheme &theme);
 
+    /*!
+        \qmlproperty enumeration QTermQuickItem::cursorShape
+
+        The mouse pointer shape over the terminal. Defaults to an automatic shape:
+        \c Qt.IBeamCursor, switching to \c Qt.ArrowCursor while an application has
+        taken the mouse over (DECSET 1000/1002/1003), where a click is delivered to
+        the program rather than starting a selection.
+
+        Assigning a shape overrides that and stops the automatic switching; call
+        \l resetCursorShape() to hand it back. Mirrors \c MouseArea::cursorShape so
+        the spelling is the familiar one.
+    */
+    Qt::CursorShape cursorShape() const;
+    void setCursorShape(Qt::CursorShape shape);
+    Q_INVOKABLE void resetCursorShape();
+
 signals:
     void terminalChanged();
     void fontChanged();
@@ -170,6 +190,24 @@ signals:
     void zoomRequested(int steps);
     void copyRequested();
     void hyperlinkActivated(const QString &url);
+    /*!
+        \brief Right-click on the terminal, with everything a menu needs.
+
+        \a position is in item coordinates (where to pop the menu up), \a row and
+        \a column are the cell under it, and \a hyperlinkId is the OSC 8 link there
+        (0 when there is none) -- pass it to \l QTermTerminal::hyperlinkUrl().
+
+        Not emitted while an application has taken the mouse over: there the click
+        belongs to the program and is reported to it instead.
+
+        A host connecting to this does not need to lay a MouseArea over the terminal,
+        which is worth avoiding: a MouseArea claims the mouse pointer even when it
+        assigns no cursorShape, so the overlay silently replaces the terminal's
+        I-beam with an arrow.
+    */
+    void contextMenuRequested(const QPointF &position, int row, int column,
+                              int hyperlinkId);
+    void cursorShapeChanged();
 
 protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;
@@ -185,6 +223,8 @@ protected:
 
 private:
     void updateMouseAcceptance();
+    // Applies the host's shape when it set one, the automatic shape otherwise.
+    void applyCursorShape();
     void recreateCursorDelegateItem();
     void updateCursorDelegateGeometry();
     void scheduleFullDirty();
@@ -227,6 +267,9 @@ private:
     bool m_selectionDirty = true;
     bool m_cursorDirty = true;
     bool m_hasFocus = false;
+    // Unset means "follow the terminal" (I-beam, arrow while an application has the
+    // mouse); a host assignment pins it.
+    std::optional<Qt::CursorShape> m_explicitCursorShape;
     // Rows that need incremental rebuild (only used when !m_contentDirty).
     QVector<int> m_dirtyRowSet;
 
