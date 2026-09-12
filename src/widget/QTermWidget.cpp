@@ -4,6 +4,7 @@
 #include <QTerm/QTermTerminal.h>
 
 #include "../quick/QTermViewController.h"
+#include "../QTermCursorDiagnostics.h"
 #include "../QTermRenderUtils.h"
 
 #include <QFocusEvent>
@@ -327,6 +328,9 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     req.cursorOpacity = m_cursorOpacity;
     req.cursorStyle   = static_cast<int>(m_cursorStyle);
     req.showCursor    = hasFocus();
+    qtermReportCursorDraw(m_cursorDrawReason, req.showCursor,
+                          surfaceModel && surfaceModel->cursorVisible(),
+                          m_cursorOpacity);
     req.hyperlinkTint = m_theme.hyperlinkTint();
     req.palette16     = m_theme.palette16();
 

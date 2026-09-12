@@ -17,6 +17,8 @@ qt_add_library(qterm STATIC
     ../include/QTerm/QTermTheme.h
     ../include/QTerm/QTermThemePack.h
     ../include/QTerm/QTermThemeLoader.h
+    QTermCursorDiagnostics.h
+    QTermCursorDiagnostics.cpp
     QTermTheme.cpp
     QTermThemePack.cpp
     QTermThemeLoader.cpp

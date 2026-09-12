@@ -183,6 +183,9 @@ private:
     QColor m_backgroundColor = QColor(QStringLiteral("#0b1016"));
     // Invalid = derive from m_backgroundColor with alpha forced opaque.
     QColor      m_inverseTextColor;
+    // Last reported reason for the cursor being drawn or not (see
+    // qtermReportCursorDraw); logs only on transitions.
+    QString m_cursorDrawReason;
     QColor m_selectionColor  = QColor(QStringLiteral("#214f76"));
     // Same amber pair as QTermQuickItem, so the two renderers agree.
     QColor m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};
