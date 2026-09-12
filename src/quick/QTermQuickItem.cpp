@@ -5,6 +5,7 @@
 
 #include "QTermGlyphAtlas.h"
 #include "QTermTextMaterial.h"
+#include "../QTermCursorDiagnostics.h"
 #include "QTermViewController.h"
 #include "../QTermRenderUtils.h"
 
@@ -1290,6 +1291,8 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         const int cursorStyle = sm ? sm->cursorShape()
                                    : static_cast<int>(m_cursorStyle);
         const bool showCursor = !m_cursorDelegateItem && m_hasFocus;
+        qtermReportCursorDraw(m_cursorDrawReason, m_hasFocus, sm && sm->cursorVisible(),
+                              m_cursorOpacity, m_cursorDelegateItem != nullptr);
         rebuildCursor(root->cursorNode, sm, cellW, cellH,
                       m_cursorColor, m_cursorOpacity, cursorStyle, showCursor);
     }

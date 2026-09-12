@@ -4,6 +4,7 @@
 #include <QTerm/QTermTerminal.h>
 
 #include "QTermViewController.h"
+#include "../QTermCursorDiagnostics.h"
 #include "../QTermRenderUtils.h"
 
 #include <QInputMethodEvent>
@@ -381,6 +382,9 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
         ? surfaceModel->cursorShape()
         : static_cast<int>(m_cursorStyle);
     req.showCursor    = !m_cursorDelegateItem && hasActiveFocus();
+    qtermReportCursorDraw(m_cursorDrawReason, hasActiveFocus(),
+                          surfaceModel && surfaceModel->cursorVisible(),
+                          m_cursorOpacity, m_cursorDelegateItem != nullptr);
     req.hyperlinkTint = m_theme.hyperlinkTint();
     req.palette16     = m_theme.palette16();
 

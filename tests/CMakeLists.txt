@@ -39,6 +39,19 @@ qt_add_executable(qterm_quick_item_tests
     quick/QTermQuickPaintedItemTest.cpp
 )
 
+qt_add_executable(qterm_cursor_visibility_tests
+    core/QTermCursorVisibilityTest.cpp
+)
+
+target_link_libraries(qterm_cursor_visibility_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_cursor_visibility_tests COMMAND qterm_cursor_visibility_tests)
+
 qt_add_executable(qterm_capability_tests
     core/QTermCapabilityTest.cpp
 )

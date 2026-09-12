@@ -229,6 +229,10 @@ private:
     void flushPendingUpdate();
     int frameIntervalMs() const;
 
+    // Last reported reason for the cursor being drawn or not; used to log
+    // only transitions. Enable with QT_LOGGING_RULES="qterm.cursor.debug=true".
+    QString m_cursorDrawReason;
+
     QTimer *m_repaintTimer = nullptr;
     QElapsedTimer m_sinceLastPaint;
     QRect m_pendingRect;

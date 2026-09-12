@@ -210,6 +210,9 @@ private:
     QColor m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};    // bright amber, current match
     QColor m_cursorColor{QStringLiteral("#dce7f3")};
     qreal m_cursorOpacity = 0.8;
+    // Last reported reason for the cursor being drawn or not (see
+    // qtermReportCursorDraw); logs only on transitions.
+    QString m_cursorDrawReason;
     CursorStyle m_cursorStyle = Block;
 
     QQmlComponent *m_cursorDelegate = nullptr;
