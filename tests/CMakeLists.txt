@@ -113,6 +113,20 @@ target_link_libraries(qterm_inverse_text_tests
 
 add_test(NAME qterm_inverse_text_tests COMMAND qterm_inverse_text_tests)
 
+qt_add_executable(qterm_pointer_shape_tests
+    quick/QTermPointerShapeTest.cpp
+)
+
+target_link_libraries(qterm_pointer_shape_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Quick
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_pointer_shape_tests COMMAND qterm_pointer_shape_tests)
+
 target_include_directories(qterm_core_tests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
