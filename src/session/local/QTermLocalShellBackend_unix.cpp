@@ -111,6 +111,8 @@ void QTermLocalShellBackend::open()
         return;
 
     close();
+    // A reopen must not keep reporting the previous run's exit code.
+    m_exitCode = -1;
 
     const QString executable = resolvedProgram();
     if (executable.isEmpty()) {
@@ -312,6 +314,14 @@ void QTermLocalShellBackend::pollChildExit()
 
     stopRuntimeWatchers();
     m_childPid = -1;
+
+    if (waitResult > 0) {
+        // 128 + signal is the convention shells use for $? when a child is
+        // killed, so a host can print one number either way.
+        m_exitCode = WIFEXITED(status)   ? WEXITSTATUS(status)
+                   : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                                         : -1;
+    }
 
     if (waitResult < 0) {
         setState(Closed);
