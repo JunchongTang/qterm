@@ -164,9 +164,17 @@ Item {
 
     // Right-click only: every other button belongs to the renderer, which
     // handles selection and the mouse protocol.
+    //
+    // **The cursor shape has to be repeated here.** A MouseArea claims the pointer
+    // even when it never assigns a shape, so this overlay silently overrides the
+    // I-beam the terminal item sets on itself -- the user sees an arrow over a text
+    // surface and nothing in the QML hints at why. Follow the terminal: an arrow
+    // once an application has taken the mouse over, a beam otherwise.
     MouseArea {
         anchors.fill: contentArea
         acceptedButtons: Qt.RightButton
+        cursorShape: root.terminal && root.terminal.mouseProtocolActive
+                     ? Qt.ArrowCursor : Qt.IBeamCursor
         onPressed: function(mouse) {
             const item = rendererLoader.item
             if (!item)

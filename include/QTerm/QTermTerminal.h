@@ -40,6 +40,12 @@ class QTermTerminal : public QObject
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(QString currentDirectory READ currentDirectory NOTIFY currentDirectoryChanged)
     // OSC 133 shell integration
+    // Whether an application has taken the mouse over (DECSET 1000/1002/1003).
+    // Exposed because a host that overlays the terminal with a MouseArea has to
+    // give that item a cursor shape -- a MouseArea claims the pointer even when it
+    // never assigns one, which silently overrides the beam this library sets on the
+    // terminal item. Binding to this keeps the host's shape in step with ours.
+    Q_PROPERTY(bool mouseProtocolActive READ isMouseProtocolActive NOTIFY modeStateChanged)
     Q_PROPERTY(int shellZone READ shellZone NOTIFY shellZoneChanged)
     Q_PROPERTY(int lastExitCode READ lastExitCode NOTIFY shellZoneChanged)
     Q_PROPERTY(QTerm::QTermSurfaceModel *surfaceModel READ surfaceModel CONSTANT)

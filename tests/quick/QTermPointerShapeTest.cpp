@@ -12,6 +12,7 @@
 // the widget-default arrow for its whole life.
 #include <QtTest>
 
+#include <QQmlApplicationEngine>
 #include <QQuickWindow>
 
 #include <QTerm/QTermQuickItem.h>
@@ -29,7 +30,7 @@ private slots:
     void thePaintedItemStartsWithAnIBeam();
     void anApplicationThatGrabsTheMouseGetsTheArrowBack();
     void releasingTheMouseRestoresTheIBeam();
-    void theWindowActuallyShowsTheBeamUnderThePointer();
+    void aQmlCreatedTerminalAlsoGetsTheBeam();
 };
 
 void QTermPointerShapeTest::theSceneGraphItemStartsWithAnIBeam()
@@ -66,36 +67,50 @@ void QTermPointerShapeTest::releasingTheMouseRestoresTheIBeam()
     QCOMPARE(item.cursor().shape(), Qt::IBeamCursor);
 }
 
-// The three cases above pin the item's own cursor. This one pins what the user
-// actually sees: a window only adopts an item's cursor if the item registered as a
-// cursor owner and the window recomputes on a mouse move. An item that "has" the
-// right cursor while the window keeps drawing an arrow would pass every check above
-// and still look broken.
+// The cases above pin the item's own cursor. This one pins what the user actually
+// sees, and it is built the way a host builds it: the QML engine creates the item,
+// and a right-click MouseArea is laid over the terminal.
 //
-// The item is built the way QML builds it -- constructed first, parented after --
-// because the constructor is where the shape is set, and a cursor set before the
-// item has any ancestors is the case most likely to get lost.
+// That overlay is the whole point. **A MouseArea claims the pointer even when it
+// never assigns a cursorShape**, so it silently overrode the beam the terminal sets
+// on itself -- every C++-level check passed while the running application still
+// showed an arrow. The fix is for the overlay to carry the shape, which is why
+// QTermTerminal exposes mouseProtocolActive.
 //
 // **Only one window case on purpose.** Two of them in the same process interfere:
-// the second one reads a stale window cursor and fails, while passing on its own
-// (the window's cursor is recomputed from the *real* pointer position, which the
-// previous window left pointing at itself). That flake cost an hour of chasing a
-// fix that was never broken.
-void QTermPointerShapeTest::theWindowActuallyShowsTheBeamUnderThePointer()
+// the window recomputes its cursor from the real pointer position, so the second
+// one reads a stale value and fails (or takes ten seconds) while passing alone.
+void QTermPointerShapeTest::aQmlCreatedTerminalAlsoGetsTheBeam()
 {
-    QQuickWindow window;
-    window.resize(200, 120);
+    QQmlApplicationEngine engine;
+    engine.loadData(R"(
+        import QtQuick
+        import QTerm
+        Window {
+            width: 200; height: 120; visible: true
+            QTermTerminal { id: term }
+            QTermQuickItem { anchors.fill: parent; terminal: term }
+            // Hosts overlay the terminal with a right-click-only MouseArea (both
+            // the example and XPort do). **A MouseArea claims the pointer even when
+            // it never assigns a cursorShape**, which silently overrode the beam --
+            // that is the bug this case exists for. The cure is for the overlay to
+            // carry the shape itself, in step with the mouse protocol.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                cursorShape: term.mouseProtocolActive ? Qt.ArrowCursor : Qt.IBeamCursor
+            }
+        }
+    )");
+    QVERIFY2(!engine.rootObjects().isEmpty(), "the QML did not load -- import path wrong?");
 
-    auto *item = new QTermQuickItem;
-    item->setSize(QSizeF(200, 120));
-    item->setParentItem(window.contentItem());
-
-    window.show();
-    if (!QTest::qWaitForWindowExposed(&window))
+    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
+    QVERIFY(window);
+    if (!QTest::qWaitForWindowExposed(window))
         QSKIP("the window was never exposed -- no compositor for this run");
 
-    QTest::mouseMove(&window, QPoint(100, 60));
-    QTRY_COMPARE(window.cursor().shape(), Qt::IBeamCursor);
+    QTest::mouseMove(window, QPoint(100, 60));
+    QTRY_COMPARE(window->cursor().shape(), Qt::IBeamCursor);
 }
 
 QTEST_MAIN(QTermPointerShapeTest)
