@@ -63,22 +63,6 @@ Item {
     function clearScreen() { root.terminal.feedText("\u001b[H\u001b[2J") }
     function clearScrollback() { root.terminal.feedText("\u001b[3J") }
 
-    // Style runs carry the OSC 8 link id, so a cell's link is found by walking
-    // the row's runs until the one covering that column.
-    function hyperlinkIdAt(row, column) {
-        const allRows = root.terminal.surfaceModel.visibleLineRuns
-        if (row < 0 || row >= allRows.length)
-            return 0
-        let start = 0
-        for (const run of allRows[row]) {
-            const span = run.columns
-            if (column >= start && column < start + span)
-                return run.hyperlinkId ? run.hyperlinkId : 0
-            start += span
-        }
-        return 0
-    }
-
     // The renderer is a value type consumer, so the palette has to be pushed
     // again whenever the renderer is rebuilt or the app theme flips.
     function applyTerminalTheme() {
@@ -127,6 +111,14 @@ Item {
             cursorOpacity: root.cursorBlinkOpacity
             onCopyRequested: clipboardBridge.copyText(root.terminal.surfaceModel.selectedText)
             onHyperlinkActivated: url => Qt.openUrlExternally(url)
+            // The right-click menu comes from the terminal item itself. There used to
+            // be a MouseArea over the whole view doing this; it also claimed the mouse
+            // pointer (a MouseArea does that even with no cursorShape set) and quietly
+            // replaced the terminal's I-beam with an arrow.
+            onContextMenuRequested: (position, row, column, hyperlinkId) => {
+                root.menuHyperlinkId = hyperlinkId
+                contextMenu.popup(position.x, position.y)
+            }
         }
     }
 
@@ -141,6 +133,14 @@ Item {
             cursorOpacity: root.cursorBlinkOpacity
             onCopyRequested: text => clipboardBridge.copyText(text)
             onHyperlinkActivated: url => Qt.openUrlExternally(url)
+            // The right-click menu comes from the terminal item itself. There used to
+            // be a MouseArea over the whole view doing this; it also claimed the mouse
+            // pointer (a MouseArea does that even with no cursorShape set) and quietly
+            // replaced the terminal's I-beam with an arrow.
+            onContextMenuRequested: (position, row, column, hyperlinkId) => {
+                root.menuHyperlinkId = hyperlinkId
+                contextMenu.popup(position.x, position.y)
+            }
         }
     }
 
@@ -159,30 +159,6 @@ Item {
                 root.applyTerminalTheme()
                 rendererLoader.item.forceActiveFocus()
             }
-        }
-    }
-
-    // Right-click only: every other button belongs to the renderer, which
-    // handles selection and the mouse protocol.
-    //
-    // **The cursor shape has to be repeated here.** A MouseArea claims the pointer
-    // even when it never assigns a shape, so this overlay silently overrides the
-    // I-beam the terminal item sets on itself -- the user sees an arrow over a text
-    // surface and nothing in the QML hints at why. Follow the terminal: an arrow
-    // once an application has taken the mouse over, a beam otherwise.
-    MouseArea {
-        anchors.fill: contentArea
-        acceptedButtons: Qt.RightButton
-        cursorShape: root.terminal && root.terminal.mouseProtocolActive
-                     ? Qt.ArrowCursor : Qt.IBeamCursor
-        onPressed: function(mouse) {
-            const item = rendererLoader.item
-            if (!item)
-                return
-            const local = mapToItem(item, mouse.x, mouse.y)
-            root.menuHyperlinkId = root.hyperlinkIdAt(item.rowAtPosition(local.y),
-                                                      item.columnAtPosition(local.x))
-            contextMenu.popup()
         }
     }
 

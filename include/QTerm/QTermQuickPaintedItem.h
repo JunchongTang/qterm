@@ -2,6 +2,8 @@
 #define QTERM_QTERMQUICKPAINTEDITEM_H
 
 #include <QColor>
+
+#include <optional>
 #include <QPointer>
 #include <QQmlComponent>
 #include <QQuickPaintedItem>
@@ -52,6 +54,10 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermQuickPaintedItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
+    // See QTermQuickItem::cursorShape -- same contract: unset follows the terminal,
+    // an assignment pins it, resetCursorShape() hands it back.
+    Q_PROPERTY(Qt::CursorShape cursorShape READ cursorShape WRITE setCursorShape
+               RESET resetCursorShape NOTIFY cursorShapeChanged)
     // Normalised scroll properties, matching QML ScrollBar's position / size.
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
@@ -114,6 +120,11 @@ public:
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
 
+    // See QTermQuickItem::cursorShape.
+    Qt::CursorShape cursorShape() const;
+    void setCursorShape(Qt::CursorShape shape);
+    Q_INVOKABLE void resetCursorShape();
+
     /*! \brief Returns the normalized scroll position in the range 0.0 to 1.0. */
     qreal scrollPosition() const noexcept;
     /*! \brief Sets the normalized scroll position in the range 0.0 to 1.0. */
@@ -151,6 +162,10 @@ signals:
     void copyRequested(const QString &text);
     // An OSC 8 hyperlink was activated (Cmd+click); the host decides how to open it.
     void hyperlinkActivated(const QString &url);
+    // See QTermQuickItem::contextMenuRequested.
+    void contextMenuRequested(const QPointF &position, int row, int column,
+                              int hyperlinkId);
+    void cursorShapeChanged();
     void themeChanged();
 
 protected:
@@ -167,6 +182,8 @@ protected:
 private:
     // Keeps setAcceptedMouseButtons / setAcceptHoverEvents in step with the mouse mode.
     void updateMouseAcceptance();
+    // Applies the host's shape when it set one, the automatic shape otherwise.
+    void applyCursorShape();
 
     // Creates or updates the delegate item's position, size and opacity.
     void recreateCursorDelegateItem();
@@ -193,6 +210,9 @@ private:
     QColor m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal  m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle = Block;
+    // Unset means "follow the terminal" (I-beam, arrow while an application has the
+    // mouse); a host assignment pins it.
+    std::optional<Qt::CursorShape> m_explicitCursorShape;
 
     // ── Cursor delegate ──────────────────────────────────────────────────────
     QQmlComponent *m_cursorDelegate     = nullptr;
