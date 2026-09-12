@@ -66,18 +66,29 @@ void QTermPointerShapeTest::releasingTheMouseRestoresTheIBeam()
     QCOMPARE(item.cursor().shape(), Qt::IBeamCursor);
 }
 
-// The three cases above pin the item's own cursor. This one pins the thing the
-// user actually sees: a window only adopts an item's cursor if the item is
-// registered as a cursor owner and the window recomputes on mouse move. An item
-// that "has" the right cursor while the window keeps drawing the arrow would pass
-// every check above and still look broken.
+// The three cases above pin the item's own cursor. This one pins what the user
+// actually sees: a window only adopts an item's cursor if the item registered as a
+// cursor owner and the window recomputes on a mouse move. An item that "has" the
+// right cursor while the window keeps drawing an arrow would pass every check above
+// and still look broken.
+//
+// The item is built the way QML builds it -- constructed first, parented after --
+// because the constructor is where the shape is set, and a cursor set before the
+// item has any ancestors is the case most likely to get lost.
+//
+// **Only one window case on purpose.** Two of them in the same process interfere:
+// the second one reads a stale window cursor and fails, while passing on its own
+// (the window's cursor is recomputed from the *real* pointer position, which the
+// previous window left pointing at itself). That flake cost an hour of chasing a
+// fix that was never broken.
 void QTermPointerShapeTest::theWindowActuallyShowsTheBeamUnderThePointer()
 {
     QQuickWindow window;
     window.resize(200, 120);
 
-    QTermQuickItem item(window.contentItem());
-    item.setSize(QSizeF(200, 120));
+    auto *item = new QTermQuickItem;
+    item->setSize(QSizeF(200, 120));
+    item->setParentItem(window.contentItem());
 
     window.show();
     if (!QTest::qWaitForWindowExposed(&window))
