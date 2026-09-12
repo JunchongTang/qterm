@@ -7,6 +7,7 @@
 #include "../QTermCursorDiagnostics.h"
 #include "../QTermRenderUtils.h"
 
+#include <QCursor>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -30,6 +31,10 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     setAcceptedMouseButtons(Qt::LeftButton);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
     setAcceptHoverEvents(false);
+    // updateMouseAcceptance() only runs when the mode changes, so the initial shape
+    // has to be set here -- otherwise a terminal that never enables mouse reporting
+    // keeps the default arrow for its whole life.
+    setCursor(Qt::IBeamCursor);
 
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
@@ -334,12 +339,19 @@ void QTermQuickPaintedItem::wheelEvent(QWheelEvent *event)
 
 void QTermQuickPaintedItem::updateMouseAcceptance()
 {
+    // Pointer shape: a terminal is a text surface, so the pointer is an I-beam --
+    // every terminal emulator does this, and the arrow reads as "nothing here is
+    // selectable". The exception is an application that has taken over the mouse
+    // (DECSET 1000/1002/1003: vim, htop, tmux): clicks go to it rather than to a
+    // selection, so an I-beam would promise something that does not happen.
     if (m_controller->mouseProtocolEnabled()) {
         setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
         setAcceptHoverEvents(m_controller->hoverEventsNeeded());
+        setCursor(Qt::ArrowCursor);
     } else {
         setAcceptedMouseButtons(Qt::LeftButton);
         setAcceptHoverEvents(false);
+        setCursor(Qt::IBeamCursor);
     }
 }
 

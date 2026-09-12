@@ -34,6 +34,10 @@ QTermWidget::QTermWidget(QWidget *parent)
     setAttribute(Qt::WA_InputMethodEnabled, true);
     setAutoFillBackground(false);
     setMouseTracking(false); // updated dynamically by updateMouseAcceptance()
+    // updateMouseAcceptance() only runs when the mode changes, so the initial shape
+    // has to be set here -- otherwise a terminal that never enables mouse reporting
+    // keeps the default arrow for its whole life.
+    setCursor(Qt::IBeamCursor);
 
     m_repaintTimer = new QTimer(this);
     m_repaintTimer->setSingleShot(true);
@@ -415,6 +419,13 @@ void QTermWidget::updateMouseAcceptance()
     // In QWidget, all mouse buttons are always delivered; no per-button filter.
     // Only mouse tracking (no-button moves) needs to be toggled.
     setMouseTracking(m_controller->hoverEventsNeeded());
+
+    // Pointer shape: a terminal is a text surface, so the pointer is an I-beam --
+    // every terminal emulator does this, and the arrow reads as "nothing here is
+    // selectable". The exception is an application that has taken over the mouse
+    // (DECSET 1000/1002/1003: vim, htop, tmux): clicks go to it rather than to a
+    // selection, so an I-beam would promise something that does not happen.
+    setCursor(m_controller->mouseProtocolEnabled() ? Qt::ArrowCursor : Qt::IBeamCursor);
 }
 
 } // namespace QTerm
