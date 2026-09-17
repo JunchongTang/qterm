@@ -318,9 +318,19 @@ void QTermInputExecutor::setHyperlink(const QString &url)
 void QTermInputExecutor::setCursorShape(int parameter)
 {
     // DECSCUSR parameter mapping:
-    // 0, 1, 2 → Block; 3, 4 → Underline; 5, 6 → Bar (I-beam)
-    // Default (0) and blinking (odd) map to same shape as steady (even).
+    //   0       → back to the terminal's default, i.e. whatever the host configured
+    //   1, 2    → Block      3, 4 → Underline      5, 6 → Bar (I-beam)
+    // Blinking (odd) maps to the same shape as steady (even) -- the blink is driven by
+    // the host, not by the shape.
+    //
+    // **0 is not Block.** It used to be, and that made the host's configured shape
+    // unreachable: a shell that emits `CSI 0 SP q` on every prompt (common in zsh
+    // themes) would pin the cursor to a block no matter what the user chose.
     switch (parameter) {
+    case 1:
+    case 2:
+        m_modeState.cursorShape = CursorShape::Block;
+        break;
     case 3:
     case 4:
         m_modeState.cursorShape = CursorShape::Underline;
@@ -329,8 +339,8 @@ void QTermInputExecutor::setCursorShape(int parameter)
     case 6:
         m_modeState.cursorShape = CursorShape::Bar;
         break;
-    default: // 0, 1, 2 and unknown
-        m_modeState.cursorShape = CursorShape::Block;
+    default: // 0 and unknown parameters: hand it back to the host
+        m_modeState.cursorShape = CursorShape::Default;
         break;
     }
 }

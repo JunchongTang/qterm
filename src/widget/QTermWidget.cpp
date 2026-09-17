@@ -1,4 +1,6 @@
 #include <QTerm/QTermWidget.h>
+// resolveCursorShape():宿主默认 + DECSCUSR 覆盖的那条规则。
+#include <QTerm/QTermModeState.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
@@ -33,11 +35,10 @@ QTermWidget::QTermWidget(QWidget *parent)
     setAttribute(Qt::WA_OpaquePaintEvent, true);
     setAttribute(Qt::WA_InputMethodEnabled, true);
     setAutoFillBackground(false);
-    setMouseTracking(false); // updated dynamically by updateMouseAcceptance()
-    // updateMouseAcceptance() only runs when the mode changes, so the initial shape
-    // has to be set here -- otherwise a terminal that never enables mouse reporting
-    // keeps the default arrow for its whole life.
-    applyCursorShape();
+    // One call, not a hand-written copy of what it does -- see QTermQuickItem's
+    // constructor. A widget is handed every button regardless, so the mask is not at
+    // stake here, but mouse tracking and the pointer shape are.
+    updateMouseAcceptance();
 
     m_repaintTimer = new QTimer(this);
     m_repaintTimer->setSingleShot(true);
@@ -332,7 +333,13 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     req.searchCurrent = m_searchCurrentColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
-    req.cursorStyle   = static_cast<int>(m_cursorStyle);
+    // **原来这里完全不看终端** —— widget 只画自己的 cursorStyle,于是 vim 切到插入模式
+    // 时光标不会变成竖线(两个 Quick 渲染器反过来:只看终端、不看宿主)。三个渲染器现在
+    // 走同一条规则,见 QTerm::resolveCursorShape。
+    req.cursorStyle   = surfaceModel
+        ? resolveCursorShape(surfaceModel->cursorShape(),
+                             static_cast<int>(m_cursorStyle))
+        : static_cast<int>(m_cursorStyle);
     req.showCursor    = hasFocus();
     qtermReportCursorDraw(m_cursorDrawReason, req.showCursor,
                           surfaceModel && surfaceModel->cursorVisible(),

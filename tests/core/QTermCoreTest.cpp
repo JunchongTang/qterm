@@ -1789,7 +1789,10 @@ void QTerm::QTermCoreTest::supportsDecScusr()
 {
     using QTerm::CursorShape;
     QTermCore core;
-    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+    // **初始是 Default,不是 Block** —— 程序还没要求过形状,画什么由宿主的配置决定
+    // (QTerm::resolveCursorShape)。写成 Block 的话宿主那个 cursorStyle 属性永远轮不上,
+    // 而那正是它之前不起作用的原因。
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Default);
 
     core.writePlainText(u"\x1b[5 q"_s); // blinking bar
     QCOMPARE(core.modeState().cursorShape, CursorShape::Bar);
@@ -1806,8 +1809,14 @@ void QTerm::QTermCoreTest::supportsDecScusr()
     core.writePlainText(u"\x1b[6 q"_s); // steady bar
     QCOMPARE(core.modeState().cursorShape, CursorShape::Bar);
 
-    core.writePlainText(u"\x1b[0 q"_s); // default → block
-    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+    // DECSCUSR 0 = 回到终端默认,而终端的默认是**用户配置的那个**,不是硬编码的 block。
+    // 有些 zsh 主题每次提示符都发一遍 `CSI 0 SP q` —— 映射成 Block 的话用户选什么都白选。
+    core.writePlainText(u"\x1b[0 q"_s);
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Default);
+
+    // 认不出的参数同样交还宿主(而不是悄悄改成 block)。
+    core.writePlainText(u"\x1b[9 q"_s);
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Default);
 }
 
 void QTerm::QTermCoreTest::supportsOsc7CurrentDirectory()

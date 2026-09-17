@@ -1,4 +1,6 @@
 #include <QTerm/QTermQuickPaintedItem.h>
+// resolveCursorShape():宿主默认 + DECSCUSR 覆盖的那条规则。
+#include <QTerm/QTermModeState.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
@@ -28,13 +30,14 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     , m_controller(new QTermViewController(this))
 {
     setOpaquePainting(true);
-    setAcceptedMouseButtons(Qt::LeftButton);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
-    setAcceptHoverEvents(false);
-    // updateMouseAcceptance() only runs when the mode changes, so the initial shape
-    // has to be set here -- otherwise a terminal that never enables mouse reporting
-    // keeps the default arrow for its whole life.
-    applyCursorShape();
+    // One call, not a hand-written copy of what it does: the button mask and the
+    // pointer shape both depend on the mouse mode, and updateMouseAcceptance() only
+    // runs when that mode *changes*. A terminal that never enables mouse reporting
+    // would otherwise keep whatever the constructor happened to set for its whole
+    // life -- which is how the right button went missing: the mask here said
+    // LeftButton, so contextMenuRequested could never fire on the common path.
+    updateMouseAcceptance();
 
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
@@ -430,8 +433,10 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.searchCurrent = m_searchCurrentColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
+    // 见 QTerm::resolveCursorShape:宿主的 cursorStyle 是默认值,DECSCUSR 才能盖掉。
     req.cursorStyle   = surfaceModel
-        ? surfaceModel->cursorShape()
+        ? resolveCursorShape(surfaceModel->cursorShape(),
+                             static_cast<int>(m_cursorStyle))
         : static_cast<int>(m_cursorStyle);
     req.showCursor    = !m_cursorDelegateItem && hasActiveFocus();
     qtermReportCursorDraw(m_cursorDrawReason, hasActiveFocus(),

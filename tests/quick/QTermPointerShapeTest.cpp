@@ -15,6 +15,8 @@
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 
+// resolveCursorShape() 与 QTerm::CursorShape 那个枚举。
+#include <QTerm/QTermModeState.h>
 #include <QTerm/QTermQuickItem.h>
 #include <QTerm/QTermQuickPaintedItem.h>
 #include <QTerm/QTermTerminal.h>
@@ -35,6 +37,8 @@ private slots:
     void rightClickAsksTheHostForAMenu();
     void anApplicationWithTheMouseKeepsTheRightButton();
     void thePaintedItemCarriesTheSameApi();
+    void theRightButtonIsAcceptedFromTheStart();
+    void theHostsCursorStyleIsTheDefaultAndDecscusrOverridesIt();
 };
 
 void QTermPointerShapeTest::theSceneGraphItemStartsWithAnIBeam()
@@ -171,6 +175,27 @@ void QTermPointerShapeTest::anApplicationWithTheMouseKeepsTheRightButton()
     QCOMPARE(spy.count(), 0);
 }
 
+// A fresh item must already accept the right button. The other cases here post the
+// press straight to the item, which bypasses the button mask -- so they stayed green
+// while the mask said LeftButton and no real right-click was ever delivered: the host
+// application had no context menu at all, and every assertion in this file passed.
+void QTermPointerShapeTest::theRightButtonIsAcceptedFromTheStart()
+{
+    QTermTerminal terminal;
+    QTermQuickItem item;
+    item.setTerminal(&terminal);
+    QVERIFY(item.acceptedMouseButtons() & Qt::RightButton);
+
+    QTermQuickPaintedItem painted;
+    painted.setTerminal(&terminal);
+    QVERIFY(painted.acceptedMouseButtons() & Qt::RightButton);
+
+    // ... and an application that takes the mouse over keeps getting it, since the
+    // press is encoded for the program rather than raised as a menu request.
+    terminal.feedText(QStringLiteral("\x1b[?1002h"));
+    QVERIFY(item.acceptedMouseButtons() & Qt::RightButton);
+}
+
 // The painted renderer is a separate implementation of the same two APIs, so it
 // needs its own check -- the first cut of it silently never landed and every other
 // test here stayed green, because they all exercise QTermQuickItem.
@@ -199,6 +224,35 @@ void QTermPointerShapeTest::thePaintedItemCarriesTheSameApi()
     QCoreApplication::sendEvent(&item, &grabbed);
     QCOMPARE(spy.count(), 1);
     QCOMPARE(item.cursorShape(), Qt::ArrowCursor);
+}
+
+// 宿主配的 cursorStyle 是**默认值**,程序用 DECSCUSR 才能盖掉它,而 DECSCUSR 0 交还默认。
+//
+// 这条测的是三个渲染器共用的那条规则(QTerm::resolveCursorShape)。它之前是坏的,而且
+// 三个渲染器坏法不同:两个 Quick 项无条件读终端的形状 —— 于是文档写着的 `cursorStyle`
+// 属性只要接了终端就完全不起作用(而"接了终端"是常态);widget 反过来只读自己的属性,
+// vim 切到插入模式时光标不会变成竖线。一个静悄悄不起作用的偏好比没有这个偏好更糟。
+void QTermPointerShapeTest::theHostsCursorStyleIsTheDefaultAndDecscusrOverridesIt()
+{
+    QTermTerminal terminal;
+    QTermSurfaceModel *sm = terminal.surfaceModel();
+    QVERIFY(sm);
+
+    const int hostBar = static_cast<int>(QTermQuickItem::Bar);
+
+    // 程序没要求过 → 用宿主的。
+    QCOMPARE(sm->cursorShape(), static_cast<int>(QTerm::CursorShape::Default));
+    QCOMPARE(QTerm::resolveCursorShape(sm->cursorShape(), hostBar), hostBar);
+
+    // DECSCUSR 4(steady underline)→ 盖掉宿主的。
+    terminal.feedText(QStringLiteral("\x1b[4 q"));
+    QCOMPARE(sm->cursorShape(), static_cast<int>(QTerm::CursorShape::Underline));
+    QCOMPARE(QTerm::resolveCursorShape(sm->cursorShape(), hostBar),
+             static_cast<int>(QTerm::CursorShape::Underline));
+
+    // DECSCUSR 0 → 交还宿主。
+    terminal.feedText(QStringLiteral("\x1b[0 q"));
+    QCOMPARE(QTerm::resolveCursorShape(sm->cursorShape(), hostBar), hostBar);
 }
 
 QTEST_MAIN(QTermPointerShapeTest)

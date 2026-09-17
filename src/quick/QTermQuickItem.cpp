@@ -1,4 +1,6 @@
 #include <QTerm/QTermQuickItem.h>
+// resolveCursorShape():宿主默认 + DECSCUSR 覆盖的那条规则。
+#include <QTerm/QTermModeState.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
@@ -596,12 +598,13 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
         m_lastFrameRequest.restart();
         update();
     });
-    setAcceptedMouseButtons(Qt::LeftButton);
-    setAcceptHoverEvents(false);
-    // updateMouseAcceptance() only runs when the mode changes, so the initial
-    // shape has to be set here -- otherwise a terminal that never enables mouse
-    // reporting keeps the default arrow for its whole life.
-    applyCursorShape();
+    // One call, not a hand-written copy of what it does: the button mask and the
+    // pointer shape both depend on the mouse mode, and updateMouseAcceptance() only
+    // runs when that mode *changes*. A terminal that never enables mouse reporting
+    // would otherwise keep whatever the constructor happened to set for its whole
+    // life -- which is how the right button went missing: the mask here said
+    // LeftButton, so contextMenuRequested could never fire on the common path.
+    updateMouseAcceptance();
 
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         m_hasFocus = hasActiveFocus();
@@ -1334,7 +1337,10 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
 
     // ── Cursor ────────────────────────────────────────────────────────────────
     if (m_fullDirty || m_cursorDirty) {
-        const int cursorStyle = sm ? sm->cursorShape()
+        // 宿主的 cursorStyle 是**默认值**,程序用 DECSCUSR 才能盖掉它(见
+        // QTerm::resolveCursorShape)。没有 surface model 时(还没接终端)直接用宿主的。
+        const int cursorStyle = sm ? resolveCursorShape(sm->cursorShape(),
+                                                        static_cast<int>(m_cursorStyle))
                                    : static_cast<int>(m_cursorStyle);
         const bool showCursor = !m_cursorDelegateItem && m_hasFocus;
         qtermReportCursorDraw(m_cursorDrawReason, m_hasFocus, sm && sm->cursorVisible(),
