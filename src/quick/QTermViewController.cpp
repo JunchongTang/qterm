@@ -154,6 +154,22 @@ void QTermViewController::setFontPixelSize(int size)
     updateMetrics();
 }
 
+qreal QTermViewController::lineHeight() const noexcept
+{
+    return m_lineHeight;
+}
+
+void QTermViewController::setLineHeight(qreal factor)
+{
+    // Clamped, not validated: a zero or negative factor would collapse the cell
+    // and every row/column computation divides by it.
+    const qreal bounded = qBound(0.8, factor, 3.0);
+    if (qFuzzyCompare(m_lineHeight, bounded))
+        return;
+    m_lineHeight = bounded;
+    updateMetrics();
+}
+
 qreal QTermViewController::cellWidth() const noexcept
 {
     return m_cellWidth;
@@ -625,7 +641,7 @@ void QTermViewController::updateMetrics()
     const qreal previousCellHeight = m_cellHeight;
 
     m_cellWidth  = qMax<qreal>(1.0, metrics.horizontalAdvance(QLatin1Char('M')));
-    m_cellHeight = qMax<qreal>(1.0, metrics.lineSpacing());
+    m_cellHeight = qMax<qreal>(1.0, metrics.lineSpacing() * m_lineHeight);
 
     if (!qFuzzyCompare(previousCellWidth,  m_cellWidth) ||
         !qFuzzyCompare(previousCellHeight, m_cellHeight)) {

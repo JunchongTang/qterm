@@ -144,6 +144,24 @@ void QTermQuickPaintedItem::setFontPixelSize(int fontPixelSize)
     emit fontChanged();
 }
 
+qreal QTermQuickPaintedItem::lineHeight() const noexcept
+{
+    return m_controller->lineHeight();
+}
+
+void QTermQuickPaintedItem::setLineHeight(qreal factor)
+{
+    // **Compare around the call, not against the argument.** The controller
+    // clamps, so an out-of-range value would never equal what is stored and
+    // would re-emit fontChanged() on every set.
+    const qreal before = m_controller->lineHeight();
+    m_controller->setLineHeight(factor);
+    if (qFuzzyCompare(before, m_controller->lineHeight()))
+        return;
+    update();
+    emit fontChanged();
+}
+
 qreal QTermQuickPaintedItem::cellWidth() const noexcept
 {
     return m_controller->cellWidth();

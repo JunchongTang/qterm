@@ -39,11 +39,90 @@ private slots:
     void syncsSizeOnGeometryChange();
     void clampsSizeToMinimumColumnsAndRows();
 
+    // Line height: taller cells, same glyphs, fewer rows.
+    void lineHeightStretchesTheCellWithoutTouchingTheWidth();
+    void lineHeightIsClampedAndOnlyReportsRealChanges();
+
     // The core resize-regression bug: prompt lines must survive repeated
     // width oscillation driven through QTermQuickPaintedItem geometry changes.
     void preservesPromptLinesAcrossWidthOscillation();
     void preservesPromptLinesWhenShellUsesAbsoluteColumnMoveViaQuickItem();
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Line height multiplies the cell *height* only.
+//
+// The whole point of the setting is that the glyphs keep their size and the
+// columns stay put — only the gap between rows grows. Everything downstream
+// (hit testing, the cursor rect, scroll math, the row count pushed to the pty)
+// is derived from cellHeight(), so this one assertion covers all of it: if the
+// factor leaked into the width or into the font, columns would move too.
+// ─────────────────────────────────────────────────────────────────────────────
+void QTermQuickPaintedItemTest::lineHeightStretchesTheCellWithoutTouchingTheWidth()
+{
+    QTermTerminal terminal;
+    QTermQuickPaintedItem item;
+
+    item.setFontFamily(u"Courier New"_s);
+    item.setFontPixelSize(14);
+    item.setTerminal(&terminal);
+    item.setWidth(800);
+    item.setHeight(480);
+
+    QCOMPARE(item.lineHeight(), 1.0);
+    const qreal baseWidth = item.cellWidth();
+    const qreal baseHeight = item.cellHeight();
+    const int baseRows = terminal.rows();
+
+    item.setLineHeight(1.5);
+
+    QCOMPARE(item.cellWidth(), baseWidth);
+    QVERIFY2(qFuzzyCompare(item.cellHeight(), baseHeight * 1.5),
+             qPrintable(QStringLiteral("cell height %1, expected %2")
+                            .arg(item.cellHeight()).arg(baseHeight * 1.5)));
+
+    // Taller cells → fewer rows in the same viewport, and the terminal has to
+    // hear about it (the shell reflows on SIGWINCH). The sync is debounced.
+    QTRY_COMPARE(terminal.rows(), expectedRows(item, 480));
+    QVERIFY2(terminal.rows() < baseRows, "row count did not shrink");
+    QCOMPARE(terminal.columns(), expectedColumns(item, 800));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Out-of-range factors are clamped, and a set that changes nothing stays quiet.
+//
+// Zero or negative would collapse the cell, and every row/column computation
+// divides by it. The "stays quiet" half matters because the hosts emit
+// fontChanged() from this setter: comparing against the *argument* instead of
+// the stored value would re-emit forever once a caller passes something out of
+// range (a slider bound to a wider span, say).
+// ─────────────────────────────────────────────────────────────────────────────
+void QTermQuickPaintedItemTest::lineHeightIsClampedAndOnlyReportsRealChanges()
+{
+    QTermTerminal terminal;
+    QTermQuickPaintedItem item;
+
+    item.setFontFamily(u"Courier New"_s);
+    item.setFontPixelSize(14);
+    item.setTerminal(&terminal);
+    item.setWidth(800);
+    item.setHeight(480);
+
+    QSignalSpy spy(&item, &QTermQuickPaintedItem::fontChanged);
+
+    item.setLineHeight(99.0);
+    QCOMPARE(item.lineHeight(), 3.0);
+    QCOMPARE(spy.count(), 1);
+
+    item.setLineHeight(99.0);               // still clamped to the same value
+    QCOMPARE(spy.count(), 1);
+
+    item.setLineHeight(0.0);
+    QCOMPARE(item.lineHeight(), 0.8);
+    QCOMPARE(spy.count(), 2);
+
+    QVERIFY(item.cellHeight() >= 1.0);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A geometry change must reach the terminal's column and row count.

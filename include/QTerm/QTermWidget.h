@@ -32,6 +32,10 @@ class QTermWidget : public QWidget
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontPixelSize READ fontPixelSize WRITE setFontPixelSize NOTIFY fontChanged)
+    // Multiplier on the font's natural line spacing (1.0 = the font's own).
+    // Larger values space the rows out **without changing the glyph size** —
+    // see QTermViewController::lineHeight() for what else moves with it.
+    Q_PROPERTY(qreal lineHeight READ lineHeight WRITE setLineHeight NOTIFY fontChanged)
     Q_PROPERTY(qreal cellWidth READ cellWidth NOTIFY metricsChanged)
     Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY metricsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
@@ -92,6 +96,8 @@ public:
         \brief Returns the pixel size of the terminal font.
     */
     int fontPixelSize() const noexcept;
+    qreal lineHeight() const noexcept;
+    void setLineHeight(qreal factor);
 
     /*!
         \brief Sets the pixel size of the terminal font.

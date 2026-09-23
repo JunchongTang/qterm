@@ -39,6 +39,20 @@ public:
     int fontPixelSize() const noexcept;
     void setFontPixelSize(int size);
 
+    // Multiplier applied to the font's natural line spacing when deriving the
+    // cell height. 1.0 = the font's own spacing, which is what terminals have
+    // always used; larger values add breathing room between rows **without
+    // changing the glyph size** — the extra space is split above and below the
+    // glyph, and the cell width is untouched.
+    //
+    // Note the knock-on effects, all of which fall out of cellHeight() and are
+    // therefore already handled: fewer rows fit the viewport (and the new size
+    // is pushed to the pty), the block cursor and the selection highlight grow
+    // with the cell, and box-drawing glyphs — which are drawn from the font at
+    // their natural height — no longer meet across row seams.
+    qreal lineHeight() const noexcept;
+    void setLineHeight(qreal factor);
+
     qreal cellWidth() const noexcept;
     qreal cellHeight() const noexcept;
 
@@ -129,6 +143,7 @@ private:
     QString m_fontFamily    = QStringLiteral("Monospace");
 #endif
     int     m_fontPixelSize = 18;
+    qreal   m_lineHeight    = 1.0;
     qreal   m_cellWidth     = 1.0;
     qreal   m_cellHeight    = 1.0;
     qreal   m_viewWidth     = 0.0;
