@@ -10,6 +10,7 @@
 #include "../QTermCursorDiagnostics.h"
 #include "QTermViewController.h"
 #include "../QTermRenderUtils.h"
+#include "../core/QTermCharWidth.h"
 
 #include <QFontMetricsF>
 #include <QHoverEvent>
@@ -241,37 +242,52 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
             if (run.value(QStringLiteral("dim")).toBool())
                 fg.setAlphaF(0.65);
 
-            // Build a QTextLayout for this run so we can call addTextLayout.
-            QTextLayout layout(text, runFont);
+            // Every cell must land on the grid; the run's own font metrics do
+            // not do that once a character falls back to another font. The
+            // segmentation (and the long why) lives in qtermGridSegments().
+            const QFontMetricsF runMetrics(runFont);
+            // Kerning would move glyphs off the grid for the same reason;
+            // a terminal never wants it.
+            runFont.setKerning(false);
 
-            // A run fills a fixed span of the cell grid, so it must never wrap.
-            // With the default word-wrapping mode, setLineWidth(runW) below
-            // moves the trailing word onto a second line as soon as the run
-            // measures runW or more -- and since only the first line is ever
-            // laid out, that word is silently dropped. A monospaced run of n
-            // columns measures exactly n * cellW, so it hits that boundary on
-            // every full-width line.
-            QTextOption textOption = layout.textOption();
-            textOption.setWrapMode(QTextOption::NoWrap);
-            layout.setTextOption(textOption);
+            for (const QTermGridSegment &seg : qtermGridSegments(text, runMetrics, cellW)) {
+                QFont segFont = runFont;
+                if (!qFuzzyIsNull(seg.letterSpacing))
+                    segFont.setLetterSpacing(QFont::AbsoluteSpacing, seg.letterSpacing);
 
-            QTextCharFormat cf;
-            cf.setForeground(fg);
-            QTextLayout::FormatRange fmt;
-            fmt.start = 0;
-            fmt.length = text.length();
-            fmt.format = cf;
-            layout.setFormats({fmt});
+                const QString segText = text.mid(seg.start, seg.length);
+                QTextLayout layout(segText, segFont);
 
-            layout.beginLayout();
-            QTextLine line = layout.createLine();
-            if (line.isValid()) {
-                line.setLineWidth(runW);
-                line.setPosition(QPointF(0.0, 0.0));
+                // A segment fills a fixed span of the cell grid, so it must never
+                // wrap. With the default word-wrapping mode, setLineWidth() below
+                // moves the trailing word onto a second line as soon as the text
+                // measures that wide -- and since only the first line is ever laid
+                // out, that word is silently dropped.
+                QTextOption textOption = layout.textOption();
+                textOption.setWrapMode(QTextOption::NoWrap);
+                layout.setTextOption(textOption);
+
+                QTextCharFormat cf;
+                cf.setForeground(fg);
+                QTextLayout::FormatRange fmt;
+                fmt.start = 0;
+                fmt.length = int(segText.length());
+                fmt.format = cf;
+                layout.setFormats({fmt});
+
+                layout.beginLayout();
+                QTextLine line = layout.createLine();
+                if (line.isValid()) {
+                    // Trailing letter spacing counts towards the measured width,
+                    // so give the line room for it -- a too-small line width is
+                    // exactly what drops the last glyph.
+                    line.setLineWidth(seg.columns * cellW + qAbs(seg.letterSpacing) + 1.0);
+                    line.setPosition(QPointF(0.0, 0.0));
+                }
+                layout.endLayout();
+
+                tn->addTextLayout(QPointF(x + seg.column * cellW, rowY), &layout);
             }
-            layout.endLayout();
-
-            tn->addTextLayout(QPointF(x, rowY), &layout);
         }
 
         x += runW;
@@ -378,7 +394,8 @@ bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
                 fallbacks.append(FallbackGlyph{
                     QPointF(penX, row * cellH + topOffset),
                     text.mid(start, clusterEnd - start), fg, bold, italic});
-                penX += cellW * (codePoint >= 0x1100 ? 2 : 1);
+                penX += cellW * qMax(1, QTerm::CharWidth::displayWidth(
+                                             QStringView(text).sliced(start)));
                 i = clusterEnd;
                 continue;
             }
@@ -395,7 +412,7 @@ bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
                 fallbacks.append(FallbackGlyph{
                     QPointF(penX, row * cellH + topOffset),
                     QString::fromUcs4(&codePoint, 1), fg, bold, italic});
-                penX += cellW * (codePoint >= 0x1100 ? 2 : 1);
+                penX += cellW * (QTerm::CharWidth::isWide(codePoint) ? 2 : 1);
                 continue;
             }
 
@@ -414,10 +431,12 @@ bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
             const QTermTextMaterial::Vertex br{gx + gw, gy + gh, u1, v1, cr, cg, cb, ca};
             vertices << tl << tr << bl << tr << br << bl;
 
-            // Wide characters occupy two columns; the run's column count already
-            // accounts for that, so advance by the glyph's own width in cells.
-            penX += (codePoint >= 0x1100 && glyph->region.width() > cellW * 1.2)
-                    ? cellW * 2 : cellW;
+            // Wide characters occupy two columns. **Ask the same function the
+            // emulator asked** -- the old rule here guessed from the rasterised
+            // glyph's ink box ("wider than 1.2 cells"), which says "narrow" for a
+            // slim CJK punctuation mark and "wide" for a fat dash, and every
+            // disagreement with the emulator shifts the rest of the row.
+            penX += cellW * (QTerm::CharWidth::isWide(codePoint) ? 2 : 1);
         }
 
         if ((underline || strikeOut) && penX > x) {

@@ -113,6 +113,22 @@ target_link_libraries(qterm_inverse_text_tests
 
 add_test(NAME qterm_inverse_text_tests COMMAND qterm_inverse_text_tests)
 
+# 文本必须落在格子上,不管最后是哪个字体在画。CJK 回退字体比两格窄、制表符比一格宽,
+# 而整段交给 Qt 排版会让误差在一行里累加 —— 症状是「`ls` 的列对不齐」「TUI 的框画宽了」,
+# 不崩、也不在 ASCII 上出现。
+qt_add_executable(qterm_grid_alignment_tests
+    quick/QTermGridAlignmentTest.cpp
+)
+
+target_link_libraries(qterm_grid_alignment_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_grid_alignment_tests COMMAND qterm_grid_alignment_tests)
+
 qt_add_executable(qterm_pointer_shape_tests
     quick/QTermPointerShapeTest.cpp
 )

@@ -25,6 +25,8 @@ qt_add_library(qterm STATIC
     core/QTermBuffer.h
     core/QTermBuffer.cpp
     core/QTermCell.h
+    core/QTermCharWidth.h
+    core/QTermCharWidth.cpp
     core/QTermCore.h
     core/QTermInputEncoder.h
     core/QTermInputEncoder.cpp
