@@ -123,6 +123,16 @@ void QTermLocalShellBackend::setWorkingDirectory(const QString &workingDirectory
     emit workingDirectoryChanged();
 }
 
+QVariantMap QTermLocalShellBackend::extraEnvironment() const { return m_extraEnvironment; }
+
+void QTermLocalShellBackend::setExtraEnvironment(const QVariantMap &environment)
+{
+    if (m_extraEnvironment == environment)
+        return;
+    m_extraEnvironment = environment;
+    emit extraEnvironmentChanged();
+}
+
 void QTermLocalShellBackend::setProcessEnvironment(const QProcessEnvironment &environment)
 {
     m_environment = environment;
@@ -231,6 +241,10 @@ void QTermLocalShellBackend::open()
     QProcessEnvironment env = m_environment.isEmpty()
         ? QProcessEnvironment::systemEnvironment()
         : m_environment;
+    for (auto it = m_extraEnvironment.constBegin(); it != m_extraEnvironment.constEnd(); ++it) {
+        if (!it.key().isEmpty())
+            env.insert(it.key(), it.value().toString());
+    }
     if (!env.contains(QStringLiteral("TERM")))
         env.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
 

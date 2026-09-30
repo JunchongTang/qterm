@@ -2,6 +2,7 @@
 #define QTERM_QTERMLOCALSHELLBACKEND_H
 
 #include <QProcessEnvironment>
+#include <QVariantMap>
 #include <QString>
 #include <QStringList>
 
@@ -29,6 +30,15 @@ class QTermLocalShellBackend : public QTermSessionBackend
     Q_PROPERTY(QString program READ program WRITE setProgram NOTIFY programChanged)
     Q_PROPERTY(QStringList arguments READ arguments WRITE setArguments NOTIFY argumentsChanged)
     Q_PROPERTY(QString workingDirectory READ workingDirectory WRITE setWorkingDirectory NOTIFY workingDirectoryChanged)
+    /*!
+        \brief Extra environment variables, merged on top of the inherited environment.
+
+        \c processEnvironment replaces the whole environment, which QML cannot build
+        (there is no \c QProcessEnvironment value type). This property takes a plain
+        map and merges it over whatever the child would otherwise inherit, so callers
+        can add a couple of variables without having to reproduce the rest.
+    */
+    Q_PROPERTY(QVariantMap extraEnvironment READ extraEnvironment WRITE setExtraEnvironment NOTIFY extraEnvironmentChanged)
 
 public:
     explicit QTermLocalShellBackend(QObject *parent = nullptr);
@@ -79,6 +89,13 @@ public:
     */
     void setProcessEnvironment(const QProcessEnvironment &environment);
 
+    QVariantMap extraEnvironment() const;
+    /*!
+        \brief Sets extra variables merged over the inherited environment.
+        \param environment Key/value pairs; values are converted with \c toString().
+    */
+    void setExtraEnvironment(const QVariantMap &environment);
+
     /*!
         \brief Starts the local shell process.
     */
@@ -127,6 +144,7 @@ signals:
     void programChanged();
     void argumentsChanged();
     void workingDirectoryChanged();
+    void extraEnvironmentChanged();
 
 private:
     // resolvedProgram() is common: returns configured program, or the platform
@@ -138,6 +156,7 @@ private:
     QStringList m_arguments;
     QString m_workingDirectory;
     QProcessEnvironment m_environment;
+    QVariantMap m_extraEnvironment;
     int m_columns = 80;
     int m_rows = 24;
 

@@ -100,6 +100,16 @@ void QTermLocalShellBackend::setWorkingDirectory(const QString &workingDirectory
     emit workingDirectoryChanged();
 }
 
+QVariantMap QTermLocalShellBackend::extraEnvironment() const { return m_extraEnvironment; }
+
+void QTermLocalShellBackend::setExtraEnvironment(const QVariantMap &environment)
+{
+    if (m_extraEnvironment == environment)
+        return;
+    m_extraEnvironment = environment;
+    emit extraEnvironmentChanged();
+}
+
 void QTermLocalShellBackend::setProcessEnvironment(const QProcessEnvironment &environment)
 {
     m_environment = environment;
@@ -376,6 +386,12 @@ QProcessEnvironment QTermLocalShellBackend::resolvedEnvironment() const
     QProcessEnvironment environment = m_environment;
     if (environment.isEmpty())
         environment = QProcessEnvironment::systemEnvironment();
+    // Extras go on top of whatever was inherited or set wholesale: they are meant to
+    // add a couple of variables, not to define the environment.
+    for (auto it = m_extraEnvironment.constBegin(); it != m_extraEnvironment.constEnd(); ++it) {
+        if (!it.key().isEmpty())
+            environment.insert(it.key(), it.value().toString());
+    }
     if (!environment.contains(QStringLiteral("TERM")))
         environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
     return environment;
