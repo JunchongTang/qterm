@@ -1,0 +1,21 @@
+^D/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:66:        m_cells[index] = [01;31m[KQTermCell[m[K();
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:86:        m_cells[index] = [01;31m[KQTermCell[m[K();
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:92:const [01;31m[KQTermCell[m[K &QTermLine::cellAt(int column) const
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:97:void QTermLine::setCell(int column, const [01;31m[KQTermCell[m[K &cell)
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:103:void QTermLine::setNarrowRun(int column, QStringView text, const [01;31m[KQTermCell[m[KAttributes &attributes)
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:125:        [01;31m[KQTermCell[m[K &cell = m_cells[column + offset];
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:141:        m_cells = QVector<[01;31m[KQTermCell[m[K>(columns);
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:147:        [01;31m[KQTermCell[m[K *cells = m_cells.data();
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:149:            [01;31m[KQTermCell[m[K &cell = cells[column];
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:153:            cell.attributes = [01;31m[KQTermCell[m[KAttributes();
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:172:    m_cells[baseColumn] = [01;31m[KQTermCell[m[K();
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:175:        m_cells[baseColumn + offset] = [01;31m[KQTermCell[m[K();
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:190:    [01;31m[KQTermCell[m[K &baseCell = m_cells[baseColumn];
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:199:void QTermLine::setCharacter(int column, const QString &text, int width, const [01;31m[KQTermCell[m[KAttributes &attributes)
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:212:    m_cells[column] = [01;31m[KQTermCell[m[K{text, boundedWidth, false, attributes};
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:215:        m_cells[column + offset] = [01;31m[KQTermCell[m[K{QString(), 0, true, attributes};
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:254:        const [01;31m[KQTermCell[m[K &cell = m_cells.at(column);
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:270:    for (const [01;31m[KQTermCell[m[K &cell : m_cells) {
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:283:    [01;31m[KQTermCell[m[KAttributes currentAttributes;
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:312:    for (const [01;31m[KQTermCell[m[K &cell : m_cells) {
+/home/user/workspace/1-projects/qterm/src/core/QTermLine.cpp:359:    for (const [01;31m[KQTermCell[m[K &cell : m_cells) {

@@ -1,0 +1,416 @@
+{
+    "columns": 80,
+    "cursor": {
+        "column": 0,
+        "row": 23
+    },
+    "historyLines": 25,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x   10 root  wheel   320 Jun 25 10:29 "
+                },
+                {
+                    "columns": 3,
+                    "foregroundIndex": 4,
+                    "text": "man"
+                },
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": "drwxr-xr-x   10 root  wheel   320 Jun 25 10:29 man"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 4,
+                    "text": "mecabra"
+                },
+                {
+                    "columns": 26,
+                    "text": "                          "
+                }
+            ],
+            "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 mecabra"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x  103 root  wheel  3296 Jun 25 10:29 "
+                },
+                {
+                    "columns": 4,
+                    "foregroundIndex": 4,
+                    "text": "misc"
+                },
+                {
+                    "columns": 29,
+                    "text": "                             "
+                }
+            ],
+            "text": "drwxr-xr-x  103 root  wheel  3296 Jun 25 10:29 misc"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 4,
+                    "text": "morphun"
+                },
+                {
+                    "columns": 26,
+                    "text": "                          "
+                }
+            ],
+            "text": "drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 morphun"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 4,
+                    "text": "openssh"
+                },
+                {
+                    "columns": 26,
+                    "text": "                          "
+                }
+            ],
+            "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 openssh"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x   37 root  wheel  1184 Jun 25 10:29 "
+                },
+                {
+                    "columns": 8,
+                    "foregroundIndex": 4,
+                    "text": "pmenergy"
+                },
+                {
+                    "columns": 25,
+                    "text": "                         "
+                }
+            ],
+            "text": "drwxr-xr-x   37 root  wheel  1184 Jun 25 10:29 pmenergy"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "lrwxr-xr-x    1 root  wheel    76 Jun 25 10:29 "
+                },
+                {
+                    "columns": 2,
+                    "foregroundIndex": 5,
+                    "text": "ri"
+                },
+                {
+                    "columns": 31,
+                    "text": " -> ../../System/Library/Framew"
+                }
+            ],
+            "text": "lrwxr-xr-x    1 root  wheel    76 Jun 25 10:29 ri -> ../../System/Library/Framew"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "orks/Ruby.framework/Versions/Current/usr/share/ri                               "
+                }
+            ],
+            "text": "orks/Ruby.framework/Versions/Current/usr/share/ri"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x   61 root  wheel  1952 Jun 25 10:29 "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 4,
+                    "text": "sandbox"
+                },
+                {
+                    "columns": 26,
+                    "text": "                          "
+                }
+            ],
+            "text": "drwxr-xr-x   61 root  wheel  1952 Jun 25 10:29 sandbox"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 "
+                },
+                {
+                    "columns": 6,
+                    "foregroundIndex": 4,
+                    "text": "screen"
+                },
+                {
+                    "columns": 27,
+                    "text": "                           "
+                }
+            ],
+            "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 screen"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    2 root  wheel    64 Jun 25 10:29 "
+                },
+                {
+                    "columns": 4,
+                    "foregroundIndex": 4,
+                    "text": "skel"
+                },
+                {
+                    "columns": 29,
+                    "text": "                             "
+                }
+            ],
+            "text": "drwxr-xr-x    2 root  wheel    64 Jun 25 10:29 skel"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x   28 root  wheel   896 Jun 25 10:29 "
+                },
+                {
+                    "columns": 4,
+                    "foregroundIndex": 4,
+                    "text": "snmp"
+                },
+                {
+                    "columns": 29,
+                    "text": "                             "
+                }
+            ],
+            "text": "drwxr-xr-x   28 root  wheel   896 Jun 25 10:29 snmp"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 "
+                },
+                {
+                    "columns": 5,
+                    "foregroundIndex": 4,
+                    "text": "swift"
+                },
+                {
+                    "columns": 28,
+                    "text": "                            "
+                }
+            ],
+            "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 swift"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 "
+                },
+                {
+                    "columns": 6,
+                    "foregroundIndex": 4,
+                    "text": "tabset"
+                },
+                {
+                    "columns": 27,
+                    "text": "                           "
+                }
+            ],
+            "text": "drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 tabset"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x   44 root  wheel  1408 Jun 25 10:29 "
+                },
+                {
+                    "columns": 8,
+                    "foregroundIndex": 4,
+                    "text": "terminfo"
+                },
+                {
+                    "columns": 25,
+                    "text": "                         "
+                }
+            ],
+            "text": "drwxr-xr-x   44 root  wheel  1408 Jun 25 10:29 terminfo"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 "
+                },
+                {
+                    "columns": 15,
+                    "foregroundIndex": 4,
+                    "text": "thermald.bundle"
+                },
+                {
+                    "columns": 18,
+                    "text": "                  "
+                }
+            ],
+            "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 thermald.bundle"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 "
+                },
+                {
+                    "columns": 9,
+                    "foregroundIndex": 4,
+                    "text": "tokenizer"
+                },
+                {
+                    "columns": 24,
+                    "text": "                        "
+                }
+            ],
+            "text": "drwxr-xr-x    6 root  wheel   192 Jun 25 10:29 tokenizer"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 "
+                },
+                {
+                    "columns": 8,
+                    "foregroundIndex": 4,
+                    "text": "ucupdate"
+                },
+                {
+                    "columns": 25,
+                    "text": "                         "
+                }
+            ],
+            "text": "drwxr-xr-x    3 root  wheel    96 Jun 25 10:29 ucupdate"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 "
+                },
+                {
+                    "columns": 3,
+                    "foregroundIndex": 4,
+                    "text": "vim"
+                },
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": "drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 vim"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "lrwxr-xr-x    1 root  wheel    25 Jun 25 10:29 "
+                },
+                {
+                    "columns": 8,
+                    "foregroundIndex": 5,
+                    "text": "zoneinfo"
+                },
+                {
+                    "columns": 25,
+                    "text": " -> /var/db/timezone/zone"
+                }
+            ],
+            "text": "lrwxr-xr-x    1 root  wheel    25 Jun 25 10:29 zoneinfo -> /var/db/timezone/zone"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "info                                                                            "
+                }
+            ],
+            "text": "info"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x   69 root  wheel  2208 Jun 25 10:29 "
+                },
+                {
+                    "columns": 16,
+                    "foregroundIndex": 4,
+                    "text": "zoneinfo.default"
+                },
+                {
+                    "columns": 17,
+                    "text": "                 "
+                }
+            ],
+            "text": "drwxr-xr-x   69 root  wheel  2208 Jun 25 10:29 zoneinfo.default"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 47,
+                    "text": "drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 "
+                },
+                {
+                    "columns": 3,
+                    "foregroundIndex": 4,
+                    "text": "zsh"
+                },
+                {
+                    "columns": 30,
+                    "text": "                              "
+                }
+            ],
+            "text": "drwxr-xr-x    4 root  wheel   128 Jun 25 10:29 zsh"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 80,
+                    "text": "                                                                                "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 24
+}

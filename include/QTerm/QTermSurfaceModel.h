@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <functional>
 #include <QVariantList>
 
 namespace QTerm {
@@ -141,6 +142,17 @@ private:
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn);
     void setSelectionSnapshot(bool hasSelection, int startRow, int startColumn, int endRow, int endColumn, const QString &selectedText);
     void setVisibleLines(const QStringList &visibleLines);
+    // The plain-text projection has no renderer consuming it, so building it on
+    // every write is wasted work. QTermTerminal installs a provider and only
+    // flags the projection stale; it is materialised when actually read.
+    void setVisibleLinesProvider(std::function<QStringList()> provider);
+    void markVisibleLinesDirty();
+    // Same deal for the style runs: rebuilding them costs a QVariantMap per run
+    // and a deep comparison of the whole list, while a renderer only reads them
+    // once per frame. Flagging them stale also collapses a burst of writes into
+    // a single change notification.
+    void setVisibleLineRunsProvider(std::function<QVariantList()> provider);
+    void markVisibleLineRunsDirty();
     void setVisibleLineRuns(const QVariantList &visibleLineRuns);
     void setVisibleLineRunsPartial(const QVector<int> &rows, const QVariantList &runs);
     void setSearchHighlights(const QVariantList &highlights);
@@ -158,8 +170,14 @@ private:
     int m_selectionEndColumn = 0;
     QTermTerminal *m_selectionController = nullptr;
     QString m_selectedText;
-    QStringList m_visibleLines;
-    QVariantList m_visibleLineRuns;
+    void materialiseVisibleLineRuns() const;
+
+    mutable QStringList m_visibleLines;
+    mutable bool m_visibleLinesDirty = false;
+    std::function<QStringList()> m_visibleLinesProvider;
+    mutable bool m_visibleLineRunsDirty = false;
+    std::function<QVariantList()> m_visibleLineRunsProvider;
+    mutable QVariantList m_visibleLineRuns;
     QVariantList m_searchHighlights;
 };
 

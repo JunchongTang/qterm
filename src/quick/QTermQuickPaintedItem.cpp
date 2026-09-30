@@ -1,11 +1,15 @@
 #include <QTerm/QTermQuickPaintedItem.h>
+// resolveCursorShape():宿主默认 + DECSCUSR 覆盖的那条规则。
+#include <QTerm/QTermModeState.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
 
 #include "QTermViewController.h"
+#include "../QTermCursorDiagnostics.h"
 #include "../QTermRenderUtils.h"
 
+#include <QCursor>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -26,9 +30,14 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     , m_controller(new QTermViewController(this))
 {
     setOpaquePainting(true);
-    setAcceptedMouseButtons(Qt::LeftButton);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
-    setAcceptHoverEvents(false);
+    // One call, not a hand-written copy of what it does: the button mask and the
+    // pointer shape both depend on the mouse mode, and updateMouseAcceptance() only
+    // runs when that mode *changes*. A terminal that never enables mouse reporting
+    // would otherwise keep whatever the constructor happened to set for its whole
+    // life -- which is how the right button went missing: the mask here said
+    // LeftButton, so contextMenuRequested could never fire on the common path.
+    updateMouseAcceptance();
 
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         update();
@@ -82,6 +91,8 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
             this, &QTermQuickPaintedItem::copyRequested);
     connect(m_controller, &QTermViewController::hyperlinkActivated,
             this, &QTermQuickPaintedItem::hyperlinkActivated);
+    connect(m_controller, &QTermViewController::contextMenuRequested,
+            this, &QTermQuickPaintedItem::contextMenuRequested);
     connect(m_controller, &QTermViewController::terminalChanged, this, [this]() {
         update();
         emit terminalChanged();
@@ -89,7 +100,7 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
     });
 }
 
-// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermQuickPaintedItem::terminal() const noexcept
 {
@@ -102,7 +113,7 @@ void QTermQuickPaintedItem::setTerminal(QTermTerminal *terminal)
     update();
 }
 
-// ── 字体 ──────────────────────────────────────────────────────────────────────
+// ── Font ─────────────────────────────────────────────────────────────────────
 
 QString QTermQuickPaintedItem::fontFamily() const
 {
@@ -133,6 +144,24 @@ void QTermQuickPaintedItem::setFontPixelSize(int fontPixelSize)
     emit fontChanged();
 }
 
+qreal QTermQuickPaintedItem::lineHeight() const noexcept
+{
+    return m_controller->lineHeight();
+}
+
+void QTermQuickPaintedItem::setLineHeight(qreal factor)
+{
+    // **Compare around the call, not against the argument.** The controller
+    // clamps, so an out-of-range value would never equal what is stored and
+    // would re-emit fontChanged() on every set.
+    const qreal before = m_controller->lineHeight();
+    m_controller->setLineHeight(factor);
+    if (qFuzzyCompare(before, m_controller->lineHeight()))
+        return;
+    update();
+    emit fontChanged();
+}
+
 qreal QTermQuickPaintedItem::cellWidth() const noexcept
 {
     return m_controller->cellWidth();
@@ -143,7 +172,7 @@ qreal QTermQuickPaintedItem::cellHeight() const noexcept
     return m_controller->cellHeight();
 }
 
-// ── 调色板 ────────────────────────────────────────────────────────────────────
+// ── Palette ──────────────────────────────────────────────────────────────────
 
 QColor QTermQuickPaintedItem::foregroundColor() const { return m_foregroundColor; }
 
@@ -157,10 +186,40 @@ void QTermQuickPaintedItem::setForegroundColor(const QColor &foregroundColor)
 
 QColor QTermQuickPaintedItem::backgroundColor() const { return m_backgroundColor; }
 
+QColor QTermQuickPaintedItem::inverseTextColor() const { return m_inverseTextColor; }
+
+void QTermQuickPaintedItem::setInverseTextColor(const QColor &inverseTextColor)
+{
+    if (m_inverseTextColor == inverseTextColor) return;
+    m_inverseTextColor = inverseTextColor;
+    update();
+    emit paletteChanged();
+}
+
 void QTermQuickPaintedItem::setBackgroundColor(const QColor &backgroundColor)
 {
     if (m_backgroundColor == backgroundColor) return;
     m_backgroundColor = backgroundColor;
+    update();
+    emit paletteChanged();
+}
+
+QColor QTermQuickPaintedItem::searchHighlightColor() const { return m_searchHighlightColor; }
+
+void QTermQuickPaintedItem::setSearchHighlightColor(const QColor &color)
+{
+    if (m_searchHighlightColor == color) return;
+    m_searchHighlightColor = color;
+    update();
+    emit paletteChanged();
+}
+
+QColor QTermQuickPaintedItem::searchCurrentColor() const { return m_searchCurrentColor; }
+
+void QTermQuickPaintedItem::setSearchCurrentColor(const QColor &color)
+{
+    if (m_searchCurrentColor == color) return;
+    m_searchCurrentColor = color;
     update();
     emit paletteChanged();
 }
@@ -197,7 +256,7 @@ void QTermQuickPaintedItem::setCursorOpacity(qreal cursorOpacity)
     emit cursorOpacityChanged();
 }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermQuickPaintedItem::rowAtPosition(qreal y) const
 {
@@ -209,7 +268,7 @@ int QTermQuickPaintedItem::columnAtPosition(qreal x) const
     return m_controller->columnAtPosition(x);
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermQuickPaintedItem::scrollSize() const noexcept
 {
@@ -307,9 +366,54 @@ void QTermQuickPaintedItem::updateMouseAcceptance()
         setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
         setAcceptHoverEvents(m_controller->hoverEventsNeeded());
     } else {
-        setAcceptedMouseButtons(Qt::LeftButton);
+        // The right button is accepted so the controller can raise
+        // contextMenuRequested: a host that had to lay a MouseArea over the item to
+        // catch it would take the pointer shape away with it (a MouseArea claims the
+        // cursor even when it never assigns cursorShape).
+        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
         setAcceptHoverEvents(false);
     }
+    applyCursorShape();
+}
+
+// ── Pointer shape ─────────────────────────────────────────────────────────────
+
+Qt::CursorShape QTermQuickPaintedItem::cursorShape() const
+{
+    return cursor().shape();
+}
+
+void QTermQuickPaintedItem::setCursorShape(Qt::CursorShape shape)
+{
+    if (m_explicitCursorShape && *m_explicitCursorShape == shape)
+        return;
+    m_explicitCursorShape = shape;
+    applyCursorShape();
+    emit cursorShapeChanged();
+}
+
+void QTermQuickPaintedItem::resetCursorShape()
+{
+    if (!m_explicitCursorShape)
+        return;
+    m_explicitCursorShape.reset();
+    applyCursorShape();
+    emit cursorShapeChanged();
+}
+
+void QTermQuickPaintedItem::applyCursorShape()
+{
+    // A terminal is a text surface, so the pointer is an I-beam -- every terminal
+    // emulator does this, and the arrow reads as "nothing here is selectable". The
+    // exception is an application that has taken over the mouse (DECSET 1000/1002/
+    // 1003: vim, htop, tmux): clicks go to it rather than to a selection, so an
+    // I-beam would promise something that does not happen. A host that set the shape
+    // itself outranks both.
+    const Qt::CursorShape shape =
+        m_explicitCursorShape ? *m_explicitCursorShape
+        : (m_controller->mouseProtocolEnabled() ? Qt::ArrowCursor : Qt::IBeamCursor);
+    if (cursor().shape() != shape)
+        setCursor(shape);
 }
 
 // ── paint() ───────────────────────────────────────────────────────────────────
@@ -341,13 +445,21 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     req.baseFont      = baseFont;
     req.foreground    = m_foregroundColor;
     req.background    = m_backgroundColor;
+    req.inverseText   = m_inverseTextColor;
     req.selection     = m_selectionColor;
+    req.searchHighlight = m_searchHighlightColor;
+    req.searchCurrent = m_searchCurrentColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
+    // 见 QTerm::resolveCursorShape:宿主的 cursorStyle 是默认值,DECSCUSR 才能盖掉。
     req.cursorStyle   = surfaceModel
-        ? surfaceModel->cursorShape()
+        ? resolveCursorShape(surfaceModel->cursorShape(),
+                             static_cast<int>(m_cursorStyle))
         : static_cast<int>(m_cursorStyle);
     req.showCursor    = !m_cursorDelegateItem && hasActiveFocus();
+    qtermReportCursorDraw(m_cursorDrawReason, hasActiveFocus(),
+                          surfaceModel && surfaceModel->cursorVisible(),
+                          m_cursorOpacity, m_cursorDelegateItem != nullptr);
     req.hyperlinkTint = m_theme.hyperlinkTint();
     req.palette16     = m_theme.palette16();
 

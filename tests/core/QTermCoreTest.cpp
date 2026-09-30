@@ -22,6 +22,7 @@ private slots:
     void keepsPartialCsiStateAcrossWrites();
     void ignoresUnsupportedControlStrings();
     void supportsColonSeparatedTrueColorSgr();
+    void supportsColonSeparatedSgrVariants();
     void treatsVerticalTabAndFormFeedAsLineFeeds();
     void supportsCsiCursorPosition();
     void supportsCsiEraseInLine();
@@ -81,7 +82,7 @@ private slots:
     void togglesMouseModeSGR();
     void encodesMouseEventX10();
     void encodesMouseEventSGR();
-    // tmux 支持回归测试
+    // tmux support regression tests
     void decawmDisablesPendingWrap();
     void decstbmMovesCursorToHomeNotScrollTop();
     void lineFeedOutsideScrollRegionDoesNotScroll();
@@ -227,6 +228,42 @@ void QTermCoreTest::supportsColonSeparatedTrueColorSgr()
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0xff0000);
 }
 
+// The colon form comes in two lengths (with and without the colour-space slot)
+// and also covers indexed colour and backgrounds, none of which the
+// semicolon-folding parser could tell apart.
+void QTermCoreTest::supportsColonSeparatedSgrVariants()
+{
+    {   // truecolour without the empty colour-space slot
+        QTermCore core;
+        core.writePlainText("\x1b[38:2:0:255:0mgreen"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0x00ff00);
+    }
+    {   // indexed colour
+        QTermCore core;
+        core.writePlainText("\x1b[38:5:196mred"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundIndex, 196);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, -1);
+    }
+    {   // background, with the colour-space slot
+        QTermCore core;
+        core.writePlainText("\x1b[48:2::0:0:255mblue"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.backgroundRgb, 0x0000ff);
+    }
+    {   // the semicolon form must keep working unchanged
+        QTermCore core;
+        core.writePlainText("\x1b[38;2;255;128;0morange"_L1);
+        QCOMPARE(core.buffer().lineAt(0).cellAt(0).attributes.foregroundRgb, 0xff8000);
+    }
+    {   // a colon sequence followed by more attributes on the same escape
+        QTermCore core;
+        core.writePlainText("\x1b[1;38:2::255:0:0;4mred"_L1);
+        const auto attributes = core.buffer().lineAt(0).cellAt(0).attributes;
+        QCOMPARE(attributes.foregroundRgb, 0xff0000);
+        QVERIFY(attributes.bold);
+        QVERIFY(attributes.underline);
+    }
+}
+
 void QTermCoreTest::treatsVerticalTabAndFormFeedAsLineFeeds()
 {
     QTermCore core;
@@ -276,7 +313,7 @@ void QTermCoreTest::preservesSgrAttributesOnCells()
     core.writePlainText("\x1b[1;2;4;7;9;31mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
-    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), "A"_L1);
     QVERIFY(cell.attributes.bold);
     QVERIFY(cell.attributes.dim);
     QVERIFY(cell.attributes.underline);
@@ -485,7 +522,7 @@ void QTermCoreTest::combinesNonSpacingMarks()
     QCOMPARE(core.dumpPlainText(), composed);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 2);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, firstCellText);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), firstCellText);
 }
 
 void QTermCoreTest::storesWideCharactersAcrossTwoCells()
@@ -499,10 +536,10 @@ void QTermCoreTest::storesWideCharactersAcrossTwoCells()
     QCOMPARE(core.dumpPlainText(), text);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, wideChar);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), wideChar);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(2).text, "a"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(2), "a"_L1);
 }
 
 void QTermCoreTest::updatesWindowTitleFromOscBel()
@@ -539,7 +576,7 @@ void QTermCoreTest::keepsNonBmpWideCharactersAcrossWrites()
     QCOMPARE(core.dumpPlainText(), emoji + "a"_L1);
     QCOMPARE(core.cursorState().row, 0);
     QCOMPARE(core.cursorState().column, 3);
-    QCOMPARE(core.buffer().lineAt(0).cellAt(0).text, emoji);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), emoji);
     QCOMPARE(core.buffer().lineAt(0).cellAt(0).width, 2);
     QVERIFY(core.buffer().lineAt(0).cellAt(1).continuation);
 }
@@ -818,7 +855,7 @@ void QTermCoreTest::supports256ColorSgrAttributes()
     core.writePlainText("\x1b[38;5;196;48;5;33mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
-    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), "A"_L1);
     QCOMPARE(cell.attributes.foregroundIndex, 196);
     QCOMPARE(cell.attributes.foregroundRgb, -1);
     QCOMPARE(cell.attributes.backgroundIndex, 33);
@@ -832,7 +869,7 @@ void QTermCoreTest::supportsTrueColorSgrAttributes()
     core.writePlainText("\x1b[38;2;12;34;56;48;2;200;210;220mA"_L1);
 
     const QTermCell &cell = core.buffer().lineAt(0).cellAt(0);
-    QCOMPARE(cell.text, "A"_L1);
+    QCOMPARE(core.buffer().lineAt(0).textAt(0), "A"_L1);
     QCOMPARE(cell.attributes.foregroundIndex, -1);
     QCOMPARE(cell.attributes.foregroundRgb, 0x0c2238);
     QCOMPARE(cell.attributes.backgroundIndex, -1);
@@ -1028,11 +1065,11 @@ void QTermCoreTest::togglesMouseModeX10()
     QTermCore core;
     QCOMPARE(core.modeState().mouseTracking, MouseTracking::Disabled);
 
-    // 启用 X10 鼠标模式：ESC[?1000h
+    // Enable X10 mouse mode: ESC[?1000h
     core.writePlainText("\x1b[?1000h"_L1);
     QCOMPARE(core.modeState().mouseTracking, MouseTracking::X10);
 
-    // 禁用鼠标模式：ESC[?1000l
+    // Disable mouse mode: ESC[?1000l
     core.writePlainText("\x1b[?1000l"_L1);
     QCOMPARE(core.modeState().mouseTracking, MouseTracking::Disabled);
 }
@@ -1042,11 +1079,11 @@ void QTermCoreTest::togglesMouseModeSGR()
     QTermCore core;
     QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::Default);
 
-    // 启用 SGR 编码：ESC[?1006h
+    // Enable SGR encoding: ESC[?1006h
     core.writePlainText("\x1b[?1006h"_L1);
     QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::SGR);
 
-    // 禁用 SGR 编码：ESC[?1006l
+    // Disable SGR encoding: ESC[?1006l
     core.writePlainText("\x1b[?1006l"_L1);
     QCOMPARE(core.modeState().mouseEncoding, MouseEncoding::Default);
 }
@@ -1054,13 +1091,13 @@ void QTermCoreTest::togglesMouseModeSGR()
 void QTermCoreTest::encodesMouseEventX10()
 {
     QTermCore core;
-    core.writePlainText("\x1b[?1000h"_L1);  // 启用 X10 模式
+    core.writePlainText("\x1b[?1000h"_L1);  // enable X10 mode
 
-    // 编码鼠标按下事件：左键按下在 (5, 10)
+    // Encode a press: left button at (5, 10)
     const QByteArray encoded = QTermInputEncoder::encodeMouse(
         10, 5, Qt::LeftButton, Qt::NoModifier, true, core.modeState());
     
-    // X10 格式：ESC[M<button><x><y>
+    // X10 format: ESC[M<button><x><y>
     // button = 0 + 0x20 = 0x20 (' ')
     // x = 5 + 33 = 38 = 0x26 ('&')
     // y = 10 + 33 = 43 = 0x2B ('+')
@@ -1072,15 +1109,15 @@ void QTermCoreTest::encodesMouseEventX10()
 void QTermCoreTest::encodesMouseEventSGR()
 {
     QTermCore core;
-    core.writePlainText("\x1b[?1006h"_L1);  // 启用 SGR 编码格式
-    core.writePlainText("\x1b[?1002h"_L1);  // 启用 Button 事件跟踪
+    core.writePlainText("\x1b[?1006h"_L1);  // enable SGR encoding
+    core.writePlainText("\x1b[?1002h"_L1);  // enable button-event tracking
 
-    // 编码鼠标按下事件：右键按下在 (5, 10)，带 Shift 修饰符
+    // Encode a press: right button at (5, 10) with Shift held
     const QByteArray encoded = QTermInputEncoder::encodeMouse(
         10, 5, Qt::RightButton, Qt::ShiftModifier, true, core.modeState());
     
-    // SGR 格式：ESC[<button>;<x>;<y>M
-    // button = 2 (右键) + 4 (Shift) = 6
+    // SGR format: ESC[<button>;<x>;<y>M
+    // button = 2 (right) + 4 (Shift) = 6
     // x = 5 + 1 = 6
     // y = 10 + 1 = 11
     const QByteArray expected = QByteArray("\x1b[<6;6;11M");
@@ -1752,7 +1789,10 @@ void QTerm::QTermCoreTest::supportsDecScusr()
 {
     using QTerm::CursorShape;
     QTermCore core;
-    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+    // **初始是 Default,不是 Block** —— 程序还没要求过形状,画什么由宿主的配置决定
+    // (QTerm::resolveCursorShape)。写成 Block 的话宿主那个 cursorStyle 属性永远轮不上,
+    // 而那正是它之前不起作用的原因。
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Default);
 
     core.writePlainText(u"\x1b[5 q"_s); // blinking bar
     QCOMPARE(core.modeState().cursorShape, CursorShape::Bar);
@@ -1769,8 +1809,14 @@ void QTerm::QTermCoreTest::supportsDecScusr()
     core.writePlainText(u"\x1b[6 q"_s); // steady bar
     QCOMPARE(core.modeState().cursorShape, CursorShape::Bar);
 
-    core.writePlainText(u"\x1b[0 q"_s); // default → block
-    QCOMPARE(core.modeState().cursorShape, CursorShape::Block);
+    // DECSCUSR 0 = 回到终端默认,而终端的默认是**用户配置的那个**,不是硬编码的 block。
+    // 有些 zsh 主题每次提示符都发一遍 `CSI 0 SP q` —— 映射成 Block 的话用户选什么都白选。
+    core.writePlainText(u"\x1b[0 q"_s);
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Default);
+
+    // 认不出的参数同样交还宿主(而不是悄悄改成 block)。
+    core.writePlainText(u"\x1b[9 q"_s);
+    QCOMPARE(core.modeState().cursorShape, CursorShape::Default);
 }
 
 void QTerm::QTermCoreTest::supportsOsc7CurrentDirectory()

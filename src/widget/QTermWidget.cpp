@@ -1,9 +1,12 @@
 #include <QTerm/QTermWidget.h>
+// resolveCursorShape():宿主默认 + DECSCUSR 覆盖的那条规则。
+#include <QTerm/QTermModeState.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
 
 #include "../quick/QTermViewController.h"
+#include "../QTermCursorDiagnostics.h"
 #include "../QTermRenderUtils.h"
 
 #include <QFocusEvent>
@@ -14,6 +17,8 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QResizeEvent>
+#include <QScreen>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include <limits>
@@ -30,17 +35,24 @@ QTermWidget::QTermWidget(QWidget *parent)
     setAttribute(Qt::WA_OpaquePaintEvent, true);
     setAttribute(Qt::WA_InputMethodEnabled, true);
     setAutoFillBackground(false);
-    setMouseTracking(false); // updated dynamically by updateMouseAcceptance()
+    // One call, not a hand-written copy of what it does -- see QTermQuickItem's
+    // constructor. A widget is handed every button regardless, so the mask is not at
+    // stake here, but mouse tracking and the pointer shape are.
+    updateMouseAcceptance();
+
+    m_repaintTimer = new QTimer(this);
+    m_repaintTimer->setSingleShot(true);
+    connect(m_repaintTimer, &QTimer::timeout, this, &QTermWidget::flushPendingUpdate);
 
     connect(m_controller, &QTermViewController::repaintNeeded, this, [this]() {
         m_dirtyRows.clear();
-        update();
+        scheduleUpdate();
     });
     connect(m_controller, &QTermViewController::contentRowsDirty, this, [this](QVector<int> rows) {
         const qreal cellH = m_controller->cellHeight();
         if (cellH <= 0.0) {
             m_dirtyRows.clear();
-            update();
+            scheduleUpdate();
             return;
         }
         for (int r : rows) {
@@ -53,10 +65,12 @@ QTermWidget::QTermWidget(QWidget *parent)
             yMin = qMin(yMin, r * cellH);
             yMax = qMax(yMax, (r + 1) * cellH);
         }
-        update(QRect(0, int(yMin), width(), int(yMax - yMin)));
+        scheduleUpdate(QRect(0, int(yMin), width(), int(yMax - yMin)));
     });
     connect(m_controller, &QTermViewController::mouseAcceptanceChanged,
             this, &QTermWidget::updateMouseAcceptance);
+    connect(m_controller, &QTermViewController::contextMenuRequested,
+            this, &QTermWidget::contextMenuRequested);
     connect(m_controller, &QTermViewController::focusRequested, this, [this]() {
         setFocus(Qt::MouseFocusReason);
     });
@@ -82,7 +96,7 @@ QTermWidget::QTermWidget(QWidget *parent)
     });
 }
 
-// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermWidget::terminal() const noexcept
 {
@@ -96,7 +110,7 @@ void QTermWidget::setTerminal(QTermTerminal *terminal)
     update();
 }
 
-// ── 字体 ──────────────────────────────────────────────────────────────────────
+// ── Font ─────────────────────────────────────────────────────────────────────
 
 QString QTermWidget::fontFamily() const
 {
@@ -125,10 +139,28 @@ void QTermWidget::setFontPixelSize(int size)
     emit fontChanged();
 }
 
+qreal QTermWidget::lineHeight() const noexcept
+{
+    return m_controller->lineHeight();
+}
+
+void QTermWidget::setLineHeight(qreal factor)
+{
+    // **Compare around the call, not against the argument.** The controller
+    // clamps, so an out-of-range value would never equal what is stored and
+    // would re-emit fontChanged() on every set.
+    const qreal before = m_controller->lineHeight();
+    m_controller->setLineHeight(factor);
+    if (qFuzzyCompare(before, m_controller->lineHeight()))
+        return;
+    update();
+    emit fontChanged();
+}
+
 qreal QTermWidget::cellWidth() const noexcept  { return m_controller->cellWidth(); }
 qreal QTermWidget::cellHeight() const noexcept { return m_controller->cellHeight(); }
 
-// ── 调色板 ────────────────────────────────────────────────────────────────────
+// ── Palette ──────────────────────────────────────────────────────────────────
 
 QColor QTermWidget::foregroundColor() const { return m_foregroundColor; }
 void QTermWidget::setForegroundColor(const QColor &c)
@@ -138,6 +170,16 @@ void QTermWidget::setForegroundColor(const QColor &c)
 }
 
 QColor QTermWidget::backgroundColor() const { return m_backgroundColor; }
+
+QColor QTermWidget::inverseTextColor() const { return m_inverseTextColor; }
+
+void QTermWidget::setInverseTextColor(const QColor &inverseTextColor)
+{
+    if (m_inverseTextColor == inverseTextColor) return;
+    m_inverseTextColor = inverseTextColor;
+    update();
+    emit paletteChanged();
+}
 void QTermWidget::setBackgroundColor(const QColor &c)
 {
     if (m_backgroundColor == c) return;
@@ -149,6 +191,20 @@ void QTermWidget::setSelectionColor(const QColor &c)
 {
     if (m_selectionColor == c) return;
     m_selectionColor = c; update(); emit paletteChanged();
+}
+
+QColor QTermWidget::searchHighlightColor() const { return m_searchHighlightColor; }
+void QTermWidget::setSearchHighlightColor(const QColor &c)
+{
+    if (m_searchHighlightColor == c) return;
+    m_searchHighlightColor = c; update(); emit paletteChanged();
+}
+
+QColor QTermWidget::searchCurrentColor() const { return m_searchCurrentColor; }
+void QTermWidget::setSearchCurrentColor(const QColor &c)
+{
+    if (m_searchCurrentColor == c) return;
+    m_searchCurrentColor = c; update(); emit paletteChanged();
 }
 
 QColor QTermWidget::cursorColor() const { return m_cursorColor; }
@@ -173,13 +229,13 @@ void QTermWidget::setCursorStyle(CursorStyle style)
     m_cursorStyle = style; update(); emit cursorStyleChanged();
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermWidget::scrollPosition() const noexcept { return m_controller->scrollPosition(); }
 qreal QTermWidget::scrollSize() const noexcept     { return m_controller->scrollSize(); }
 void QTermWidget::setScrollPosition(qreal pos)     { m_controller->setScrollPosition(pos); }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermWidget::rowAtPosition(qreal y) const    { return m_controller->rowAtPosition(y); }
 int QTermWidget::columnAtPosition(qreal x) const { return m_controller->columnAtPosition(x); }
@@ -223,6 +279,49 @@ QSize QTermWidget::sizeHint() const
                  static_cast<int>(24 * m_controller->cellHeight()));
 }
 
+// ── Repaint coalescing ────────────────────────────────────────────────────────
+
+int QTermWidget::frameIntervalMs() const
+{
+    // Following the display means a fast panel still gets its extra frames and
+    // a slow one is not asked for frames it cannot show.
+    const qreal refreshRate = screen() ? screen()->refreshRate() : 60.0;
+    const int interval = refreshRate > 1.0 ? int(1000.0 / refreshRate) : 16;
+    return qBound(4, interval, 32);
+}
+
+void QTermWidget::scheduleUpdate(const QRect &rect)
+{
+    if (rect.isNull())
+        m_pendingFull = true;
+    else if (!m_pendingFull)
+        m_pendingRect = m_pendingRect.united(rect);
+
+    // Already waiting on the frame deadline: the region above is enough, the
+    // timer will pick it up.
+    if (m_repaintTimer->isActive())
+        return;
+
+    const int interval = frameIntervalMs();
+    const qint64 sinceLastPaint = m_sinceLastPaint.isValid() ? m_sinceLastPaint.elapsed()
+                                                             : interval;
+    if (sinceLastPaint >= interval)
+        flushPendingUpdate();          // idle until now: paint straight away
+    else
+        m_repaintTimer->start(int(interval - sinceLastPaint));
+}
+
+void QTermWidget::flushPendingUpdate()
+{
+    if (m_pendingFull)
+        update();
+    else if (!m_pendingRect.isNull())
+        update(m_pendingRect);
+
+    m_pendingFull = false;
+    m_pendingRect = QRect();
+}
+
 // ── paintEvent ────────────────────────────────────────────────────────────────
 
 void QTermWidget::paintEvent(QPaintEvent *event)
@@ -246,11 +345,23 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     req.baseFont      = baseFont;
     req.foreground    = m_foregroundColor;
     req.background    = m_backgroundColor;
+    req.inverseText   = m_inverseTextColor;
     req.selection     = m_selectionColor;
+    req.searchHighlight = m_searchHighlightColor;
+    req.searchCurrent = m_searchCurrentColor;
     req.cursor        = m_cursorColor;
     req.cursorOpacity = m_cursorOpacity;
-    req.cursorStyle   = static_cast<int>(m_cursorStyle);
+    // **原来这里完全不看终端** —— widget 只画自己的 cursorStyle,于是 vim 切到插入模式
+    // 时光标不会变成竖线(两个 Quick 渲染器反过来:只看终端、不看宿主)。三个渲染器现在
+    // 走同一条规则,见 QTerm::resolveCursorShape。
+    req.cursorStyle   = surfaceModel
+        ? resolveCursorShape(surfaceModel->cursorShape(),
+                             static_cast<int>(m_cursorStyle))
+        : static_cast<int>(m_cursorStyle);
     req.showCursor    = hasFocus();
+    qtermReportCursorDraw(m_cursorDrawReason, req.showCursor,
+                          surfaceModel && surfaceModel->cursorVisible(),
+                          m_cursorOpacity);
     req.hyperlinkTint = m_theme.hyperlinkTint();
     req.palette16     = m_theme.palette16();
 
@@ -258,6 +369,8 @@ void QTermWidget::paintEvent(QPaintEvent *event)
     qtermPaintTerminal(&painter, req);
 
     m_dirtyRows.clear();
+    // Anchors the next frame deadline; scheduleUpdate() measures from here.
+    m_sinceLastPaint.restart();
 }
 
 // ── resizeEvent ───────────────────────────────────────────────────────────────
@@ -333,6 +446,42 @@ void QTermWidget::updateMouseAcceptance()
     // In QWidget, all mouse buttons are always delivered; no per-button filter.
     // Only mouse tracking (no-button moves) needs to be toggled.
     setMouseTracking(m_controller->hoverEventsNeeded());
+    applyCursorShape();
+}
+
+Qt::CursorShape QTermWidget::cursorShape() const
+{
+    return cursor().shape();
+}
+
+void QTermWidget::setCursorShape(Qt::CursorShape shape)
+{
+    if (m_explicitCursorShape && *m_explicitCursorShape == shape)
+        return;
+    m_explicitCursorShape = shape;
+    applyCursorShape();
+}
+
+void QTermWidget::resetCursorShape()
+{
+    if (!m_explicitCursorShape)
+        return;
+    m_explicitCursorShape.reset();
+    applyCursorShape();
+}
+
+void QTermWidget::applyCursorShape()
+{
+    // Pointer shape: a terminal is a text surface, so the pointer is an I-beam --
+    // every terminal emulator does this, and the arrow reads as "nothing here is
+    // selectable". The exception is an application that has taken the mouse over
+    // (DECSET 1000/1002/1003: vim, htop, tmux): clicks go to it rather than to a
+    // selection, so an I-beam would promise something that does not happen.
+    const Qt::CursorShape shape =
+        m_explicitCursorShape ? *m_explicitCursorShape
+        : (m_controller->mouseProtocolEnabled() ? Qt::ArrowCursor : Qt::IBeamCursor);
+    if (cursor().shape() != shape)
+        setCursor(shape);
 }
 
 } // namespace QTerm

@@ -40,6 +40,12 @@ class QTermTerminal : public QObject
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(QString currentDirectory READ currentDirectory NOTIFY currentDirectoryChanged)
     // OSC 133 shell integration
+    // Whether an application has taken the mouse over (DECSET 1000/1002/1003).
+    // Exposed because a host that overlays the terminal with a MouseArea has to
+    // give that item a cursor shape -- a MouseArea claims the pointer even when it
+    // never assigns one, which silently overrides the beam this library sets on the
+    // terminal item. Binding to this keeps the host's shape in step with ours.
+    Q_PROPERTY(bool mouseProtocolActive READ isMouseProtocolActive NOTIFY modeStateChanged)
     Q_PROPERTY(int shellZone READ shellZone NOTIFY shellZoneChanged)
     Q_PROPERTY(int lastExitCode READ lastExitCode NOTIFY shellZoneChanged)
     Q_PROPERTY(QTerm::QTermSurfaceModel *surfaceModel READ surfaceModel CONSTANT)
@@ -187,6 +193,18 @@ public:
                                       int dragProjectionRow, int dragColumn);
 
     /*!
+        \brief Selects the whole buffer, scrollback included.
+
+        Equivalent to a drag from the first cell of the oldest projection row to
+        the end of the last row that has content, so it goes through the same
+        logical-anchor path as a real drag selection (and therefore survives
+        auto-scroll and reflow). Blank rows past the end of the output are left
+        out, so Select All followed by a copy does not yield trailing newlines.
+        Clears the selection when the buffer holds nothing but blanks.
+    */
+    Q_INVOKABLE void selectAll();
+
+    /*!
         \brief Selects the word under the given cursor position.
     */
     Q_INVOKABLE void selectWordAt(int row, int column);
@@ -230,13 +248,22 @@ public:
         \brief Clears the current search and its highlights.
     */
     Q_INVOKABLE void clearSearch();
+    /*!
+        \brief Returns the number of matches found by the last search().
+    */
+    int searchMatchCount() const noexcept;
+    /*!
+        \brief Returns the 1-based position of the current match, or 0 if none.
+    */
+    int searchCurrentIndex() const noexcept;
 
     /*!
         \brief Sends a key event to the attached session.
         \param key The key code.
         \param text Optional text payload for printable keys.
     */
-    Q_INVOKABLE void sendKey(int key, const QString &text = QString());
+    Q_INVOKABLE void sendKey(int key, const QString &text = QString(),
+                             Qt::KeyboardModifiers modifiers = Qt::NoModifier);
 
     /*!
         \brief Sends pasted text to the attached session.
@@ -285,8 +312,6 @@ private:
     void syncSurfaceViewport();
     void syncSurfaceSelection();
 
-    int searchMatchCount() const noexcept;
-    int searchCurrentIndex() const noexcept;
     // Project stored matches (projection-row coords) onto the current viewport
     // and push to the surface model; called on every viewport change + on search.
     void syncSurfaceSearch();

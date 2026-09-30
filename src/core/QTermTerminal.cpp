@@ -37,6 +37,12 @@ QTermTerminal::QTermTerminal(QObject *parent)
     , m_surfaceModel(this)
     , m_selectionModel(std::make_unique<QTermSelectionModel>())
 {
+    m_surfaceModel.setVisibleLinesProvider([this] {
+        return m_core->buffer().viewportLineTexts(m_viewportTopProjectionRow, rows());
+    });
+    m_surfaceModel.setVisibleLineRunsProvider([this] {
+        return m_core->buffer().viewportLineRuns(m_viewportTopProjectionRow, rows());
+    });
     m_surfaceModel.setSelectionController(this);
     m_selectionModel->setTerminalSize(m_core->columns(), m_core->rows());
     m_viewportTopProjectionRow = qMax(0, m_core->buffer().projectionRowCount() - m_core->rows());
@@ -263,6 +269,38 @@ void QTermTerminal::setSelectionDrag(int anchorProjectionRow, int anchorColumn,
                                                 anchorProjectionRow, anchorColumn,
                                                 dragProjectionRow, dragColumn);
     m_selectionModel->refreshSelectionText(m_core->buffer());
+    syncSurfaceSelection();
+}
+
+void QTermTerminal::selectAll()
+{
+    const QTermBuffer &buffer = m_core->buffer();
+    const int projectionRowCount = buffer.projectionRowCount();
+    if (projectionRowCount <= 0) {
+        clearSelection();
+        return;
+    }
+
+    // Stop at the last row that actually has content. A terminal buffer is always
+    // at least one screen tall, so the rows below the output are real but blank —
+    // selecting them too would make Select All + Copy yield a pile of trailing
+    // newlines, which is the classic annoyance this avoids.
+    int lastRow = projectionRowCount - 1;
+    while (lastRow >= 0 && buffer.projectionLineAt(lastRow).plainText().trimmed().isEmpty()) {
+        --lastRow;
+    }
+    if (lastRow < 0) {
+        // Nothing but blanks in the whole buffer: there is nothing to select.
+        clearSelection();
+        return;
+    }
+
+    // Reuse the drag path rather than setSelectionRange(): the latter normalizes
+    // against the viewport size, so it can never reach past the visible screen
+    // into the scrollback.
+    const int lastColumn = buffer.projectionLineAt(lastRow).columnTexts().size();
+    m_selectionModel->setSelectionFromDragCells(buffer, 0, 0, lastRow, lastColumn);
+    m_selectionModel->refreshSelectionText(buffer);
     syncSurfaceSelection();
 }
 
@@ -494,9 +532,9 @@ void QTermTerminal::syncSurfaceSearch()
     m_surfaceModel.setSearchHighlights(highlights);
 }
 
-void QTermTerminal::sendKey(int key, const QString &text)
+void QTermTerminal::sendKey(int key, const QString &text, Qt::KeyboardModifiers modifiers)
 {
-    m_core->sendKey(key, text);
+    m_core->sendKey(key, text, modifiers);
 }
 
 void QTermTerminal::sendPaste(const QString &text)
@@ -608,7 +646,7 @@ void QTermTerminal::clampViewportToBuffer()
 void QTermTerminal::syncSurfaceViewport()
 {
     QTermBuffer &buf = m_core->buffer();
-    m_surfaceModel.setVisibleLines(buf.viewportLineTexts(m_viewportTopProjectionRow, rows()));
+    m_surfaceModel.markVisibleLinesDirty();
 
     // If the viewport offset changed since last sync, or the buffer is fully dirty,
     // do a full rebuild — the incremental dirty-row set only covers buffer-write
@@ -617,7 +655,7 @@ void QTermTerminal::syncSurfaceViewport()
     m_lastSyncedViewportTop = m_viewportTopProjectionRow;
 
     if (buf.allRowsDirty() || viewportMoved) {
-        m_surfaceModel.setVisibleLineRuns(buf.viewportLineRuns(m_viewportTopProjectionRow, rows()));
+        m_surfaceModel.markVisibleLineRunsDirty();
         buf.clearDirtyRows();
         return;
     }

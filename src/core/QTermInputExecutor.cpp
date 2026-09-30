@@ -1,5 +1,7 @@
 #include "QTermInputExecutor.h"
 
+#include "QTermCharWidth.h"
+
 #include <QChar>
 #include <QtGlobal>
 
@@ -65,82 +67,88 @@ int packRgb(int red, int green, int blue)
            clampColorComponent(blue);
 }
 
-bool isCombiningMark(const QString &text)
-{
-    const QList<uint> codePoints = text.toUcs4();
-    if (codePoints.size() != 1) {
-        return false;
-    }
+// 字符宽度那三个搬到了 core/QTermCharWidth.h —— **渲染器也要用同一份**。
+// 它们原来藏在这个匿名命名空间里,于是渲染器够不着、只好自己猜;两边一旦不一致,
+// 症状不是"宽度算错了",而是"`ls` 的列对不齐""TUI 的框画宽了"。
+using QTerm::CharWidth::leadingCodePoint;
+using QTerm::CharWidth::isCombiningMark;
+using QTerm::CharWidth::displayWidth;
 
-    switch (QChar::category(codePoints.front())) {
-    case QChar::Mark_NonSpacing:
-    case QChar::Mark_SpacingCombining:
-    case QChar::Mark_Enclosing:
-        return true;
-    default:
-        return false;
+void applyExtendedColor(bool foreground, int rgb, int index,
+                        QTerm::QTermCellAttributes &attributes)
+{
+    if (foreground) {
+        attributes.foregroundIndex = index;
+        attributes.foregroundRgb = rgb;
+    } else {
+        attributes.backgroundIndex = index;
+        attributes.backgroundRgb = rgb;
     }
 }
 
-bool isWideCodePoint(uint codePoint)
-{
-    return (codePoint >= 0x1100 && codePoint <= 0x115f) ||
-           codePoint == 0x2329 ||
-           codePoint == 0x232a ||
-           (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
-           (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-           (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-           (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-           (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-           (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-           (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-           (codePoint >= 0x1f300 && codePoint <= 0x1faff) ||
-           (codePoint >= 0x20000 && codePoint <= 0x3fffd);
-}
-
-int displayWidth(const QString &text)
-{
-    const QList<uint> codePoints = text.toUcs4();
-    if (codePoints.isEmpty()) {
-        return 0;
-    }
-
-    if (isCombiningMark(text)) {
-        return 0;
-    }
-
-    return isWideCodePoint(codePoints.front()) ? 2 : 1;
-}
-
-int consumeExtendedColor(const QVector<int> &parameters, int parameterIndex, bool foreground, QTerm::QTermCellAttributes &attributes)
+// Applies a 38/48 extended-colour sequence and returns how many parameters it
+// consumed.
+//
+// Two spellings exist. The common one separates everything with semicolons:
+//
+//     ESC[38;2;r;g;bm       ESC[38;5;nm
+//
+// ITU T.416 instead makes the components sub-parameters of the 38, separated by
+// colons, with a slot for a colour space that is normally left empty:
+//
+//     ESC[38:2::r:g:bm      ESC[38:2:r:g:bm      ESC[38:5:nm
+//
+// The two cannot be folded together: the colon form may carry one extra slot,
+// which shifts the components by one. subParameterFlags marks which values
+// arrived after a colon, which is what tells the forms apart.
+int consumeExtendedColor(const QVector<int> &parameters,
+                         const QVector<quint8> &subParameterFlags,
+                         int parameterIndex, bool foreground,
+                         QTerm::QTermCellAttributes &attributes)
 {
     if (parameterIndex + 1 >= parameters.size()) {
         return 1;
     }
 
+    int subCount = 0;
+    while (parameterIndex + 1 + subCount < parameters.size()
+           && parameterIndex + 1 + subCount < subParameterFlags.size()
+           && subParameterFlags.at(parameterIndex + 1 + subCount) != 0) {
+        ++subCount;
+    }
+
     const int colorMode = parameters.at(parameterIndex + 1);
-    if (colorMode == 5 && parameterIndex + 2 < parameters.size()) {
-        if (foreground) {
-            attributes.foregroundIndex = qBound(0, parameters.at(parameterIndex + 2), 255);
-            attributes.foregroundRgb = -1;
-        } else {
-            attributes.backgroundIndex = qBound(0, parameters.at(parameterIndex + 2), 255);
-            attributes.backgroundRgb = -1;
+
+    if (subCount > 0) {
+        // Colon form: everything after the mode belongs to this parameter, so
+        // the count itself says whether the colour-space slot is present.
+        if (colorMode == 2 && subCount >= 4) {
+            const int first = parameterIndex + (subCount >= 5 ? 3 : 2);
+            applyExtendedColor(foreground,
+                               packRgb(parameters.at(first),
+                                       parameters.at(first + 1),
+                                       parameters.at(first + 2)),
+                               -1, attributes);
+        } else if (colorMode == 5 && subCount >= 2) {
+            applyExtendedColor(foreground, -1,
+                               qBound(0, parameters.at(parameterIndex + 2), 255),
+                               attributes);
         }
+        return 1 + subCount;
+    }
+
+    if (colorMode == 5 && parameterIndex + 2 < parameters.size()) {
+        applyExtendedColor(foreground, -1,
+                           qBound(0, parameters.at(parameterIndex + 2), 255), attributes);
         return 3;
     }
 
     if (colorMode == 2 && parameterIndex + 4 < parameters.size()) {
-        const int rgb = packRgb(parameters.at(parameterIndex + 2),
-                                parameters.at(parameterIndex + 3),
-                                parameters.at(parameterIndex + 4));
-        if (foreground) {
-            attributes.foregroundIndex = -1;
-            attributes.foregroundRgb = rgb;
-        } else {
-            attributes.backgroundIndex = -1;
-            attributes.backgroundRgb = rgb;
-        }
+        applyExtendedColor(foreground,
+                           packRgb(parameters.at(parameterIndex + 2),
+                                   parameters.at(parameterIndex + 3),
+                                   parameters.at(parameterIndex + 4)),
+                           -1, attributes);
         return 5;
     }
 
@@ -247,9 +255,19 @@ void QTermInputExecutor::setHyperlink(const QString &url)
 void QTermInputExecutor::setCursorShape(int parameter)
 {
     // DECSCUSR parameter mapping:
-    // 0, 1, 2 → Block; 3, 4 → Underline; 5, 6 → Bar (I-beam)
-    // Default (0) and blinking (odd) map to same shape as steady (even).
+    //   0       → back to the terminal's default, i.e. whatever the host configured
+    //   1, 2    → Block      3, 4 → Underline      5, 6 → Bar (I-beam)
+    // Blinking (odd) maps to the same shape as steady (even) -- the blink is driven by
+    // the host, not by the shape.
+    //
+    // **0 is not Block.** It used to be, and that made the host's configured shape
+    // unreachable: a shell that emits `CSI 0 SP q` on every prompt (common in zsh
+    // themes) would pin the cursor to a block no matter what the user chose.
     switch (parameter) {
+    case 1:
+    case 2:
+        m_modeState.cursorShape = CursorShape::Block;
+        break;
     case 3:
     case 4:
         m_modeState.cursorShape = CursorShape::Underline;
@@ -258,13 +276,73 @@ void QTermInputExecutor::setCursorShape(int parameter)
     case 6:
         m_modeState.cursorShape = CursorShape::Bar;
         break;
-    default: // 0, 1, 2 and unknown
-        m_modeState.cursorShape = CursorShape::Block;
+    default: // 0 and unknown parameters: hand it back to the host
+        m_modeState.cursorShape = CursorShape::Default;
         break;
     }
 }
 
-void QTermInputExecutor::print(const QString &text)
+void QTermInputExecutor::printNarrowRun(QStringView run)
+{
+    // DEC line drawing remaps 0x60-0x7E, so the run is not plain text then.
+    if (currentScreen().lineDrawingMode) {
+        for (const QChar character : run) {
+            print(QStringView(&character, 1));
+        }
+        return;
+    }
+
+    int consumed = 0;
+    while (consumed < run.size()) {
+        if (currentScreen().wrapPending) {
+            if (m_modeState.autoWrap) {
+                wrapToNextLine();
+            } else {
+                currentScreen().wrapPending = false;
+                setCursorState(QTermCursorState{currentScreen().cursorState.row,
+                                                currentScreen().buffer.columns() - 1});
+            }
+        }
+
+        // Same predecessor-chain severing as print(); see the comment there.
+        if (currentScreen().breakPredecessorWrapOnWrite) {
+            currentScreen().breakPredecessorWrapOnWrite = false;
+            const int chainStart = currentScreen().buffer.severPredecessorWrapChain(
+                currentScreen().cursorState.row);
+            if (chainStart < currentScreen().cursorState.row) {
+                setCursorState(QTermCursorState{chainStart, 0});
+            }
+        }
+
+        const int columns = currentScreen().buffer.columns();
+        const int column = currentScreen().cursorState.column;
+        const int available = columns - column;
+        if (available <= 0) {
+            return;
+        }
+        const int take = qMin(available, run.size() - consumed);
+
+        currentScreen().currentAttributes.hyperlinkId = m_modeState.activeHyperlinkId;
+        currentScreen().buffer.lineAt(currentScreen().cursorState.row).setNarrowRun(
+            column, run.mid(consumed, take), currentScreen().currentAttributes);
+        consumed += take;
+
+        if (column + take >= columns) {
+            if (m_modeState.autoWrap) {
+                currentScreen().wrapPending = true;
+            }
+            setCursorState(QTermCursorState{currentScreen().cursorState.row, columns - 1});
+            if (!m_modeState.autoWrap) {
+                // Without auto-wrap the remainder overwrites the last column.
+                return;
+            }
+        } else {
+            setCursorState(QTermCursorState{currentScreen().cursorState.row, column + take});
+        }
+    }
+}
+
+void QTermInputExecutor::print(QStringView text)
 {
     // DEC line drawing translation: if active and the character is in the
     // special range 0x60-0x7e, remap to the corresponding Unicode symbol.
@@ -273,7 +351,7 @@ void QTermInputExecutor::print(const QString &text)
         if (code >= 0x60 && code <= 0x7e) {
             const QChar mapped = applyLineDrawing(text.front());
             if (mapped != text.front()) {
-                print(QString(mapped));
+                print(QStringView(&mapped, 1));
                 return;
             }
         }
@@ -287,7 +365,8 @@ void QTermInputExecutor::print(const QString &text)
             : currentScreen().cursorState.column - 1;
 
         if (targetColumn >= 0) {
-            currentScreen().buffer.lineAt(currentScreen().cursorState.row).appendCombiningMark(targetColumn, text);
+            currentScreen().buffer.lineAt(currentScreen().cursorState.row)
+                .appendCombiningMark(targetColumn, text.toString());
         }
         return;
     }
@@ -495,7 +574,8 @@ void QTermInputExecutor::eraseInDisplay(int mode)
     }
 }
 
-void QTermInputExecutor::characterAttributes(const QVector<int> &parameters)
+void QTermInputExecutor::characterAttributes(const QVector<int> &parameters,
+                                             const QVector<quint8> &subParameterFlags)
 {
     const QVector<int> normalized = parameters.isEmpty() ? QVector<int>{0} : parameters;
 
@@ -575,10 +655,12 @@ void QTermInputExecutor::characterAttributes(const QVector<int> &parameters)
                 currentScreen().currentAttributes.backgroundIndex = 8 + (parameter - 100);
                 currentScreen().currentAttributes.backgroundRgb = -1;
             } else if (parameter == 38) {
-                parameterIndex += consumeExtendedColor(normalized, parameterIndex, true, currentScreen().currentAttributes);
+                parameterIndex += consumeExtendedColor(normalized, subParameterFlags, parameterIndex,
+                                                      true, currentScreen().currentAttributes);
                 continue;
             } else if (parameter == 48) {
-                parameterIndex += consumeExtendedColor(normalized, parameterIndex, false, currentScreen().currentAttributes);
+                parameterIndex += consumeExtendedColor(normalized, subParameterFlags, parameterIndex,
+                                                      false, currentScreen().currentAttributes);
                 continue;
             }
             ++parameterIndex;
@@ -736,7 +818,7 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         case 2004:
             m_modeState.bracketedPaste = enabled;
             break;
-        // 鼠标事件类型：?1000, ?1002, ?1003
+        // Which mouse events to report: ?1000, ?1002, ?1003
         case 1000:
             m_modeState.mouseTracking = enabled ? MouseTracking::X10 : MouseTracking::Disabled;
             break;
@@ -746,9 +828,9 @@ void QTermInputExecutor::setPrivateModes(const QVector<int> &parameters, bool en
         case 1003:
             m_modeState.mouseTracking = enabled ? MouseTracking::AnyEvent : MouseTracking::Disabled;
             break;
-        // 鼠标编码格式：?1005（UTF-8，忽略），?1006（SGR），?1015（URXVT）
+        // Report encoding: ?1005 (UTF-8, ignored), ?1006 (SGR), ?1015 (URXVT)
         case 1005:
-            break;  // UTF-8 编码忽略，不影响事件类型
+            break;  // UTF-8 encoding is ignored; it does not change which events fire
         case 1006:
             m_modeState.mouseEncoding = enabled ? MouseEncoding::SGR : MouseEncoding::Default;
             break;

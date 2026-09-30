@@ -1,10 +1,17 @@
 #include <QTerm/QTermQuickItem.h>
+// resolveCursorShape():宿主默认 + DECSCUSR 覆盖的那条规则。
+#include <QTerm/QTermModeState.h>
 
 #include <QTerm/QTermSurfaceModel.h>
 #include <QTerm/QTermTerminal.h>
 
+#include "QTermGlyphAtlas.h"
+#include "QTermSelectionGeometry.h"
+#include "QTermTextMaterial.h"
+#include "../QTermCursorDiagnostics.h"
 #include "QTermViewController.h"
 #include "../QTermRenderUtils.h"
+#include "../core/QTermCharWidth.h"
 
 #include <QFontMetricsF>
 #include <QHoverEvent>
@@ -14,6 +21,7 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSGFlatColorMaterial>
 #include <QSGGeometryNode>
 #include <QSGNode>
@@ -46,6 +54,8 @@ struct QTermSGRootNode : public QSGNode
     QSGNode *textGroupNode = nullptr;
     QSGGeometryNode *cursorNode = nullptr;
     QVector<QSGTextNode *> textNodes; // parallel to visible rows, NOT OwnedByParent
+    // Atlas path: every glyph on screen in one geometry node, one draw call.
+    QSGGeometryNode *atlasTextNode = nullptr;
 };
 
 namespace {
@@ -131,7 +141,12 @@ void rebuildBgFills(QSGGeometryNode *node, const QVariantList &lineRuns,
     auto *v = geom->vertexDataAsColoredPoint2D();
     int vi = 0;
 
-    // Full terminal background quad
+    // Full terminal background quad.
+    //
+    // termBg's alpha is honoured here and *only* here: this is what makes a
+    // translucent terminal possible (the pane behind shows through the cells that
+    // use the default background). The same colour must NOT be reused as the
+    // reverse-video glyph colour -- see QTermQuickItem::effectiveInverseTextColor.
     appendQuadCPD(v, vi, 0.0f, 0.0f, float(itemW), float(itemH),
                   quint8(termBg.red()), quint8(termBg.green()),
                   quint8(termBg.blue()), quint8(termBg.alpha()));
@@ -184,10 +199,15 @@ void recreateTextRowNodes(QTermSGRootNode *root, QQuickWindow *win,
 
 // Populate one row's text node from style-run data.
 // Uses one QTextLayout per style run to leverage QSGTextNode::addTextLayout.
+// `inverseTextColor` is only consulted for reverse-video runs -- it is the colour
+// the swap produces for a cell that never set a background. It is deliberately
+// NOT the item's backgroundColor: that one may carry alpha for a translucent
+// terminal, and a translucent glyph over a solid block renders as a smear.
 void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
                          qreal cellW, qreal cellH,
                          const QFont &baseFont, const qreal topOffset,
-                         const QColor &termFg, const QColor &termBg, const QColor &hyperlinkTint,
+                         const QColor &termFg, const QColor &inverseTextColor,
+                         const QColor &hyperlinkTint,
                          const QColor *palette16)
 {
     tn->clear();
@@ -213,7 +233,7 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
             runFont.setUnderline(run.value(QStringLiteral("underline")).toBool() || hasHyperlink);
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
 
-            QColor fg = qtermEffectiveForeground(run, termFg, termBg, palette16);
+            QColor fg = qtermEffectiveForeground(run, termFg, inverseTextColor, palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
@@ -223,41 +243,230 @@ void populateRowTextNode(QSGTextNode *tn, int row, const QVariantList &lineRuns,
             if (run.value(QStringLiteral("dim")).toBool())
                 fg.setAlphaF(0.65);
 
-            // Build a QTextLayout for this run so we can call addTextLayout.
-            QTextLayout layout(text, runFont);
+            // Every cell must land on the grid; the run's own font metrics do
+            // not do that once a character falls back to another font. The
+            // segmentation (and the long why) lives in qtermGridSegments().
+            const QFontMetricsF runMetrics(runFont);
+            // Kerning would move glyphs off the grid for the same reason;
+            // a terminal never wants it.
+            runFont.setKerning(false);
 
-            // A run fills a fixed span of the cell grid, so it must never wrap.
-            // With the default word-wrapping mode, setLineWidth(runW) below
-            // moves the trailing word onto a second line as soon as the run
-            // measures runW or more -- and since only the first line is ever
-            // laid out, that word is silently dropped. A monospaced run of n
-            // columns measures exactly n * cellW, so it hits that boundary on
-            // every full-width line.
-            QTextOption textOption = layout.textOption();
-            textOption.setWrapMode(QTextOption::NoWrap);
-            layout.setTextOption(textOption);
+            for (const QTermGridSegment &seg : qtermGridSegments(text, runMetrics, cellW)) {
+                QFont segFont = runFont;
+                if (!qFuzzyIsNull(seg.letterSpacing))
+                    segFont.setLetterSpacing(QFont::AbsoluteSpacing, seg.letterSpacing);
 
-            QTextCharFormat cf;
-            cf.setForeground(fg);
-            QTextLayout::FormatRange fmt;
-            fmt.start = 0;
-            fmt.length = text.length();
-            fmt.format = cf;
-            layout.setFormats({fmt});
+                const QString segText = text.mid(seg.start, seg.length);
+                QTextLayout layout(segText, segFont);
 
-            layout.beginLayout();
-            QTextLine line = layout.createLine();
-            if (line.isValid()) {
-                line.setLineWidth(runW);
-                line.setPosition(QPointF(0.0, 0.0));
+                // A segment fills a fixed span of the cell grid, so it must never
+                // wrap. With the default word-wrapping mode, setLineWidth() below
+                // moves the trailing word onto a second line as soon as the text
+                // measures that wide -- and since only the first line is ever laid
+                // out, that word is silently dropped.
+                QTextOption textOption = layout.textOption();
+                textOption.setWrapMode(QTextOption::NoWrap);
+                layout.setTextOption(textOption);
+
+                QTextCharFormat cf;
+                cf.setForeground(fg);
+                QTextLayout::FormatRange fmt;
+                fmt.start = 0;
+                fmt.length = int(segText.length());
+                fmt.format = cf;
+                layout.setFormats({fmt});
+
+                layout.beginLayout();
+                QTextLine line = layout.createLine();
+                if (line.isValid()) {
+                    // Trailing letter spacing counts towards the measured width,
+                    // so give the line room for it -- a too-small line width is
+                    // exactly what drops the last glyph.
+                    line.setLineWidth(seg.columns * cellW + qAbs(seg.letterSpacing) + 1.0);
+                    line.setPosition(QPointF(0.0, 0.0));
+                }
+                layout.endLayout();
+
+                tn->addTextLayout(QPointF(x + seg.column * cellW, rowY), &layout);
             }
-            layout.endLayout();
-
-            tn->addTextLayout(QPointF(x, rowY), &layout);
         }
 
         x += runW;
     }
+}
+
+// ── Atlas text geometry ───────────────────────────────────────────────────────
+
+// A character the atlas cannot draw, to be handed to the general text path at
+// this exact position. Colour emoji are the common case, so falling back per
+// glyph rather than per row matters: one emoji per line would otherwise send
+// every line down the slow path.
+struct FallbackGlyph
+{
+    QPointF position;
+    QString text;
+    QColor color;
+    bool bold = false;
+    bool italic = false;
+};
+
+// Builds glyph quads for one row, appending to `vertices`.
+//
+// Returns false only when the row needs decorations the atlas does not draw
+// (underline, strike-through), in which case the caller renders the whole row
+// through the general path. Individual characters without an atlas glyph are
+// collected into `fallbacks` instead.
+bool buildRowGlyphs(QVector<QTermTextMaterial::Vertex> &vertices,
+                    QVector<FallbackGlyph> &fallbacks,
+                    QTermGlyphAtlas &atlas, const QSizeF &atlasSize,
+                    int row, const QVariantList &lineRuns,
+                    qreal cellW, qreal cellH, qreal topOffset, qreal ascent,
+                    const QColor &termFg, const QColor &inverseTextColor,
+                    const QColor &hyperlinkTint, const QColor *palette16)
+{
+    if (row >= lineRuns.size())
+        return true;
+
+    const QVariantList runs = lineRuns.at(row).toList();
+    const qreal baseline = row * cellH + topOffset + ascent;
+    qreal x = 0.0;
+
+    for (const QVariant &rv : runs) {
+        const QVariantMap run = rv.toMap();
+        const int cols = qtermRunColumns(run);
+        const QString text = run.value(QStringLiteral("text")).toString();
+        if (text.isEmpty()) {
+            x += cols * cellW;
+            continue;
+        }
+
+        const bool bold = run.value(QStringLiteral("bold")).toBool();
+        const bool italic = run.value(QStringLiteral("italic")).toBool();
+        const auto style = QTermGlyphAtlas::Style(
+            (bold ? QTermGlyphAtlas::Bold : 0) | (italic ? QTermGlyphAtlas::Italic : 0));
+
+        const bool hasHyperlink = run.value(QStringLiteral("hyperlinkId")).toInt() > 0;
+        const bool underline = run.value(QStringLiteral("underline")).toBool() || hasHyperlink;
+        const bool strikeOut = run.value(QStringLiteral("strikethrough")).toBool();
+
+        QColor fg = qtermEffectiveForeground(run, termFg, inverseTextColor, palette16);
+        if (hasHyperlink
+            && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
+            && run.value(QStringLiteral("foregroundRgb"), -1).toInt() < 0) {
+            fg = hyperlinkTint.isValid() ? hyperlinkTint : QColor(QStringLiteral("#6ab0f5"));
+        }
+        if (run.value(QStringLiteral("dim")).toBool())
+            fg.setAlphaF(0.65);
+
+        // Premultiplied, to match the atlas and the shader.
+        const float alpha = float(fg.alphaF());
+        const uchar cr = uchar(qRound(fg.red() * alpha));
+        const uchar cg = uchar(qRound(fg.green() * alpha));
+        const uchar cb = uchar(qRound(fg.blue() * alpha));
+        const uchar ca = uchar(qRound(255.0 * alpha));
+
+        qreal penX = x;
+        for (qsizetype i = 0; i < text.size(); ) {
+            char32_t codePoint = text.at(i).unicode();
+            qsizetype units = 1;
+            if (QChar::isHighSurrogate(codePoint) && i + 1 < text.size()
+                && text.at(i + 1).isLowSurrogate()) {
+                codePoint = QChar::surrogateToUcs4(text.at(i), text.at(i + 1));
+                units = 2;
+            }
+            i += units;
+
+            // A base character followed by combining marks is one grapheme and
+            // has to be positioned as a unit. The atlas holds single code
+            // points, so the whole cluster goes to the general path.
+            qsizetype clusterEnd = i;
+            while (clusterEnd < text.size()) {
+                const QChar next = text.at(clusterEnd);
+                const QChar::Category category = next.category();
+                if (category != QChar::Mark_NonSpacing
+                    && category != QChar::Mark_SpacingCombining
+                    && category != QChar::Mark_Enclosing) {
+                    break;
+                }
+                ++clusterEnd;
+            }
+            if (clusterEnd > i) {
+                const qsizetype start = i - units;
+                fallbacks.append(FallbackGlyph{
+                    QPointF(penX, row * cellH + topOffset),
+                    text.mid(start, clusterEnd - start), fg, bold, italic});
+                penX += cellW * qMax(1, QTerm::CharWidth::displayWidth(
+                                             QStringView(text).sliced(start)));
+                i = clusterEnd;
+                continue;
+            }
+
+            // A space contributes nothing to draw; skip the lookup entirely.
+            if (codePoint == U' ') {
+                penX += cellW;
+                continue;
+            }
+
+            const QTermGlyphAtlas::Glyph *glyph = atlas.glyphFor(codePoint, style);
+            if (!glyph) {
+                // Colour emoji and anything no installed font covers.
+                fallbacks.append(FallbackGlyph{
+                    QPointF(penX, row * cellH + topOffset),
+                    QString::fromUcs4(&codePoint, 1), fg, bold, italic});
+                penX += cellW * (QTerm::CharWidth::isWide(codePoint) ? 2 : 1);
+                continue;
+            }
+
+            const float gx = float(penX + glyph->bearing.x());
+            const float gy = float(baseline + glyph->bearing.y());
+            const float gw = float(glyph->region.width());
+            const float gh = float(glyph->region.height());
+            const float u0 = float(glyph->region.x()) / float(atlasSize.width());
+            const float v0 = float(glyph->region.y()) / float(atlasSize.height());
+            const float u1 = float(glyph->region.right() + 1) / float(atlasSize.width());
+            const float v1 = float(glyph->region.bottom() + 1) / float(atlasSize.height());
+
+            const QTermTextMaterial::Vertex tl{gx,      gy,      u0, v0, cr, cg, cb, ca};
+            const QTermTextMaterial::Vertex tr{gx + gw, gy,      u1, v0, cr, cg, cb, ca};
+            const QTermTextMaterial::Vertex bl{gx,      gy + gh, u0, v1, cr, cg, cb, ca};
+            const QTermTextMaterial::Vertex br{gx + gw, gy + gh, u1, v1, cr, cg, cb, ca};
+            vertices << tl << tr << bl << tr << br << bl;
+
+            // Wide characters occupy two columns. **Ask the same function the
+            // emulator asked** -- the old rule here guessed from the rasterised
+            // glyph's ink box ("wider than 1.2 cells"), which says "narrow" for a
+            // slim CJK punctuation mark and "wide" for a fat dash, and every
+            // disagreement with the emulator shifts the rest of the row.
+            penX += cellW * (QTerm::CharWidth::isWide(codePoint) ? 2 : 1);
+        }
+
+        if ((underline || strikeOut) && penX > x) {
+            const QRect solid = atlas.solidRegion();
+            if (solid.isNull())
+                return false; // atlas full; the general path draws the row
+
+            const float su = float(solid.x() + 1) / float(atlasSize.width());
+            const float sv = float(solid.y() + 1) / float(atlasSize.height());
+            const float thickness = qMax(1.0f, float(cellH / 14.0));
+
+            const auto appendLine = [&](float top) {
+                const float x0 = float(x);
+                const float x1 = float(penX);
+                const QTermTextMaterial::Vertex tl{x0, top, su, sv, cr, cg, cb, ca};
+                const QTermTextMaterial::Vertex tr{x1, top, su, sv, cr, cg, cb, ca};
+                const QTermTextMaterial::Vertex bl{x0, top + thickness, su, sv, cr, cg, cb, ca};
+                const QTermTextMaterial::Vertex br{x1, top + thickness, su, sv, cr, cg, cb, ca};
+                vertices << tl << tr << bl << tr << br << bl;
+            };
+            if (underline)
+                appendLine(float(baseline + qMax(1.0, cellH / 10.0)));
+            if (strikeOut)
+                appendLine(float(baseline - ascent * 0.30));
+        }
+
+        x += cols * cellW;
+    }
+    return true;
 }
 
 // ── Selection geometry ────────────────────────────────────────────────────────
@@ -275,30 +484,33 @@ void rebuildSelection(QSGGeometryNode *node, QTermSurfaceModel *sm,
         return;
     }
 
-    const int startRow = sm->selectionStartRow();
-    const int endRow   = sm->selectionEndRow();
-    const int rows     = sm->rows();
-    const int cols     = sm->columns();
+    // One quad per row that has something to highlight.
+    //
+    // The buffer is sized from `spans` -- the very list the loop below writes from --
+    // and NOT from `endRow - startRow + 1`. `QSGGeometry::allocate()` does not zero
+    // the memory, so any vertex the loop fails to write is drawn as garbage; sizing
+    // the buffer from a looser count than the loop's own skip conditions was exactly
+    // that bug (a wedge of skewed triangles across the rows). See
+    // QTermSelectionGeometry.h.
+    const QList<Internal::SelectionSpan> spans = Internal::selectionSpans(
+        sm->selectionStartRow(), sm->selectionStartColumn(),
+        sm->selectionEndRow(), sm->selectionEndColumn(),
+        sm->rows(), sm->columns());
 
-    // One quad per selected row.
-    const int quadCount = qMax(0, endRow - startRow + 1);
     QSGGeometry *geom = node->geometry();
-    geom->allocate(quadCount * 6);
+    geom->allocate(int(spans.size()) * 6);
 
     auto *v = geom->vertexDataAsPoint2D();
     int vi = 0;
 
-    for (int row = startRow; row <= endRow && row < rows; ++row) {
-        const int selStart = (row == startRow) ? sm->selectionStartColumn() : 0;
-        const int selEnd   = (row == endRow)   ? sm->selectionEndColumn()   : cols;
-        if (selEnd <= selStart)
-            continue;
-        const float x0 = float(selStart * cellW);
-        const float y0 = float(row * cellH);
-        const float x1 = float(selEnd   * cellW);
+    for (const Internal::SelectionSpan &span : spans) {
+        const float x0 = float(span.startColumn * cellW);
+        const float y0 = float(span.row * cellH);
+        const float x1 = float(span.endColumn * cellW);
         const float y1 = float(y0 + cellH);
         appendQuadP2D(v, vi, x0, y0, x1, y1);
     }
+    Q_ASSERT(vi == geom->vertexCount());
 
     node->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
 }
@@ -403,8 +615,19 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
 {
     setFlag(QQuickItem::ItemHasContents, true);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
-    setAcceptedMouseButtons(Qt::LeftButton);
-    setAcceptHoverEvents(false);
+
+    m_frameCoalesceTimer.setSingleShot(true);
+    connect(&m_frameCoalesceTimer, &QTimer::timeout, this, [this] {
+        m_lastFrameRequest.restart();
+        update();
+    });
+    // One call, not a hand-written copy of what it does: the button mask and the
+    // pointer shape both depend on the mouse mode, and updateMouseAcceptance() only
+    // runs when that mode *changes*. A terminal that never enables mouse reporting
+    // would otherwise keep whatever the constructor happened to set for its whole
+    // life -- which is how the right button went missing: the mask here said
+    // LeftButton, so contextMenuRequested could never fire on the common path.
+    updateMouseAcceptance();
 
     connect(this, &QQuickItem::activeFocusChanged, this, [this]() {
         m_hasFocus = hasActiveFocus();
@@ -441,6 +664,8 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
             this, &QTermQuickItem::copyRequested);
     connect(m_controller, &QTermViewController::hyperlinkActivated,
             this, &QTermQuickItem::hyperlinkActivated);
+    connect(m_controller, &QTermViewController::contextMenuRequested,
+            this, &QTermQuickItem::contextMenuRequested);
     connect(m_controller, &QTermViewController::terminalChanged, this, [this]() {
         scheduleFullDirty();
         emit terminalChanged();
@@ -451,40 +676,83 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
     });
 }
 
+QTermQuickItem::~QTermQuickItem()
+{
+    delete m_atlasTexture;
+}
+
 // ── Dirty flag helpers ────────────────────────────────────────────────────────
+
+int QTermQuickItem::minimumFrameIntervalMs() const
+{
+    // Follow the display: a 120 Hz panel should not be held down to 60.
+    if (QQuickWindow *win = window()) {
+        if (const QScreen *screen = win->screen()) {
+            const qreal hz = screen->refreshRate();
+            if (hz > 0.0) {
+                return qMax(1, qRound(1000.0 / hz));
+            }
+        }
+    }
+    return 16;
+}
+
+void QTermQuickItem::requestFrame()
+{
+    // A frame is already queued; the dirty flags it will read are up to date.
+    if (m_frameCoalesceTimer.isActive()) {
+        return;
+    }
+
+    const int interval = minimumFrameIntervalMs();
+    const qint64 since = m_lastFrameRequest.isValid() ? m_lastFrameRequest.elapsed()
+                                                      : interval;
+    if (since >= interval) {
+        // Idle long enough that this is not a burst -- draw straight away so
+        // typing and other interactive updates keep zero added latency.
+        m_lastFrameRequest.restart();
+        update();
+        return;
+    }
+
+    // Mid-burst: fold everything that arrives before the next display refresh
+    // into one repaint. The timer always fires, so the final state of a burst
+    // is never left undrawn.
+    m_frameCoalesceTimer.start(interval - int(since));
+}
 
 void QTermQuickItem::scheduleFullDirty()
 {
     m_fullDirty = true;
     m_contentDirty = m_selectionDirty = m_cursorDirty = true;
     m_dirtyRowSet.clear();
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleContentDirty()
 {
     m_contentDirty = true;
     m_dirtyRowSet.clear();
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleSelectionDirty()
 {
     m_selectionDirty = true;
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleCursorDirty()
 {
     m_cursorDirty = true;
-    update();
+    requestFrame();
 }
 
 void QTermQuickItem::scheduleRowsDirty(QVector<int> rows)
 {
     if (m_contentDirty || m_fullDirty) {
         // Already doing a full repaint; no need to track individual rows.
-        update();
+        requestFrame();
         return;
     }
     for (int r : rows) {
@@ -492,10 +760,10 @@ void QTermQuickItem::scheduleRowsDirty(QVector<int> rows)
             m_dirtyRowSet.append(r);
         }
     }
-    update();
+    requestFrame();
 }
 
-// ── Terminal 绑定 ─────────────────────────────────────────────────────────────
+// ── Terminal binding ─────────────────────────────────────────────────────────
 
 QTermTerminal *QTermQuickItem::terminal() const noexcept
 {
@@ -508,7 +776,7 @@ void QTermQuickItem::setTerminal(QTermTerminal *terminal)
     scheduleFullDirty();
 }
 
-// ── 字体 ──────────────────────────────────────────────────────────────────────
+// ── Font ─────────────────────────────────────────────────────────────────────
 
 QString QTermQuickItem::fontFamily() const
 {
@@ -539,10 +807,28 @@ void QTermQuickItem::setFontPixelSize(int fontPixelSize)
     emit fontChanged();
 }
 
+qreal QTermQuickItem::lineHeight() const noexcept
+{
+    return m_controller->lineHeight();
+}
+
+void QTermQuickItem::setLineHeight(qreal factor)
+{
+    // **Compare around the call, not against the argument.** The controller
+    // clamps, so an out-of-range value would never equal what is stored and
+    // would re-emit fontChanged() on every set.
+    const qreal before = m_controller->lineHeight();
+    m_controller->setLineHeight(factor);
+    if (qFuzzyCompare(before, m_controller->lineHeight()))
+        return;
+    scheduleFullDirty();
+    emit fontChanged();
+}
+
 qreal QTermQuickItem::cellWidth() const noexcept { return m_controller->cellWidth(); }
 qreal QTermQuickItem::cellHeight() const noexcept { return m_controller->cellHeight(); }
 
-// ── 调色板 ────────────────────────────────────────────────────────────────────
+// ── Palette ──────────────────────────────────────────────────────────────────
 
 QColor QTermQuickItem::foregroundColor() const { return m_foregroundColor; }
 
@@ -562,6 +848,32 @@ void QTermQuickItem::setBackgroundColor(const QColor &backgroundColor)
     m_backgroundColor = backgroundColor;
     scheduleContentDirty();
     emit paletteChanged();
+}
+
+QColor QTermQuickItem::inverseTextColor() const { return m_inverseTextColor; }
+
+void QTermQuickItem::setInverseTextColor(const QColor &inverseTextColor)
+{
+    if (m_inverseTextColor == inverseTextColor) return;
+    m_inverseTextColor = inverseTextColor;
+    scheduleFullDirty();
+    emit paletteChanged();
+}
+
+// Reverse video (SGR 7) swaps the resolved colours: the block takes the cell's
+// foreground, the glyph takes its background. A cell with no explicit background
+// falls back to the theme default -- and that fallback must stay *opaque* even
+// when m_backgroundColor carries alpha for a translucent terminal, or the glyph
+// is drawn semi-transparent over a solid block of its own foreground (and
+// disappears completely at alpha 0).
+//
+// Deriving keeps the hue: a hardcoded constant here only looks right on one of
+// the two themes.
+QColor QTermQuickItem::effectiveInverseTextColor() const
+{
+    if (m_inverseTextColor.isValid())
+        return m_inverseTextColor;
+    return QColor(m_backgroundColor.rgb());
 }
 
 QColor QTermQuickItem::selectionColor() const { return m_selectionColor; }
@@ -616,7 +928,7 @@ void QTermQuickItem::setCursorOpacity(qreal cursorOpacity)
     emit cursorOpacityChanged();
 }
 
-// ── 滚动 ──────────────────────────────────────────────────────────────────────
+// ── Scrolling ────────────────────────────────────────────────────────────────
 
 qreal QTermQuickItem::scrollSize() const noexcept { return m_controller->scrollSize(); }
 qreal QTermQuickItem::scrollPosition() const noexcept { return m_controller->scrollPosition(); }
@@ -626,7 +938,7 @@ void QTermQuickItem::setScrollPosition(qreal position)
     m_controller->setScrollPosition(position);
 }
 
-// ── 坐标辅助 ──────────────────────────────────────────────────────────────────
+// ── Coordinate helpers ───────────────────────────────────────────────────────
 
 int QTermQuickItem::rowAtPosition(qreal y) const { return m_controller->rowAtPosition(y); }
 int QTermQuickItem::columnAtPosition(qreal x) const { return m_controller->columnAtPosition(x); }
@@ -803,9 +1115,49 @@ void QTermQuickItem::updateMouseAcceptance()
         setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
         setAcceptHoverEvents(m_controller->hoverEventsNeeded());
     } else {
-        setAcceptedMouseButtons(Qt::LeftButton);
+        // The right button is accepted here too: it is what raises contextMenuRequested,
+        // which is how a host gets a menu without laying a MouseArea over the terminal.
+        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
         setAcceptHoverEvents(false);
     }
+    applyCursorShape();
+}
+
+Qt::CursorShape QTermQuickItem::cursorShape() const
+{
+    return cursor().shape();
+}
+
+void QTermQuickItem::setCursorShape(Qt::CursorShape shape)
+{
+    if (m_explicitCursorShape && *m_explicitCursorShape == shape)
+        return;
+    m_explicitCursorShape = shape;
+    applyCursorShape();
+    emit cursorShapeChanged();
+}
+
+void QTermQuickItem::resetCursorShape()
+{
+    if (!m_explicitCursorShape)
+        return;
+    m_explicitCursorShape.reset();
+    applyCursorShape();
+    emit cursorShapeChanged();
+}
+
+void QTermQuickItem::applyCursorShape()
+{
+    // Pointer shape: a terminal is a text surface, so the pointer is an I-beam --
+    // every terminal emulator does this, and the arrow reads as "nothing here is
+    // selectable". The exception is an application that has taken the mouse over
+    // (DECSET 1000/1002/1003: vim, htop, tmux): clicks go to it rather than to a
+    // selection, so an I-beam would promise something that does not happen.
+    const Qt::CursorShape shape =
+        m_explicitCursorShape ? *m_explicitCursorShape
+        : (m_controller->mouseProtocolEnabled() ? Qt::ArrowCursor : Qt::IBeamCursor);
+    if (cursor().shape() != shape)
+        setCursor(shape);
 }
 
 // ── updatePaintNode ───────────────────────────────────────────────────────────
@@ -871,6 +1223,11 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     // QTextLayout position is the top-left of the text block.
     const qreal topOffset = (cellH - fm.height()) * 0.5;
 
+    // ── Glyph atlas path ─────────────────────────────────────────────────────
+    static const bool useAtlas = qEnvironmentVariableIsSet("QTERM_GLYPH_ATLAS");
+    if (useAtlas && !m_glyphAtlas)
+        m_glyphAtlas = std::make_unique<QTermGlyphAtlas>();
+
     const bool rowCountChanged = (root->textNodes.size() != rows);
     const bool needTextRebuild = m_fullDirty || m_contentDirty || rowCountChanged;
     const bool hasPartialRows = !m_dirtyRowSet.isEmpty() && !needTextRebuild;
@@ -893,12 +1250,109 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         recreateTextRowNodes(root, window(), rows);
     }
 
-    if (needTextRebuild) {
+    if (useAtlas && (needTextRebuild || hasPartialRows)) {
+        // The whole screen is rebuilt even for a partial update: the vertex
+        // buffer is one flat array, so patching a few rows is no cheaper than
+        // refilling it, and it keeps the row-to-vertex mapping out of the code.
+        m_glyphAtlas->setFont(baseFont);
+
+        const QVariantList lineRuns = sm->visibleLineRuns();
+        const qreal ascent = fm.ascent();
+        QVector<QTermTextMaterial::Vertex> vertices;
+        vertices.reserve(rows * sm->columns() * 6);
+
+        QVector<int> fallbackRows;
+        QVector<QVector<FallbackGlyph>> rowFallbacks(rows);
+        for (int row = 0; row < rows; ++row) {
+            const qsizetype mark = vertices.size();
+            if (!buildRowGlyphs(vertices, rowFallbacks[row], *m_glyphAtlas,
+                                QSizeF(m_glyphAtlas->image().size()),
+                                row, lineRuns, cellW, cellH, topOffset, ascent,
+                                m_foregroundColor, effectiveInverseTextColor(),
+                                m_theme.hyperlinkTint(), m_theme.palette16())) {
+                // Underline or strike-through: the atlas draws glyphs only, so
+                // the whole row goes to the general path.
+                vertices.resize(mark);
+                rowFallbacks[row].clear();
+                fallbackRows.append(row);
+            }
+        }
+
+        if (!root->atlasTextNode) {
+            root->atlasTextNode = new QSGGeometryNode;
+            auto *geometry = new QSGGeometry(QTermTextMaterial::attributes(), 0);
+            geometry->setDrawingMode(QSGGeometry::DrawTriangles);
+            root->atlasTextNode->setGeometry(geometry);
+            root->atlasTextNode->setFlag(QSGNode::OwnsGeometry);
+            auto *material = new QTermTextMaterial;
+            material->setFlag(QSGMaterial::Blending);
+            root->atlasTextNode->setMaterial(material);
+            root->atlasTextNode->setFlag(QSGNode::OwnsMaterial);
+            root->textGroupNode->appendChildNode(root->atlasTextNode);
+        }
+
+        // Re-upload only when the atlas actually grew.
+        if (m_atlasTextureGeneration != m_glyphAtlas->generation()
+            && !m_glyphAtlas->image().isNull()) {
+            delete m_atlasTexture;
+            m_atlasTexture = window()->createTextureFromImage(
+                m_glyphAtlas->image(), QQuickWindow::TextureHasAlphaChannel);
+            m_atlasTextureGeneration = m_glyphAtlas->generation();
+        }
+        static_cast<QTermTextMaterial *>(root->atlasTextNode->material())
+            ->setTexture(m_atlasTexture);
+
+        QSGGeometry *geometry = root->atlasTextNode->geometry();
+        geometry->allocate(int(vertices.size()));
+        if (!vertices.isEmpty()) {
+            memcpy(geometry->vertexData(), vertices.constData(),
+                   vertices.size() * sizeof(QTermTextMaterial::Vertex));
+        }
+        root->atlasTextNode->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
+
+        // Whatever the atlas could not draw goes through the general path: a
+        // whole row when decorations are involved, otherwise just the odd glyph.
+        for (int row = 0; row < rows; ++row) {
+            QSGTextNode *node = root->textNodes[row];
+            if (fallbackRows.contains(row)) {
+                populateRowTextNode(node, row, lineRuns,
+                                    cellW, cellH, baseFont, topOffset,
+                                    m_foregroundColor, effectiveInverseTextColor(),
+                                    m_theme.hyperlinkTint(), m_theme.palette16());
+                continue;
+            }
+
+            node->clear();
+            for (const FallbackGlyph &fallback : std::as_const(rowFallbacks[row])) {
+                QFont glyphFont = baseFont;
+                glyphFont.setBold(fallback.bold);
+                glyphFont.setItalic(fallback.italic);
+
+                QTextLayout layout(fallback.text, glyphFont);
+                QTextOption option = layout.textOption();
+                option.setWrapMode(QTextOption::NoWrap);
+                layout.setTextOption(option);
+
+                QTextCharFormat format;
+                format.setForeground(fallback.color);
+                layout.setFormats({QTextLayout::FormatRange{0, int(fallback.text.size()), format}});
+
+                layout.beginLayout();
+                QTextLine textLine = layout.createLine();
+                if (textLine.isValid()) {
+                    textLine.setLineWidth(cellW * 2);
+                    textLine.setPosition(QPointF(0.0, 0.0));
+                }
+                layout.endLayout();
+                node->addTextLayout(fallback.position, &layout);
+            }
+        }
+    } else if (needTextRebuild) {
         const QVariantList lineRuns = sm->visibleLineRuns();
         for (int row = 0; row < rows; ++row) {
             populateRowTextNode(root->textNodes[row], row, lineRuns,
                                 cellW, cellH, baseFont, topOffset,
-                                m_foregroundColor, m_backgroundColor,
+                                m_foregroundColor, effectiveInverseTextColor(),
                                 m_theme.hyperlinkTint(), m_theme.palette16());
         }
     } else if (hasPartialRows) {
@@ -907,7 +1361,7 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
             if (row >= 0 && row < rows) {
                 populateRowTextNode(root->textNodes[row], row, lineRuns,
                                     cellW, cellH, baseFont, topOffset,
-                                    m_foregroundColor, m_backgroundColor,
+                                    m_foregroundColor, effectiveInverseTextColor(),
                                     m_theme.hyperlinkTint(), m_theme.palette16());
             }
         }
@@ -924,9 +1378,14 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
 
     // ── Cursor ────────────────────────────────────────────────────────────────
     if (m_fullDirty || m_cursorDirty) {
-        const int cursorStyle = sm ? sm->cursorShape()
+        // 宿主的 cursorStyle 是**默认值**,程序用 DECSCUSR 才能盖掉它(见
+        // QTerm::resolveCursorShape)。没有 surface model 时(还没接终端)直接用宿主的。
+        const int cursorStyle = sm ? resolveCursorShape(sm->cursorShape(),
+                                                        static_cast<int>(m_cursorStyle))
                                    : static_cast<int>(m_cursorStyle);
         const bool showCursor = !m_cursorDelegateItem && m_hasFocus;
+        qtermReportCursorDraw(m_cursorDrawReason, m_hasFocus, sm && sm->cursorVisible(),
+                              m_cursorOpacity, m_cursorDelegateItem != nullptr);
         rebuildCursor(root->cursorNode, sm, cellW, cellH,
                       m_cursorColor, m_cursorOpacity, cursorStyle, showCursor);
     }

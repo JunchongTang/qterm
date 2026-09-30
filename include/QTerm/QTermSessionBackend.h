@@ -17,6 +17,13 @@ namespace QTerm {
 class QTermSessionBackend : public QObject
 {
     Q_OBJECT
+    // Registered (but uncreatable) so QML can name the enumerations: `state` is a
+    // QML-visible property on both this class and QTermSession, and a consumer that
+    // paints a connection indicator has to compare it against something. Without a
+    // QML name the only way to read it from QML is by magic number.
+    QML_ELEMENT
+    QML_UNCREATABLE("QTermSessionBackend is an abstract base; instantiate a concrete "
+                    "backend such as QTermSerialBackend.")
     Q_PROPERTY(State state READ state NOTIFY stateChanged)
     // Read-only and on-demand (no NOTIFY): consumers query these via property()
     // at the moment of closing; they are never used in a QML binding.

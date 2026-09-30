@@ -1,0 +1,637 @@
+{
+    "columns": 100,
+    "cursor": {
+        "column": 0,
+        "row": 28
+    },
+    "historyLines": 0,
+    "lines": [
+        {
+            "runs": [
+                {
+                    "columns": 100,
+                    "text": "WARNING: terminal is not fully functional                                                           "
+                }
+            ],
+            "text": "WARNING: terminal is not fully functional"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 100,
+                    "text": "Press RETURN to continue                                                                            "
+                }
+            ],
+            "text": "Press RETURN to continue"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 9,
+                    "foregroundIndex": 3,
+                    "text": "085ecdb ("
+                },
+                {
+                    "bold": true,
+                    "columns": 4,
+                    "foregroundIndex": 6,
+                    "text": "HEAD"
+                },
+                {
+                    "columns": 4,
+                    "foregroundIndex": 3,
+                    "text": " -> "
+                },
+                {
+                    "bold": true,
+                    "columns": 3,
+                    "foregroundIndex": 2,
+                    "text": "dev"
+                },
+                {
+                    "columns": 1,
+                    "foregroundIndex": 3,
+                    "text": ")"
+                },
+                {
+                    "columns": 77,
+                    "text": " perf(core): rebuild style runs on read rather than on every write           "
+                }
+            ],
+            "text": "* 085ecdb (HEAD -> dev) perf(core): rebuild style runs on read rather than on every write"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "2eba7a6"
+                },
+                {
+                    "columns": 91,
+                    "text": " perf(core): materialise the plain-text projection only when read                          "
+                }
+            ],
+            "text": "* 2eba7a6 perf(core): materialise the plain-text projection only when read"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "ff85f1a"
+                },
+                {
+                    "columns": 91,
+                    "text": " perf(core): recycle evicted lines instead of rebuilding them                              "
+                }
+            ],
+            "text": "* ff85f1a perf(core): recycle evicted lines instead of rebuilding them"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "cf295e8"
+                },
+                {
+                    "columns": 91,
+                    "text": " perf(core): write runs of printable ASCII in one pass                                     "
+                }
+            ],
+            "text": "* cf295e8 perf(core): write runs of printable ASCII in one pass"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 9,
+                    "foregroundIndex": 3,
+                    "text": "b0048c2 ("
+                },
+                {
+                    "bold": true,
+                    "columns": 10,
+                    "foregroundIndex": 1,
+                    "text": "origin/dev"
+                },
+                {
+                    "columns": 1,
+                    "foregroundIndex": 3,
+                    "text": ")"
+                },
+                {
+                    "columns": 78,
+                    "text": " feat: inverseTextColor to decouple reverse video from background alpha       "
+                }
+            ],
+            "text": "* b0048c2 (origin/dev) feat: inverseTextColor to decouple reverse video from background alpha"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "8ccc5ab"
+                },
+                {
+                    "columns": 91,
+                    "text": " fix(serial): report a failed open once, with the right kind                               "
+                }
+            ],
+            "text": "* 8ccc5ab fix(serial): report a failed open once, with the right kind"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "181328e"
+                },
+                {
+                    "columns": 91,
+                    "text": " feat(session): register QTermSessionBackend so QML can name State                         "
+                }
+            ],
+            "text": "* 181328e feat(session): register QTermSessionBackend so QML can name State"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "f919013"
+                },
+                {
+                    "columns": 91,
+                    "text": " feat(serial): expose the USB serial number on QTermSerialPortInfo                         "
+                }
+            ],
+            "text": "* f919013 feat(serial): expose the USB serial number on QTermSerialPortInfo"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "c2d92d6"
+                },
+                {
+                    "columns": 91,
+                    "text": " feat(terminal): add selectAll() covering the scrollback                                   "
+                }
+            ],
+            "text": "* c2d92d6 feat(terminal): add selectAll() covering the scrollback"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 9,
+                    "foregroundIndex": 3,
+                    "text": "2afecb0 ("
+                },
+                {
+                    "bold": true,
+                    "columns": 11,
+                    "foregroundIndex": 1,
+                    "text": "origin/main"
+                },
+                {
+                    "columns": 2,
+                    "foregroundIndex": 3,
+                    "text": ", "
+                },
+                {
+                    "bold": true,
+                    "columns": 11,
+                    "foregroundIndex": 1,
+                    "text": "origin/HEAD"
+                },
+                {
+                    "columns": 2,
+                    "foregroundIndex": 3,
+                    "text": ", "
+                },
+                {
+                    "bold": true,
+                    "columns": 4,
+                    "foregroundIndex": 2,
+                    "text": "main"
+                },
+                {
+                    "columns": 1,
+                    "foregroundIndex": 3,
+                    "text": ")"
+                },
+                {
+                    "columns": 58,
+                    "text": " fix(examples): restore the Widget demo's tab labels      "
+                }
+            ],
+            "text": "* 2afecb0 (origin/main, origin/HEAD, main) fix(examples): restore the Widget demo's tab labels"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "777ecb0"
+                },
+                {
+                    "columns": 91,
+                    "text": " fix(examples): use a real widget for the Widget demo's tab close button                   "
+                }
+            ],
+            "text": "* 777ecb0 fix(examples): use a real widget for the Widget demo's tab close button"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "6e58dc7"
+                },
+                {
+                    "columns": 91,
+                    "text": " fix(examples): inset the Widget demo's tab close button from the tab edge                 "
+                }
+            ],
+            "text": "* 6e58dc7 fix(examples): inset the Widget demo's tab close button from the tab edge"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 2,
+                    "text": "* "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "d28a12d"
+                },
+                {
+                    "columns": 91,
+                    "text": " feat(examples): match the Widget demo's icons and naming to the Qt Quick demo             "
+                }
+            ],
+            "text": "* d28a12d feat(examples): match the Widget demo's icons and naming to the Qt Quick demo"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 4,
+                    "text": "*   "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "e7d2fa9"
+                },
+                {
+                    "columns": 89,
+                    "text": " Merge branch 'dev'                                                                      "
+                }
+            ],
+            "text": "*   e7d2fa9 Merge branch 'dev'"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 1,
+                    "foregroundIndex": 3,
+                    "text": "\\"
+                },
+                {
+                    "columns": 98,
+                    "text": "                                                                                                  "
+                }
+            ],
+            "text": "|\\"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "965a899"
+                },
+                {
+                    "columns": 89,
+                    "text": " chore: ignore local tooling artifacts                                                   "
+                }
+            ],
+            "text": "| * 965a899 chore: ignore local tooling artifacts"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "a7f6a7c"
+                },
+                {
+                    "columns": 89,
+                    "text": " feat(examples): rewrite both demos with a shared shadcn-style design system             "
+                }
+            ],
+            "text": "| * a7f6a7c feat(examples): rewrite both demos with a shared shadcn-style design system"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "83e4ce1"
+                },
+                {
+                    "columns": 89,
+                    "text": " fix(render): stop the scene-graph renderer dropping a run's trailing word               "
+                }
+            ],
+            "text": "| * 83e4ce1 fix(render): stop the scene-graph renderer dropping a run's trailing word"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "bef0c00"
+                },
+                {
+                    "columns": 89,
+                    "text": " test: extend core and session coverage                                                  "
+                }
+            ],
+            "text": "| * bef0c00 test: extend core and session coverage"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "7e60bca"
+                },
+                {
+                    "columns": 89,
+                    "text": " docs(api): convert public API comments to QDoc syntax                                   "
+                }
+            ],
+            "text": "| * 7e60bca docs(api): convert public API comments to QDoc syntax"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "776fff2"
+                },
+                {
+                    "columns": 89,
+                    "text": " docs: add a Chinese README and link it from the English one                             "
+                }
+            ],
+            "text": "| * 776fff2 docs: add a Chinese README and link it from the English one"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "77571ff"
+                },
+                {
+                    "columns": 89,
+                    "text": " docs: add QDoc module configuration and documentation CI workflow                       "
+                }
+            ],
+            "text": "| * 77571ff docs: add QDoc module configuration and documentation CI workflow"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "cd44250"
+                },
+                {
+                    "columns": 89,
+                    "text": " docs: move internal Chinese documentation to the private repository                     "
+                }
+            ],
+            "text": "| * cd44250 docs: move internal Chinese documentation to the private repository"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "54126d7"
+                },
+                {
+                    "columns": 89,
+                    "text": " docs: translate session comments to English + forward zoomRequested in QTermWidget      "
+                }
+            ],
+            "text": "| * 54126d7 docs: translate session comments to English + forward zoomRequested in QTermWidget"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "e295739"
+                },
+                {
+                    "columns": 89,
+                    "text": " fix(wheel): lower Cmd+wheel zoom sensitivity to one step per notch                      "
+                }
+            ],
+            "text": "| * e295739 fix(wheel): lower Cmd+wheel zoom sensitivity to one step per notch"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 1,
+                    "foregroundIndex": 2,
+                    "text": "|"
+                },
+                {
+                    "columns": 3,
+                    "text": " * "
+                },
+                {
+                    "columns": 7,
+                    "foregroundIndex": 3,
+                    "text": "6b2d9c9"
+                },
+                {
+                    "columns": 89,
+                    "text": " feat(wheel): report zoomRequested on Ctrl/Cmd+wheel                                     "
+                }
+            ],
+            "text": "| * 6b2d9c9 feat(wheel): report zoomRequested on Ctrl/Cmd+wheel"
+        },
+        {
+            "runs": [
+                {
+                    "columns": 100,
+                    "text": "                                                                                                    "
+                }
+            ],
+            "text": ""
+        },
+        {
+            "runs": [
+                {
+                    "columns": 100,
+                    "text": "                                                                                                    "
+                }
+            ],
+            "text": ""
+        }
+    ],
+    "rows": 30
+}

@@ -16,9 +16,103 @@
 
 #include <QTerm/QTermSurfaceModel.h>
 
+#include "core/QTermCharWidth.h"
+
 #include <cmath>
 
 namespace {
+
+// ── Keeping text on the cell grid ────────────────────────────────────────────
+//
+// A terminal is a grid: cell n starts at exactly n * cellW, and the emulator
+// already decided how many cells each character claims (QTerm::CharWidth).
+// Handing a whole run to drawText()/QTextLayout throws that away -- Qt advances
+// by each glyph's own metrics, which matches the grid only while every glyph
+// comes from the monospaced primary font.
+//
+// It stops matching the moment a character falls back to another font. Measured
+// with Menlo at 15 px: a cell is 9.016 px, so a wide character owes 18.03 px,
+// but the CJK fallback advances 15.00 -- three pixels short *per character*.
+// Ten Chinese characters in a file name and everything after them on that line
+// sits three cells to the left; that is the "the columns of `ls` don't line up"
+// report. Narrow characters are not safe either: with JetBrains Mono a
+// box-drawing U+2500 advances 15.0 against a 12.875 px cell, so a TUI's
+// horizontal rule grows two pixels per character.
+//
+// So the run is split into segments of characters that need the same
+// correction, and each segment is drawn with a font whose letter spacing makes
+// its glyphs advance exactly one (or two) cells. Each segment is positioned at
+// its own grid x, so error cannot accumulate across segments either. Plain
+// ASCII in the primary font is a single segment with a zero correction -- the
+// common case stays one draw call.
+struct QTermGridSegment
+{
+    qsizetype start = 0;        // offset into the run text, in UTF-16 units
+    qsizetype length = 0;
+    int column = 0;             // first cell, relative to the run's first cell
+    int columns = 0;
+    qreal letterSpacing = 0.0;  // QFont::AbsoluteSpacing to add after each glyph
+};
+
+QVector<QTermGridSegment> qtermGridSegments(const QString &text, const QFontMetricsF &metrics,
+                                            qreal cellW)
+{
+    QVector<QTermGridSegment> out;
+    const QStringView view(text);
+    qsizetype i = 0;
+    int column = 0;
+
+    // One grapheme at a time: a base character plus its combining marks is a
+    // single cell and must be measured (and drawn) as a unit.
+    const auto clusterAt = [&view](qsizetype at, int *cells) -> qsizetype {
+        qsizetype consumed = 0;
+        QTerm::CharWidth::leadingCodePoint(view.sliced(at), &consumed);
+        if (consumed <= 0)
+            return 0;
+        *cells = qMax(1, QTerm::CharWidth::displayWidth(view.sliced(at, consumed)));
+        qsizetype end = at + consumed;
+        while (end < view.size()) {
+            qsizetype markLen = 0;
+            QTerm::CharWidth::leadingCodePoint(view.sliced(end), &markLen);
+            if (markLen <= 0
+                || QTerm::CharWidth::displayWidth(view.sliced(end, markLen)) != 0) {
+                break;
+            }
+            end += markLen;
+        }
+        return end - at;
+    };
+
+    while (i < view.size()) {
+        int cells = 1;
+        const qsizetype clusterLen = clusterAt(i, &cells);
+        if (clusterLen <= 0)
+            break;
+        const qreal advance = metrics.horizontalAdvance(text.mid(i, clusterLen));
+        const qreal correction = cells * cellW - advance;
+
+        // Extend while the next cluster needs the same correction. That is what
+        // keeps a stretch of Chinese, or a stretch of ASCII, in one segment.
+        qsizetype end = i + clusterLen;
+        int columns = cells;
+        while (end < view.size()) {
+            int nextCells = 1;
+            const qsizetype nextLen = clusterAt(end, &nextCells);
+            if (nextLen <= 0)
+                break;
+            const qreal nextAdvance = metrics.horizontalAdvance(text.mid(end, nextLen));
+            if (nextCells != cells || !qFuzzyCompare(nextAdvance + 1.0, advance + 1.0))
+                break;
+            end += nextLen;
+            columns += nextCells;
+        }
+
+        out.append(QTermGridSegment{i, end - i, column, columns, correction});
+        column += columns;
+        i = end;
+    }
+    return out;
+}
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
@@ -133,7 +227,18 @@ struct QTermPaintRequest {
     QFont baseFont;
     QColor foreground;
     QColor background;
+    // Glyph colour for reverse-video cells with no explicit background of their
+    // own. **Deliberately separate from `background`**: that one may carry alpha
+    // for a translucent terminal, and a translucent glyph painted over a solid
+    // block of its own foreground renders as a smear (or vanishes at alpha 0).
+    // Invalid = derive from `background` with alpha forced opaque, which is the
+    // historical behaviour.
+    QColor inverseText;
     QColor selection;
+    // Search matches, drawn over the selection and under the text. Invalid
+    // disables the pass, which is what a host that never calls search() gets.
+    QColor searchHighlight;
+    QColor searchCurrent;
     QColor cursor;
     qreal cursorOpacity = 1.0;
     int cursorStyle = 0;
@@ -164,6 +269,7 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
     const qreal textTopOffset = (cellH - metrics.height()) * 0.5;
     const QVariantList visibleRuns = sm->visibleLineRuns();
     const int lineCount = qMin(sm->rows(), visibleRuns.size());
+    const QVariantList searchHighlights = sm->searchHighlights();
 
     painter->setRenderHint(QPainter::TextAntialiasing, true);
 
@@ -200,6 +306,27 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             }
         }
 
+        // Pass 1c: search matches. The rows carried by the highlights are
+        // viewport-relative, same as the runs, so they index directly.
+        if (req.searchHighlight.isValid() || req.searchCurrent.isValid()) {
+            for (const QVariant &hv : searchHighlights) {
+                const QVariantMap highlight = hv.toMap();
+                if (highlight.value(QStringLiteral("row")).toInt() != row)
+                    continue;
+                const bool isCurrent = highlight.value(QStringLiteral("current")).toBool();
+                const QColor tint = isCurrent ? req.searchCurrent : req.searchHighlight;
+                if (!tint.isValid())
+                    continue;
+                const int startColumn = highlight.value(QStringLiteral("startColumn")).toInt();
+                const int endColumn = highlight.value(QStringLiteral("endColumn")).toInt();
+                if (endColumn <= startColumn)
+                    continue;
+                painter->fillRect(QRectF(startColumn * cellW, y,
+                                         (endColumn - startColumn) * cellW, cellH),
+                                  tint);
+            }
+        }
+
         // Pass 2: text
         x = 0.0;
         for (const QVariant &rv : lineRuns) {
@@ -214,7 +341,10 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             runFont.setStrikeOut(run.value(QStringLiteral("strikethrough")).toBool());
             painter->setFont(runFont);
 
-            QColor fg = qtermEffectiveForeground(run, req.foreground, req.background, req.palette16);
+            const QColor inverseText = req.inverseText.isValid()
+                                     ? req.inverseText
+                                     : QColor(req.background.rgb());
+            QColor fg = qtermEffectiveForeground(run, req.foreground, inverseText, req.palette16);
             if (hasHyperlink
                 && run.value(QStringLiteral("foregroundIndex"), -1).toInt() < 0
                 && run.value(QStringLiteral("foregroundRgb"),   -1).toInt() < 0) {
@@ -223,10 +353,23 @@ void qtermPaintTerminal(QPainter *painter, const QTermPaintRequest &req)
             }
             fg.setAlphaF(run.value(QStringLiteral("dim")).toBool() ? 0.65 : 1.0);
             painter->setPen(fg);
-            painter->drawText(
-                QRectF(x, y + textTopOffset, columns * cellW, cellH),
-                Qt::AlignLeft | Qt::AlignTop | Qt::TextDontClip,
-                run.value(QStringLiteral("text")).toString());
+            // Per segment, so every cell lands on the grid (see qtermGridSegments).
+            const QString runText = run.value(QStringLiteral("text")).toString();
+            const QFontMetricsF runMetrics(runFont);
+            // Kerning would move glyphs off the grid for the same reason; a
+            // terminal never wants it.
+            runFont.setKerning(false);
+            for (const QTermGridSegment &seg : qtermGridSegments(runText, runMetrics, cellW)) {
+                QFont segFont = runFont;
+                if (!qFuzzyIsNull(seg.letterSpacing))
+                    segFont.setLetterSpacing(QFont::AbsoluteSpacing, seg.letterSpacing);
+                painter->setFont(segFont);
+                painter->drawText(
+                    QRectF(x + seg.column * cellW, y + textTopOffset,
+                           seg.columns * cellW, cellH),
+                    Qt::AlignLeft | Qt::AlignTop | Qt::TextDontClip,
+                    runText.mid(seg.start, seg.length));
+            }
             x += columns * cellW;
         }
     }

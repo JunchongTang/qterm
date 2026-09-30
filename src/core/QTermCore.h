@@ -35,7 +35,8 @@ public:
     const QTermBuffer &buffer() const noexcept;
     QTermBuffer &buffer() noexcept;
     const QTermModeState &modeState() const noexcept;
-    QByteArray encodeKey(int key, const QString &text = QString()) const;
+    QByteArray encodeKey(int key, const QString &text = QString(),
+                         Qt::KeyboardModifiers modifiers = Qt::NoModifier) const;
     QByteArray encodePaste(const QString &text) const;
 
     // OSC 8: returns the URL registered for the given id, or empty string
@@ -47,7 +48,8 @@ public:
     void writePlainText(const QString &text);
     void setMaximumScrollbackLines(int maximumScrollbackLines);
     void setTerminalSize(int columns, int rows);
-    void sendKey(int key, const QString &text = QString());
+    void sendKey(int key, const QString &text = QString(),
+                 Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     void sendPaste(const QString &text);
 
 signals:

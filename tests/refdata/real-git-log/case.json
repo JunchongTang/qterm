@@ -1,0 +1,6 @@
+{
+  "columns": 100,
+  "rows": 30,
+  "chunk": 4096,
+  "recordedFrom": "git -C /home/user/workspace/1-projects/qterm log --oneline --graph --color=always -25"
+}

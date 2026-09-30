@@ -33,7 +33,11 @@ public:
     void setOutboundHandler(const std::function<void(const QByteArray &)> &handler);
     void setRegisterHyperlinkHandler(const std::function<int(const QString &)> &handler);
 
-    void print(const QString &text);
+    void print(QStringView text);
+    // Fast path for a run of plain printable ASCII (0x20-0x7E). Such characters
+    // are always one cell wide and never combining, so the run can be written
+    // straight into the line instead of going through print() per character.
+    void printNarrowRun(QStringView run);
     void lineFeed();
     void carriageReturn();
     void backspace();
@@ -46,7 +50,11 @@ public:
     void cursorPosition(int row, int column);
     void eraseInLine(int mode);
     void eraseInDisplay(int mode);
-    void characterAttributes(const QVector<int> &parameters);
+    // subParameterFlags marks values introduced by a colon rather than a
+    // semicolon; see consumeExtendedColor(). Empty means the whole sequence
+    // used semicolons.
+    void characterAttributes(const QVector<int> &parameters,
+                             const QVector<quint8> &subParameterFlags = {});
     void insertCharacters(int count);
     void deleteCharacters(int count);
     void insertLines(int count);

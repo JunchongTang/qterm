@@ -2,6 +2,8 @@
 #define QTERM_QTERMQUICKPAINTEDITEM_H
 
 #include <QColor>
+
+#include <optional>
 #include <QPointer>
 #include <QQmlComponent>
 #include <QQuickPaintedItem>
@@ -32,16 +34,35 @@ class QTermQuickPaintedItem : public QQuickPaintedItem
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontPixelSize READ fontPixelSize WRITE setFontPixelSize NOTIFY fontChanged)
+    // Multiplier on the font's natural line spacing (1.0 = the font's own).
+    // Larger values space the rows out **without changing the glyph size** —
+    // see QTermViewController::lineHeight() for what else moves with it.
+    Q_PROPERTY(qreal lineHeight READ lineHeight WRITE setLineHeight NOTIFY fontChanged)
     Q_PROPERTY(qreal cellWidth READ cellWidth NOTIFY metricsChanged)
     Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY metricsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
+    /*!
+        Glyph colour for reverse-video (SGR 7) cells with no explicit background
+        of their own. **Separate from \l backgroundColor on purpose**: that one may
+        carry alpha for a translucent terminal, and a translucent glyph over a
+        solid block of its own foreground renders as a smear (or vanishes at
+        alpha 0). Invalid (the default) derives it from \l backgroundColor with
+        alpha forced opaque -- the historical behaviour.
+    */
+    Q_PROPERTY(QColor inverseTextColor READ inverseTextColor WRITE setInverseTextColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchHighlightColor READ searchHighlightColor WRITE setSearchHighlightColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchCurrentColor READ searchCurrentColor WRITE setSearchCurrentColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermQuickPaintedItem::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
     Q_PROPERTY(QQmlComponent *cursorDelegate READ cursorDelegate WRITE setCursorDelegate NOTIFY cursorDelegateChanged FINAL)
-    // 标准化滚动属性，直接对接 QML ScrollBar 的 position / size
+    // See QTermQuickItem::cursorShape -- same contract: unset follows the terminal,
+    // an assignment pins it, resetCursorShape() hands it back.
+    Q_PROPERTY(Qt::CursorShape cursorShape READ cursorShape WRITE setCursorShape
+               RESET resetCursorShape NOTIFY cursorShapeChanged)
+    // Normalised scroll properties, matching QML ScrollBar's position / size.
     Q_PROPERTY(qreal scrollPosition READ scrollPosition WRITE setScrollPosition NOTIFY scrollChanged)
     Q_PROPERTY(qreal scrollSize READ scrollSize NOTIFY scrollChanged)
     Q_PROPERTY(QTerm::QTermTheme theme READ theme WRITE setTheme NOTIFY themeChanged)
@@ -52,9 +73,9 @@ public:
         \brief Built-in cursor rendering styles.
     */
     enum CursorStyle {
-        Block,      // 填充块（默认）
-        Underline,  // 单元格底部下划线
-        Bar         // 左侧竖线（I-beam）
+        Block,      // filled block (default)
+        Underline,  // underline along the bottom of the cell
+        Bar         // vertical bar at the left edge (I-beam)
     };
     Q_ENUM(CursorStyle)
 
@@ -70,6 +91,8 @@ public:
 
     int fontPixelSize() const noexcept;
     void setFontPixelSize(int fontPixelSize);
+    qreal lineHeight() const noexcept;
+    void setLineHeight(qreal factor);
 
     qreal cellWidth() const noexcept;
     qreal cellHeight() const noexcept;
@@ -78,10 +101,18 @@ public:
     void setForegroundColor(const QColor &foregroundColor);
 
     QColor backgroundColor() const;
+    QColor inverseTextColor() const;
+    void setInverseTextColor(const QColor &inverseTextColor);
     void setBackgroundColor(const QColor &backgroundColor);
 
     QColor selectionColor() const;
     void setSelectionColor(const QColor &selectionColor);
+
+    QColor searchHighlightColor() const;
+    void setSearchHighlightColor(const QColor &color);
+
+    QColor searchCurrentColor() const;
+    void setSearchCurrentColor(const QColor &color);
 
     QColor cursorColor() const;
     void setCursorColor(const QColor &cursorColor);
@@ -94,6 +125,11 @@ public:
 
     QQmlComponent *cursorDelegate() const noexcept;
     void setCursorDelegate(QQmlComponent *delegate);
+
+    // See QTermQuickItem::cursorShape.
+    Qt::CursorShape cursorShape() const;
+    void setCursorShape(Qt::CursorShape shape);
+    Q_INVOKABLE void resetCursorShape();
 
     /*! \brief Returns the normalized scroll position in the range 0.0 to 1.0. */
     qreal scrollPosition() const noexcept;
@@ -128,10 +164,14 @@ signals:
     void cursorDelegateChanged();
     void scrollChanged();
     void wheelScrolled(int scrollOffset);
-    // 请求外部将 text 写入系统剪贴板（QML/C++ 均可连接）
+    // Asks the host to put text on the system clipboard; connect from QML or C++.
     void copyRequested(const QString &text);
-    // OSC 8 超链接被激活（Cmd+单击），外部决定如何打开 URL
+    // An OSC 8 hyperlink was activated (Cmd+click); the host decides how to open it.
     void hyperlinkActivated(const QString &url);
+    // See QTermQuickItem::contextMenuRequested.
+    void contextMenuRequested(const QPointF &position, int row, int column,
+                              int hyperlinkId);
+    void cursorShapeChanged();
     void themeChanged();
 
 protected:
@@ -146,32 +186,45 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    // 鼠标模式变化时同步 setAcceptedMouseButtons / setAcceptHoverEvents
+    // Keeps setAcceptedMouseButtons / setAcceptHoverEvents in step with the mouse mode.
     void updateMouseAcceptance();
+    // Applies the host's shape when it set one, the automatic shape otherwise.
+    void applyCursorShape();
 
-    // 创建 / 更新 delegate item 的位置、尺寸、透明度
+    // Creates or updates the delegate item's position, size and opacity.
     void recreateCursorDelegateItem();
     void updateCursorDelegateGeometry();
 
-    // ── 共享控制器（输入处理 + 尺寸/滚动逻辑） ───────────────────────────────
+    // ── Shared controller: input handling plus size and scroll logic ─────────
     QTermViewController *m_controller = nullptr;
 
-    // ── 主题（包含调色板和超链接色） ────────────────────────────────────────
+    // ── Theme, including the palette and the hyperlink colour ────────────────
     QTermTheme m_theme;
 
-    // ── 调色板（渲染参数，controller 无需感知） ──────────────────────────────
+    // ── Palette: rendering only, of no concern to the controller ─────────────
     QColor m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));
     QColor m_backgroundColor = QColor(QStringLiteral("#0b1016"));
+    // Invalid = derive from m_backgroundColor with alpha forced opaque.
+    QColor      m_inverseTextColor;
+    // Last reported reason for the cursor being drawn or not (see
+    // qtermReportCursorDraw); logs only on transitions.
+    QString m_cursorDrawReason;
     QColor m_selectionColor  = QColor(QStringLiteral("#214f76"));
+    // Same amber pair as QTermQuickItem, so the two renderers agree.
+    QColor m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};
+    QColor m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};
     QColor m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal  m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle = Block;
+    // Unset means "follow the terminal" (I-beam, arrow while an application has the
+    // mouse); a host assignment pins it.
+    std::optional<Qt::CursorShape> m_explicitCursorShape;
 
-    // ── 光标 delegate ─────────────────────────────────────────────────────────
+    // ── Cursor delegate ──────────────────────────────────────────────────────
     QQmlComponent *m_cursorDelegate     = nullptr;
     QQuickItem    *m_cursorDelegateItem = nullptr;
 
-    // ── 增量脏行集合（行号，0-based visible row） ────────────────────────────
+    // ── Incremental dirty rows, as 0-based visible row numbers ───────────────
     // Non-empty only when contentRowsDirty was fired without a full repaint.
     QVector<int> m_dirtyRows;
 };

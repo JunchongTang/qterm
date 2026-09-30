@@ -1,0 +1,6 @@
+{
+  "columns": 80,
+  "rows": 24,
+  "chunk": 4096,
+  "recordedFrom": "ls --color=always -la /usr/share"
+}

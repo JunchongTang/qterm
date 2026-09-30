@@ -1,0 +1,29 @@
+^DWARNING: terminal is not fully functional
+Press RETURN to continue 
+* [33m085ecdb[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdev[m[33m)[m perf(core): rebuild style runs on read rather than on every write[m
+* [33m2eba7a6[m perf(core): materialise the plain-text projection only when read[m
+* [33mff85f1a[m perf(core): recycle evicted lines instead of rebuilding them[m
+* [33mcf295e8[m perf(core): write runs of printable ASCII in one pass[m
+* [33mb0048c2[m[33m ([m[1;31morigin/dev[m[33m)[m feat: inverseTextColor to decouple reverse video from background alpha[m
+* [33m8ccc5ab[m fix(serial): report a failed open once, with the right kind[m
+* [33m181328e[m feat(session): register QTermSessionBackend so QML can name State[m
+* [33mf919013[m feat(serial): expose the USB serial number on QTermSerialPortInfo[m
+* [33mc2d92d6[m feat(terminal): add selectAll() covering the scrollback[m
+* [33m2afecb0[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m fix(examples): restore the Widget demo's tab labels[m
+* [33m777ecb0[m fix(examples): use a real widget for the Widget demo's tab close button[m
+* [33m6e58dc7[m fix(examples): inset the Widget demo's tab close button from the tab edge[m
+* [33md28a12d[m feat(examples): match the Widget demo's icons and naming to the Qt Quick demo[m
+*   [33me7d2fa9[m Merge branch 'dev'[m
+[32m|[m[33m\[m  [m
+[32m|[m * [33m965a899[m chore: ignore local tooling artifacts[m
+[32m|[m * [33ma7f6a7c[m feat(examples): rewrite both demos with a shared shadcn-style design system[m
+[32m|[m * [33m83e4ce1[m fix(render): stop the scene-graph renderer dropping a run's trailing word[m
+[32m|[m * [33mbef0c00[m test: extend core and session coverage[m
+[32m|[m * [33m7e60bca[m docs(api): convert public API comments to QDoc syntax[m
+[32m|[m * [33m776fff2[m docs: add a Chinese README and link it from the English one[m
+[32m|[m * [33m77571ff[m docs: add QDoc module configuration and documentation CI workflow[m
+[32m|[m * [33mcd44250[m docs: move internal Chinese documentation to the private repository[m
+[32m|[m * [33m54126d7[m docs: translate session comments to English + forward zoomRequested in QTermWidget[m
+[32m|[m * [33me295739[m fix(wheel): lower Cmd+wheel zoom sensitivity to one step per notch[m
+[32m|[m * [33m6b2d9c9[m feat(wheel): report zoomRequested on Ctrl/Cmd+wheel[m
+

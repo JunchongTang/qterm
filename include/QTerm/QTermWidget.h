@@ -1,13 +1,21 @@
 #pragma once
 
 #include <QColor>
+
+#include <optional>
+#include <QElapsedTimer>
 #include <QPointer>
+#include <QRect>
 #include <QString>
 #include <QVector>
 #include <QWidget>
 
 #include <QTerm/QTermTerminal.h>
 #include <QTerm/QTermTheme.h>
+
+QT_BEGIN_NAMESPACE
+class QTimer;
+QT_END_NAMESPACE
 
 namespace QTerm {
 
@@ -24,11 +32,26 @@ class QTermWidget : public QWidget
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontPixelSize READ fontPixelSize WRITE setFontPixelSize NOTIFY fontChanged)
+    // Multiplier on the font's natural line spacing (1.0 = the font's own).
+    // Larger values space the rows out **without changing the glyph size** —
+    // see QTermViewController::lineHeight() for what else moves with it.
+    Q_PROPERTY(qreal lineHeight READ lineHeight WRITE setLineHeight NOTIFY fontChanged)
     Q_PROPERTY(qreal cellWidth READ cellWidth NOTIFY metricsChanged)
     Q_PROPERTY(qreal cellHeight READ cellHeight NOTIFY metricsChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
+    /*!
+        Glyph colour for reverse-video (SGR 7) cells with no explicit background
+        of their own. **Separate from \l backgroundColor on purpose**: that one may
+        carry alpha for a translucent terminal, and a translucent glyph over a
+        solid block of its own foreground renders as a smear (or vanishes at
+        alpha 0). Invalid (the default) derives it from \l backgroundColor with
+        alpha forced opaque -- the historical behaviour.
+    */
+    Q_PROPERTY(QColor inverseTextColor READ inverseTextColor WRITE setInverseTextColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchHighlightColor READ searchHighlightColor WRITE setSearchHighlightColor NOTIFY paletteChanged)
+    Q_PROPERTY(QColor searchCurrentColor READ searchCurrentColor WRITE setSearchCurrentColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY paletteChanged)
     Q_PROPERTY(qreal cursorOpacity READ cursorOpacity WRITE setCursorOpacity NOTIFY cursorOpacityChanged)
     Q_PROPERTY(QTerm::QTermWidget::CursorStyle cursorStyle READ cursorStyle WRITE setCursorStyle NOTIFY cursorStyleChanged)
@@ -73,6 +96,8 @@ public:
         \brief Returns the pixel size of the terminal font.
     */
     int fontPixelSize() const noexcept;
+    qreal lineHeight() const noexcept;
+    void setLineHeight(qreal factor);
 
     /*!
         \brief Sets the pixel size of the terminal font.
@@ -87,10 +112,18 @@ public:
     void setForegroundColor(const QColor &color);
 
     QColor backgroundColor() const;
+    QColor inverseTextColor() const;
+    void setInverseTextColor(const QColor &inverseTextColor);
     void setBackgroundColor(const QColor &color);
 
     QColor selectionColor() const;
     void setSelectionColor(const QColor &color);
+
+    QColor searchHighlightColor() const;
+    void setSearchHighlightColor(const QColor &color);
+
+    QColor searchCurrentColor() const;
+    void setSearchCurrentColor(const QColor &color);
 
     QColor cursorColor() const;
     void setCursorColor(const QColor &color);
@@ -100,6 +133,12 @@ public:
 
     CursorStyle cursorStyle() const noexcept;
     void setCursorStyle(CursorStyle style);
+
+    // See QTermQuickItem::cursorShape. Widget hosts should use this rather than
+    // QWidget::setCursor(), which the mouse-mode tracking would overwrite.
+    Qt::CursorShape cursorShape() const;
+    void setCursorShape(Qt::CursorShape shape);
+    void resetCursorShape();
 
     qreal scrollPosition() const noexcept;
     void setScrollPosition(qreal position);
@@ -148,6 +187,10 @@ signals:
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
     void hyperlinkActivated(const QString &url);
+    // See QTermQuickItem::contextMenuRequested. A widget host can connect this
+    // instead of reimplementing contextMenuEvent() and re-deriving the cell.
+    void contextMenuRequested(const QPointF &position, int row, int column,
+                              int hyperlinkId);
     void themeChanged();
 
 protected:
@@ -165,19 +208,57 @@ protected:
 
 private:
     void updateMouseAcceptance();
+    // Applies the host's shape when it set one, the automatic shape otherwise.
+    void applyCursorShape();
 
     QTermViewController *m_controller  = nullptr;
 
     QTermTheme  m_theme;   // current theme; individual color members follow it
     QColor      m_foregroundColor = QColor(QStringLiteral("#d2f7d0"));
     QColor      m_backgroundColor = QColor(QStringLiteral("#0b1016"));
+    // Invalid = derive from m_backgroundColor with alpha forced opaque.
+    QColor      m_inverseTextColor;
     QColor      m_selectionColor  = QColor(QStringLiteral("#214f76"));
+    // Same amber pair as QTermQuickItem, so the two renderers agree.
+    QColor      m_searchHighlightColor{0xff, 0xd5, 0x4f, 0x66};  // dim, all matches
+    QColor      m_searchCurrentColor{0xff, 0xb3, 0x00, 0xcc};    // bright, current match
     QColor      m_cursorColor     = QColor(QStringLiteral("#d7fbe0"));
     qreal       m_cursorOpacity   = 1.0;
     CursorStyle m_cursorStyle     = Block;
+    // Unset means "follow the terminal"; a host assignment pins it.
+    std::optional<Qt::CursorShape> m_explicitCursorShape;
 
     // Incremental dirty-row set; non-empty only between contentRowsDirty and paint.
     QVector<int> m_dirtyRows;
+
+    /*
+        Repaint coalescing.
+
+        QQuickItem::update() only sets a dirty flag and the scene graph decides
+        when to render, so a Qt Quick view repaints at most once per vsync no
+        matter how often the terminal changes. QWidget::update() posts an
+        UpdateRequest that the event loop delivers on its very next pass, so a
+        widget repaints roughly once per PTY read -- on a 16 MB payload that
+        measured 16680 full-screen repaints against the ~70 the scene graph
+        needed, and 93% of the wall time went into paintEvent.
+
+        Updates are therefore held back to one per frame interval. The first
+        change after an idle period still paints immediately, so typing latency
+        is unaffected; only a burst is throttled, and the trailing timer
+        guarantees the final state is drawn.
+    */
+    void scheduleUpdate(const QRect &rect = QRect());
+    void flushPendingUpdate();
+    int frameIntervalMs() const;
+
+    // Last reported reason for the cursor being drawn or not; used to log
+    // only transitions. Enable with QT_LOGGING_RULES="qterm.cursor.debug=true".
+    QString m_cursorDrawReason;
+
+    QTimer *m_repaintTimer = nullptr;
+    QElapsedTimer m_sinceLastPaint;
+    QRect m_pendingRect;
+    bool m_pendingFull = false;
 };
 
 } // namespace QTerm

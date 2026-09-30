@@ -7,9 +7,18 @@ namespace QTerm {
 
 namespace {
 
+// Cells collected for reflow leave their line behind, so the combining marks
+// held in the line's side table have to be resolved up front.
+struct ProjectedCell
+{
+    QString text;
+    int width = 1;
+    QTermCellAttributes attributes;
+};
+
 struct LogicalLineProjection
 {
-    QVector<QTermCell> cells;
+    QVector<ProjectedCell> cells;
     int displayColumns = 0;
     bool containsCursor = false;
     int cursorDisplayOffset = 0;
@@ -23,8 +32,8 @@ int lastRelevantColumn(const QTermLine &line)
             continue;
         }
 
-        if (!cell.text.isEmpty()) {
-            return column + qMax(1, cell.width);
+        if (!cell.isBlank()) {
+            return column + qMax(1, int(cell.width));
         }
     }
 
@@ -40,8 +49,10 @@ void appendLineCells(LogicalLineProjection &logicalLine, const QTermLine &line, 
             continue;
         }
 
-        logicalLine.cells.append(cell);
-        logicalLine.displayColumns += qMax(1, cell.width);
+        logicalLine.cells.append(ProjectedCell{line.textAt(column),
+                                               qMax(1, int(cell.width)),
+                                               cell.attributes});
+        logicalLine.displayColumns += qMax(1, int(cell.width));
     }
 }
 
@@ -184,8 +195,8 @@ QTermCursorState QTermBuffer::resize(int columns, int rows, const QTermCursorSta
             QTermLine currentLine(columns);
             int currentColumn = 0;
 
-            for (const QTermCell &cell : logicalLine.cells) {
-                const int cellWidth = qMax(1, cell.width);
+            for (const ProjectedCell &cell : logicalLine.cells) {
+                const int cellWidth = cell.width;
                 if (currentColumn > 0 && currentColumn + cellWidth > columns) {
                     currentLine.setWrappedToNextLine(true);
                     reflowedLines.append(currentLine);
@@ -355,9 +366,17 @@ void QTermBuffer::scrollUp()
 {
     m_historyLines.append(m_visibleLines.takeFirst());
     if (m_historyLines.size() > m_maximumHistoryLines) {
+        // Once the history is full every scroll evicts a line, so recycle it
+        // into the new bottom row instead of building a fresh cell array.
+        // resetForReuse() only clears the columns that line actually used,
+        // which for typical output is a small fraction of the width.
+        QTermLine recycled = std::move(m_historyLines.first());
         m_historyLines.remove(0, m_historyLines.size() - m_maximumHistoryLines);
+        recycled.resetForReuse(m_columns);
+        m_visibleLines.append(std::move(recycled));
+    } else {
+        appendEmptyVisibleLine();
     }
-    appendEmptyVisibleLine();
     markAllRowsDirty();
 }
 
@@ -552,7 +571,8 @@ QByteArray sgrTransition(const QTermCellAttributes *prev,
 
 QByteArray QTermBuffer::dumpAnsi(int maxLines) const
 {
-    // 把 scrollback + visible 一起拼成 projection list；保留指针避免拷贝大 line。
+    // Scrollback and visible rows form one projection list. Pointers are kept
+    // rather than copies, since a line can be large.
     QVector<const QTermLine *> projection;
     projection.reserve(m_historyLines.size() + m_visibleLines.size());
     for (const QTermLine &l : m_historyLines) projection.append(&l);
@@ -576,33 +596,35 @@ QByteArray QTermBuffer::dumpAnsi(int maxLines) const
     for (int i = firstIndex; i <= lastRelevantIndex; ++i) {
         const QTermLine &line = *projection.at(i);
         const int cols = line.columns();
-        // 行末空白裁掉——找最后一个真正写过的列。
+        // Trim trailing blanks by finding the last column actually written.
         int lineEnd = -1;
         for (int c = 0; c < cols; ++c) {
-            const QTermCell &cell = line.cellAt(c);
-            if (!cell.text.isEmpty() && cell.text != QStringLiteral(" "))
+            const QString cellText = line.textAt(c);
+            if (!cellText.isEmpty() && cellText != QStringLiteral(" "))
                 lineEnd = c;
         }
         for (int c = 0; c <= lineEnd; ++c) {
             const QTermCell &cell = line.cellAt(c);
-            // 宽字符的第二列已被前一格的 text（含两列宽字）覆盖，跳过。
+            // The second half of a wide character was already emitted with the
+            // first, so skip it.
             if (cell.continuation)
                 continue;
             out.append(sgrTransition(havePrev ? &prevAttrs : nullptr, cell.attributes));
             prevAttrs = cell.attributes;
             havePrev = true;
-            if (cell.text.isEmpty())
-                out.append(' ');             // 空格补位
+            const QString cellText = line.textAt(c);
+            if (cellText.isEmpty())
+                out.append(' ');             // pad the gap
             else
-                out.append(cell.text.toUtf8());
+                out.append(cellText.toUtf8());
         }
-        // 软换行（line wrap）不发 \r\n，让 feedText 自己继续接；
-        // 末行也不发 \r\n，免得多一行空行。
+        // A soft wrap emits no CRLF, so feeding the dump back re-wraps it the
+        // same way. The final line omits it too, to avoid a trailing blank row.
         const bool isLast = (i == lastRelevantIndex);
         if (!isLast && !line.wrappedToNextLine())
             out.append("\r\n", 2);
     }
-    // 收尾 reset，免得后续真实输出继承我们的 SGR 状态。
+    // Reset at the end so real output afterwards does not inherit this SGR state.
     if (havePrev)
         out.append("\x1b[0m", 4);
     return out;

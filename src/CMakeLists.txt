@@ -17,12 +17,16 @@ qt_add_library(qterm STATIC
     ../include/QTerm/QTermTheme.h
     ../include/QTerm/QTermThemePack.h
     ../include/QTerm/QTermThemeLoader.h
+    QTermCursorDiagnostics.h
+    QTermCursorDiagnostics.cpp
     QTermTheme.cpp
     QTermThemePack.cpp
     QTermThemeLoader.cpp
     core/QTermBuffer.h
     core/QTermBuffer.cpp
     core/QTermCell.h
+    core/QTermCharWidth.h
+    core/QTermCharWidth.cpp
     core/QTermCore.h
     core/QTermInputEncoder.h
     core/QTermInputEncoder.cpp
@@ -45,6 +49,10 @@ qt_add_library(qterm STATIC
     quick/QTermQmlForeignTypes.cpp
     quick/QTermQuickPaintedItem.cpp
     quick/QTermQuickItem.cpp
+    quick/QTermGlyphAtlas.h
+    quick/QTermGlyphAtlas.cpp
+    quick/QTermTextMaterial.h
+    quick/QTermTextMaterial.cpp
     session/local/QTermLocalShellScanner.cpp
     session/serial/QTermSerialBackend.cpp
     session/serial/QTermSerialPortInfo.cpp
@@ -54,7 +62,8 @@ qt_add_library(qterm STATIC
     session/QTermSessionBackend.cpp
 )
 
-# QTermWidget 是 QWidget 版本——纯 QML app 不用它，关掉可以省 QtWidgets。
+# QTermWidget is the QWidget frontend. A pure QML application does not need
+# it, and turning it off drops the dependency on QtWidgets.
 if(QTERM_WITH_WIDGETS)
     target_sources(qterm PRIVATE
         ../include/QTerm/QTermWidget.h
@@ -67,6 +76,24 @@ qt_add_qml_module(qterm
     VERSION 1.0
     # All QML types are declared via QML_ELEMENT / QML_UNCREATABLE / QML_VALUE_TYPE
     # macros in their respective public headers — no QML_FILES needed here.
+)
+
+# Glyph-atlas text rendering needs a material of its own: Qt has one for a
+# texture and one for per-vertex colour, but not both at once.
+# BASE keeps the resource paths flat; without it they would carry the source
+# directory. Not BATCHABLE: this material draws its own node rather than taking
+# part in Qt Quick's batching, and the batchable variant expects extra inputs.
+# BATCHABLE is required: Qt Quick's renderer merges compatible geometry nodes,
+# and for that it rewrites the vertex shader to add a per-batch ordering input.
+# Without the batchable variant the pipeline is built with an unresolved
+# attribute and Metal aborts.
+qt_add_shaders(qterm "qterm_text_shaders"
+    BATCHABLE
+    PREFIX "/qt/qml/QTerm"
+    BASE "quick/shaders"
+    FILES
+        quick/shaders/qterm_text.vert
+        quick/shaders/qterm_text.frag
 )
 
 if(WIN32)
