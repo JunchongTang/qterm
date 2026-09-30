@@ -129,6 +129,25 @@ target_link_libraries(qterm_grid_alignment_tests
 
 add_test(NAME qterm_grid_alignment_tests COMMAND qterm_grid_alignment_tests)
 
+# Selection highlight geometry -- pure logic, header-only, so no QTerm library to
+# link: just Qt::Test and the private header's directory.
+qt_add_executable(qterm_selection_geometry_tests
+    quick/QTermSelectionGeometryTest.cpp
+)
+
+target_include_directories(qterm_selection_geometry_tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/quick
+)
+
+target_link_libraries(qterm_selection_geometry_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(NAME qterm_selection_geometry_tests COMMAND qterm_selection_geometry_tests)
+
 qt_add_executable(qterm_pointer_shape_tests
     quick/QTermPointerShapeTest.cpp
 )

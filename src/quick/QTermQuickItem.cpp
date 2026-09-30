@@ -6,6 +6,7 @@
 #include <QTerm/QTermTerminal.h>
 
 #include "QTermGlyphAtlas.h"
+#include "QTermSelectionGeometry.h"
 #include "QTermTextMaterial.h"
 #include "../QTermCursorDiagnostics.h"
 #include "QTermViewController.h"
@@ -483,30 +484,33 @@ void rebuildSelection(QSGGeometryNode *node, QTermSurfaceModel *sm,
         return;
     }
 
-    const int startRow = sm->selectionStartRow();
-    const int endRow   = sm->selectionEndRow();
-    const int rows     = sm->rows();
-    const int cols     = sm->columns();
+    // One quad per row that has something to highlight.
+    //
+    // The buffer is sized from `spans` -- the very list the loop below writes from --
+    // and NOT from `endRow - startRow + 1`. `QSGGeometry::allocate()` does not zero
+    // the memory, so any vertex the loop fails to write is drawn as garbage; sizing
+    // the buffer from a looser count than the loop's own skip conditions was exactly
+    // that bug (a wedge of skewed triangles across the rows). See
+    // QTermSelectionGeometry.h.
+    const QList<Internal::SelectionSpan> spans = Internal::selectionSpans(
+        sm->selectionStartRow(), sm->selectionStartColumn(),
+        sm->selectionEndRow(), sm->selectionEndColumn(),
+        sm->rows(), sm->columns());
 
-    // One quad per selected row.
-    const int quadCount = qMax(0, endRow - startRow + 1);
     QSGGeometry *geom = node->geometry();
-    geom->allocate(quadCount * 6);
+    geom->allocate(int(spans.size()) * 6);
 
     auto *v = geom->vertexDataAsPoint2D();
     int vi = 0;
 
-    for (int row = startRow; row <= endRow && row < rows; ++row) {
-        const int selStart = (row == startRow) ? sm->selectionStartColumn() : 0;
-        const int selEnd   = (row == endRow)   ? sm->selectionEndColumn()   : cols;
-        if (selEnd <= selStart)
-            continue;
-        const float x0 = float(selStart * cellW);
-        const float y0 = float(row * cellH);
-        const float x1 = float(selEnd   * cellW);
+    for (const Internal::SelectionSpan &span : spans) {
+        const float x0 = float(span.startColumn * cellW);
+        const float y0 = float(span.row * cellH);
+        const float x1 = float(span.endColumn * cellW);
         const float y1 = float(y0 + cellH);
         appendQuadP2D(v, vi, x0, y0, x1, y1);
     }
+    Q_ASSERT(vi == geom->vertexCount());
 
     node->markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
 }
