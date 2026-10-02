@@ -148,6 +148,47 @@ target_link_libraries(qterm_selection_geometry_tests
 
 add_test(NAME qterm_selection_geometry_tests COMMAND qterm_selection_geometry_tests)
 
+# Glyph placement inside the cell: the raster margin Qt's font engines add around
+# the ink used to shift every glyph one pixel down and right.
+qt_add_executable(qterm_glyph_ink_tests
+    quick/QTermGlyphInkTest.cpp
+)
+
+target_include_directories(qterm_glyph_ink_tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/quick
+)
+
+target_link_libraries(qterm_glyph_ink_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_glyph_ink_tests COMMAND qterm_glyph_ink_tests)
+
+# Fallback ("supplementary") font: property plumbing, the cell-height rule, and
+# proof that the fallback face is what draws a character the main font lacks.
+qt_add_executable(qterm_fallback_font_tests
+    quick/QTermFallbackFontTest.cpp
+)
+
+target_include_directories(qterm_fallback_font_tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/quick
+)
+
+target_link_libraries(qterm_fallback_font_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Quick
+        Qt6::Test
+        QTerm::qterm
+)
+
+add_test(NAME qterm_fallback_font_tests COMMAND qterm_fallback_font_tests)
+
 qt_add_executable(qterm_pointer_shape_tests
     quick/QTermPointerShapeTest.cpp
 )
@@ -169,6 +210,24 @@ target_link_libraries(qterm_pointer_shape_tests
 qt_import_qml_plugins(qterm_pointer_shape_tests)
 
 add_test(NAME qterm_pointer_shape_tests COMMAND qterm_pointer_shape_tests)
+
+# When a selection gesture ends, and what the middle button means to a host. No QML
+# here: both signals are what a *host* connects to, and the events are posted straight
+# at the item (a QML mouseMove cannot carry a held button, so a real drag cannot be
+# built from QML at all).
+qt_add_executable(qterm_selection_finished_tests
+    quick/QTermSelectionFinishedTest.cpp
+)
+
+target_link_libraries(qterm_selection_finished_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Test
+        Qt6::Widgets
+        QTerm::qterm
+)
+
+add_test(NAME qterm_selection_finished_tests COMMAND qterm_selection_finished_tests)
 
 target_include_directories(qterm_core_tests
     PRIVATE

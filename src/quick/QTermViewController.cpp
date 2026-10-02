@@ -36,9 +36,21 @@ int runColumnCount(const QVariantMap &run)
     return qMax(1, run.value(QStringLiteral("text")).toString().size());
 }
 
-QFont buildFont(const QString &family, int pixelSize)
+QFont buildFont(const QString &family, int pixelSize, const QStringList &fallbacks = {})
 {
     QFont font(family);
+    // Fallbacks ride along in QFont::setFamilies(), which is exactly the list Qt
+    // walks glyph by glyph. Doing it here means the text layout, the glyph atlas'
+    // "let Qt pick the face" path and the general text path all agree without
+    // knowing about fallbacks at all.
+    if (!fallbacks.isEmpty()) {
+        QStringList families{ family };
+        for (const QString &fallback : fallbacks) {
+            if (!fallback.isEmpty() && !families.contains(fallback))
+                families.append(fallback);
+        }
+        font.setFamilies(families);
+    }
     font.setPixelSize(pixelSize);
     return font;
 }
@@ -138,6 +150,24 @@ void QTermViewController::setFontFamily(const QString &family)
         return;
     m_fontFamily = family;
     updateMetrics();
+}
+
+QStringList QTermViewController::fallbackFamilies() const noexcept
+{
+    return m_fallbackFamilies;
+}
+
+void QTermViewController::setFallbackFamilies(const QStringList &families)
+{
+    if (m_fallbackFamilies == families)
+        return;
+    m_fallbackFamilies = families;
+    updateMetrics();
+}
+
+QFont QTermViewController::resolvedFont() const
+{
+    return buildFont(m_fontFamily, m_fontPixelSize, m_fallbackFamilies);
 }
 
 int QTermViewController::fontPixelSize() const noexcept
@@ -344,6 +374,24 @@ bool QTermViewController::handleMousePress(QMouseEvent *event)
         return true;
     }
 
+    // Middle button: the host's paste, or the application's if it has taken the
+    // mouse over -- the same split the right button gets above. The library does
+    // not paste anything itself: it has no business reading the clipboard (see
+    // clipboardWriteRequested for the other direction), and on X11 the middle
+    // button means "paste the primary selection" while on Windows and macOS it
+    // means "paste the clipboard" -- a host-level choice, not a library one.
+    if (event->button() == Qt::MiddleButton) {
+        emit focusRequested();
+        if (m_terminal->isMouseProtocolActive()) {
+            m_terminal->sendMouse(rowAtPosition(event->position().y()),
+                                  columnAtPosition(event->position().x()),
+                                  event->button(), event->modifiers(), true);
+            return true;
+        }
+        emit middleButtonPressed();
+        return true;
+    }
+
     if (event->button() != Qt::LeftButton)
         return false;
 
@@ -480,10 +528,18 @@ bool QTermViewController::handleMouseRelease(QMouseEvent *event)
 
     if (m_suppressSelectionRelease) {
         m_suppressSelectionRelease = false;
+        // A double or triple click built its word / line selection in the press and
+        // double-click handlers and then suppressed this release so it would not be
+        // thrown away. This is still where the gesture *ends*, so it is where the
+        // host hears about it -- announcing from the click handlers instead would
+        // duplicate the logic three ways and depend on Qt's press/double-click
+        // ordering.
+        announceSelectionFinished();
         return true;
     }
 
     updateSelectionFromDrag(event->position().x(), event->position().y());
+    announceSelectionFinished();
     m_selectionAnchorRow    = -1;
     m_selectionAnchorColumn = -1;
     m_selectionAnchorProjectionRow = -1;
@@ -640,8 +696,30 @@ void QTermViewController::updateMetrics()
     const qreal previousCellWidth  = m_cellWidth;
     const qreal previousCellHeight = m_cellHeight;
 
+    /*!
+        **格子高度取主字体与补充字体度量的较大者。**
+
+        为什么:格子(以及选区背景、块光标)的高度原来只按主字体算,而终端主字体常常是纯拉丁
+        的 —— 汉字由补充字体画,而它的字身框比拉丁字体高得多。结果是汉字的墨迹**贴住格子底**
+        (实测:主字体 Menlo 时,汉字下面只剩 0.67px,数字有 2.06px),看起来就是"中文没有垂直
+        居中"。
+
+        取较大者之后两边都有余量。代价是**每屏行数变少**(格子变高)—— 这是有意的取舍。
+
+        用 max 而不是"总和"或"补充字体优先":补充字体只是**兜底**,大部分格子还是主字体画的,
+        主字体更高时当然听主字体的。宽度**不取 max** —— 补充字体若比主字体宽,格子会被撑开,
+        而汉字本来就该占一格(等宽的前提)。
+    */
+    qreal lineSpacing = metrics.lineSpacing();
+    for (const QString &fallback : m_fallbackFamilies) {
+        if (fallback.isEmpty())
+            continue;
+        lineSpacing = qMax(lineSpacing,
+                           QFontMetricsF(buildFont(fallback, m_fontPixelSize)).lineSpacing());
+    }
+
     m_cellWidth  = qMax<qreal>(1.0, metrics.horizontalAdvance(QLatin1Char('M')));
-    m_cellHeight = qMax<qreal>(1.0, metrics.lineSpacing() * m_lineHeight);
+    m_cellHeight = qMax<qreal>(1.0, lineSpacing * m_lineHeight);
 
     if (!qFuzzyCompare(previousCellWidth,  m_cellWidth) ||
         !qFuzzyCompare(previousCellHeight, m_cellHeight)) {
@@ -683,6 +761,16 @@ void QTermViewController::updateSelectionFromDrag(qreal x, qreal y)
     const int dragColumn = columnAtPosition(x);
     m_terminal->setSelectionDrag(m_selectionAnchorProjectionRow, m_selectionAnchorColumn,
                                  dragProjectionRow, dragColumn);
+}
+
+void QTermViewController::announceSelectionFinished()
+{
+    if (!m_terminal)
+        return;
+    QTermSurfaceModel *surface = m_terminal->surfaceModel();
+    if (!surface || !surface->hasSelection())
+        return;                       // a bare click selects nothing; nothing to announce
+    emit selectionFinished(surface->selectedText());
 }
 
 } // namespace QTerm

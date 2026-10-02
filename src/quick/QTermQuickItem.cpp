@@ -662,6 +662,10 @@ QTermQuickItem::QTermQuickItem(QQuickItem *parent)
             this, &QTermQuickItem::zoomRequested);
     connect(m_controller, &QTermViewController::copyRequested,
             this, &QTermQuickItem::copyRequested);
+    connect(m_controller, &QTermViewController::selectionFinished,
+            this, &QTermQuickItem::selectionFinished);
+    connect(m_controller, &QTermViewController::middleButtonPressed,
+            this, &QTermQuickItem::middleButtonPressed);
     connect(m_controller, &QTermViewController::hyperlinkActivated,
             this, &QTermQuickItem::hyperlinkActivated);
     connect(m_controller, &QTermViewController::contextMenuRequested,
@@ -788,6 +792,20 @@ void QTermQuickItem::setFontFamily(const QString &fontFamily)
     if (m_controller->fontFamily() == fontFamily)
         return;
     m_controller->setFontFamily(fontFamily);
+    scheduleFullDirty();
+    emit fontChanged();
+}
+
+QStringList QTermQuickItem::fallbackFamilies() const
+{
+    return m_controller->fallbackFamilies();
+}
+
+void QTermQuickItem::setFallbackFamilies(const QStringList &families)
+{
+    if (m_controller->fallbackFamilies() == families)
+        return;
+    m_controller->setFallbackFamilies(families);
     scheduleFullDirty();
     emit fontChanged();
 }
@@ -1115,9 +1133,20 @@ void QTermQuickItem::updateMouseAcceptance()
         setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
         setAcceptHoverEvents(m_controller->hoverEventsNeeded());
     } else {
-        // The right button is accepted here too: it is what raises contextMenuRequested,
-        // which is how a host gets a menu without laying a MouseArea over the terminal.
-        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
+        /*!
+            The right button is accepted here too: it is what raises contextMenuRequested,
+            which is how a host gets a menu without laying a MouseArea over the terminal.
+
+            **The middle button is accepted in *this* branch above all others.** With no
+            application using the mouse, a middle click is not a mouse report -- it is the
+            host's own gesture (paste, in every terminal that has one), and the controller
+            announces it as middleButtonPressed. Leaving it out of the mask here meant the
+            item never saw the click at all, so that signal could never fire: the feature
+            was dead on arrival while the tests stayed green, because they post the event
+            straight at the item and **posting bypasses the mask** (see the note in
+            QTermPointerShapeTest).
+        */
+        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
         setAcceptHoverEvents(false);
     }
     applyCursorShape();
@@ -1215,8 +1244,9 @@ QSGNode *QTermQuickItem::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     const qreal cellH = m_controller->cellHeight();
     const int rows    = sm->rows();
 
-    QFont baseFont(m_controller->fontFamily());
-    baseFont.setPixelSize(m_controller->fontPixelSize());
+    // **用控制器那一份。** 字体的族列表(含补充字体)只有它知道;以前这里自己拼一份,加了
+    // 补充字体之后两边就会不一致 —— 而每行的基线、`topOffset` 和字形图集全都建立在这份度量上。
+    const QFont baseFont = m_controller->resolvedFont();
     const QFontMetricsF fm(baseFont);
 
     // Vertical offset to vertically center text glyphs within the cell.

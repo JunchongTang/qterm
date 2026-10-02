@@ -87,6 +87,10 @@ QTermWidget::QTermWidget(QWidget *parent)
             this, &QTermWidget::zoomRequested);
     connect(m_controller, &QTermViewController::copyRequested,
             this, &QTermWidget::copyRequested);
+    connect(m_controller, &QTermViewController::selectionFinished,
+            this, &QTermWidget::selectionFinished);
+    connect(m_controller, &QTermViewController::middleButtonPressed,
+            this, &QTermWidget::middleButtonPressed);
     connect(m_controller, &QTermViewController::hyperlinkActivated,
             this, &QTermWidget::hyperlinkActivated);
     connect(m_controller, &QTermViewController::terminalChanged, this, [this]() {
@@ -115,6 +119,19 @@ void QTermWidget::setTerminal(QTermTerminal *terminal)
 QString QTermWidget::fontFamily() const
 {
     return m_controller->fontFamily();
+}
+
+QStringList QTermWidget::fallbackFamilies() const
+{
+    return m_controller->fallbackFamilies();
+}
+
+void QTermWidget::setFallbackFamilies(const QStringList &families)
+{
+    if (m_controller->fallbackFamilies() == families) return;
+    m_controller->setFallbackFamilies(families);
+    update();
+    emit fontChanged();
 }
 
 void QTermWidget::setFontFamily(const QString &family)

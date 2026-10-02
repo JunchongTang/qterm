@@ -38,6 +38,7 @@ private slots:
     void anApplicationWithTheMouseKeepsTheRightButton();
     void thePaintedItemCarriesTheSameApi();
     void theRightButtonIsAcceptedFromTheStart();
+    void theMiddleButtonIsAcceptedWithAndWithoutTheMouse();
     void theHostsCursorStyleIsTheDefaultAndDecscusrOverridesIt();
 };
 
@@ -194,6 +195,44 @@ void QTermPointerShapeTest::theRightButtonIsAcceptedFromTheStart()
     // press is encoded for the program rather than raised as a menu request.
     terminal.feedText(QStringLiteral("\x1b[?1002h"));
     QVERIFY(item.acceptedMouseButtons() & Qt::RightButton);
+}
+
+/*!
+    The middle button, in **both** states.
+
+    The state that matters is the one *without* mouse reporting: there a middle click is
+    not a mouse report at all, it is the host's own gesture -- paste, in every terminal
+    that has one -- and the controller announces it as `middleButtonPressed`. The first
+    cut of that signal had the mask backwards: the middle button was accepted only while
+    an application was using the mouse (where it is forwarded to that application), and
+    dropped from the mask in the ordinary case. So the click never reached the item and
+    the signal could never fire.
+
+    **Nothing below posts a mouse event.** Posting an event straight at the item ignores
+    `acceptedMouseButtons`, which is exactly how the bug survived a test that looked like
+    it covered the feature (see the note on `theRightButtonIsAcceptedFromTheStart`).
+    Asserting the mask is the only way to catch it.
+*/
+void QTermPointerShapeTest::theMiddleButtonIsAcceptedWithAndWithoutTheMouse()
+{
+    QTermTerminal terminal;
+    QTermQuickItem item;
+    item.setTerminal(&terminal);
+
+    // A fresh item: no application has taken the mouse over.
+    QVERIFY2(item.acceptedMouseButtons() & Qt::MiddleButton,
+             "without mouse reporting the middle click is the host's paste gesture");
+
+    // An application takes the mouse over, then hands it back.
+    terminal.feedText(QStringLiteral("\x1b[?1002h"));
+    QVERIFY(item.acceptedMouseButtons() & Qt::MiddleButton);
+    terminal.feedText(QStringLiteral("\x1b[?1002l"));
+    QVERIFY2(item.acceptedMouseButtons() & Qt::MiddleButton,
+             "handing the mouse back must not silently kill middle-click paste");
+
+    QTermQuickPaintedItem painted;
+    painted.setTerminal(&terminal);
+    QVERIFY(painted.acceptedMouseButtons() & Qt::MiddleButton);
 }
 
 // The painted renderer is a separate implementation of the same two APIs, so it

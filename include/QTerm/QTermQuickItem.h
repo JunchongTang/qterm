@@ -6,6 +6,7 @@
 #include <optional>
 #include <QPointer>
 #include <QQmlComponent>
+#include <QStringList>
 #include <QQuickItem>
 #include <QTimer>
 
@@ -44,6 +45,12 @@ class QTermQuickItem : public QQuickItem
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontPixelSize READ fontPixelSize WRITE setFontPixelSize NOTIFY fontChanged)
+
+    // Fallback families for characters the main family has no glyph for (a CJK
+    // face for a Latin-only terminal font). Forwarded to the controller, which
+    // also uses the tallest of the two metrics for the cell height.
+    Q_PROPERTY(QStringList fallbackFamilies READ fallbackFamilies WRITE setFallbackFamilies
+                   NOTIFY fontChanged)
     // Multiplier on the font's natural line spacing (1.0 = the font's own).
     // Larger values space the rows out **without changing the glyph size** —
     // see QTermViewController::lineHeight() for what else moves with it.
@@ -110,6 +117,9 @@ public:
 
     int fontPixelSize() const noexcept;
     void setFontPixelSize(int fontPixelSize);
+
+    QStringList fallbackFamilies() const;
+    void setFallbackFamilies(const QStringList &families);
     qreal lineHeight() const noexcept;
     void setLineHeight(qreal factor);
 
@@ -195,6 +205,13 @@ signals:
     // The host QML connects this to adjust the terminal font size.
     void zoomRequested(int steps);
     void copyRequested();
+    // See QTermViewController::selectionFinished. A host that copies on select
+    // writes the clipboard here; one that does not can ignore it.
+    void selectionFinished(const QString &text);
+    // See QTermViewController::middleButtonPressed. The library pastes nothing on
+    // its own -- reading the clipboard is the host's job, and what a middle click
+    // means differs per platform.
+    void middleButtonPressed();
     void hyperlinkActivated(const QString &url);
     /*!
         \brief Right-click on the terminal, with everything a menu needs.

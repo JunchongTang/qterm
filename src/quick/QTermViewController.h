@@ -4,10 +4,12 @@
 
 #pragma once
 
+#include <QFont>
 #include <QObject>
 #include <QPointer>
 #include <QRectF>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 
 // Forward-declare Qt event types so the header stays lightweight.
@@ -38,6 +40,25 @@ public:
 
     int fontPixelSize() const noexcept;
     void setFontPixelSize(int size);
+
+    // Families to fall back to for characters the main family has no glyph for --
+    // a CJK face for a Latin-only terminal font, typically. They go into the same
+    // QFont::setFamilies() list Qt resolves glyph by glyph, so the renderers pick
+    // them up for free: there is no second selection pass here, and no font of our
+    // own to keep in sync.
+    //
+    // The cell takes the tallest of the main and fallback metrics (see
+    // updateMetrics()). A fallback's ink box is often taller than a Latin font's
+    // line box, and sizing the cell from the main font alone leaves CJK ink pressed
+    // against the bottom of the cell while Latin sits comfortably inside it.
+    QStringList fallbackFamilies() const noexcept;
+    void setFallbackFamilies(const QStringList &families);
+
+    // The font the renderers should lay text out with: main family plus fallbacks,
+    // at the configured pixel size. Exposed so the backends stop building their own
+    // QFont -- with fallbacks they would otherwise disagree with the metrics here,
+    // and the baseline/vertical offset all come from those metrics.
+    QFont resolvedFont() const;
 
     // Multiplier applied to the font's natural line spacing when deriving the
     // cell height. 1.0 = the font's own spacing, which is what terminals have
@@ -96,6 +117,40 @@ signals:
     // the font — it only reports; the host (app) decides how to zoom (e.g. font size).
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
+    /*!
+        The user finished picking a region with the mouse, and \a text is what that
+        region covers. Fired when the left button comes up -- after a drag, and also
+        for the word / whole-line selections a double or triple click makes (those
+        are built in the press and double-click handlers, and the release that
+        follows is where they become final).
+
+        \list
+        \li While a drag is still extending this is silent: the host gets the final
+            region once, not one per mouse move.
+        \li Selections the host set itself (\c selectAll(), \c setSelectionRange())
+            are commands, not gestures, and the host already knows it asked -- so
+            they are not announced.
+        \li An empty region is never announced: there is nothing to copy.
+        \endlist
+
+        A host that copies on select writes \a text to the clipboard here. A host
+        that does not can ignore the signal; nothing depends on what it does.
+    */
+    void selectionFinished(const QString &text);
+    /*!
+        The middle button went down and the terminal did **not** take it: no
+        application has grabbed the mouse, so this is not a mouse report.
+
+        What it means is the host's decision, which is why the library reports the
+        gesture rather than naming an action. Pasting the X11 primary selection is
+        the X11 convention, pasting the clipboard is the console one, and doing
+        nothing (or opening a URL, as some macOS terminals do) is just as valid.
+
+        While an application has taken the mouse over (DECSET 1000/1002/1003) the
+        button belongs to that application and this is not emitted -- the click is
+        reported through \l sendMouse() instead.
+    */
+    void middleButtonPressed();
     void hyperlinkActivated(const QString &url);
     // Right-click on the terminal. Carries everything a host needs to raise a menu
     // without laying its own MouseArea over the view: where to pop it up, which
@@ -116,6 +171,8 @@ private:
     void scheduleTerminalSizeSync();
     void syncTerminalSize();
     void updateSelectionFromDrag(qreal x, qreal y);
+    //! Announce the finished selection to the host, unless there is nothing selected.
+    void announceSelectionFinished();
 
     // ── Signal connection handles ──────────────────────────────────────────
     QMetaObject::Connection m_viewportConnection;
@@ -143,6 +200,7 @@ private:
     QString m_fontFamily    = QStringLiteral("Monospace");
 #endif
     int     m_fontPixelSize = 18;
+    QStringList m_fallbackFamilies;
     qreal   m_lineHeight    = 1.0;
     qreal   m_cellWidth     = 1.0;
     qreal   m_cellHeight    = 1.0;

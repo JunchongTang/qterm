@@ -80,6 +80,23 @@ public:
     /*!
         \brief Sets the working directory used by the shell process.
         \param workingDirectory The directory to start in.
+
+        **An empty string means "do not change directory"**: the shell inherits this
+        process's working directory, like any other forked child (the same as
+        \c QProcess with no working directory set).
+
+        The library deliberately does not pick one for you. What a *user* expects a
+        new terminal to open in -- their home directory, a project folder, wherever
+        the last one was -- is the host's policy, not the terminal's: this class
+        only knows how to start a process, and "the host's own cwd" is the one
+        answer that needs no guessing. A host that wants "home unless the user chose
+        something else" resolves that itself before setting this.
+
+        **A path that cannot be entered kills the session.** The child \c chdir()s
+        before exec and, on failure, prints the reason on the pty and exits with
+        status 127. A host that takes this path from a text field should check it
+        first and report it itself -- by the time the child exits, the session the
+        user was looking at is already gone.
     */
     void setWorkingDirectory(const QString &workingDirectory);
 

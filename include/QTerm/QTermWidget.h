@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QStringList>
 
 #include <optional>
 #include <QElapsedTimer>
@@ -32,6 +33,12 @@ class QTermWidget : public QWidget
     Q_PROPERTY(QTerm::QTermTerminal *terminal READ terminal WRITE setTerminal NOTIFY terminalChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontPixelSize READ fontPixelSize WRITE setFontPixelSize NOTIFY fontChanged)
+
+    // Fallback families for characters the main family has no glyph for (a CJK
+    // face for a Latin-only terminal font). Forwarded to the controller, which
+    // also uses the tallest of the two metrics for the cell height.
+    Q_PROPERTY(QStringList fallbackFamilies READ fallbackFamilies WRITE setFallbackFamilies
+                   NOTIFY fontChanged)
     // Multiplier on the font's natural line spacing (1.0 = the font's own).
     // Larger values space the rows out **without changing the glyph size** —
     // see QTermViewController::lineHeight() for what else moves with it.
@@ -85,6 +92,8 @@ public:
         \brief Returns the font family used for rendering terminal text.
     */
     QString fontFamily() const;
+    QStringList fallbackFamilies() const;
+    void setFallbackFamilies(const QStringList &families);
 
     /*!
         \brief Sets the font family used for rendering terminal text.
@@ -186,6 +195,13 @@ signals:
     // The host connects this to adjust the terminal font size.
     void zoomRequested(int steps);
     void copyRequested(const QString &text);
+    // See QTermViewController::selectionFinished. A host that copies on select
+    // writes the clipboard here; one that does not can ignore it.
+    void selectionFinished(const QString &text);
+    // See QTermViewController::middleButtonPressed. The library pastes nothing on
+    // its own -- reading the clipboard is the host's job, and what a middle click
+    // means differs per platform.
+    void middleButtonPressed();
     void hyperlinkActivated(const QString &url);
     // See QTermQuickItem::contextMenuRequested. A widget host can connect this
     // instead of reimplementing contextMenuEvent() and re-deriving the cell.

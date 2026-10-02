@@ -1,5 +1,7 @@
 #include "QTermGlyphAtlas.h"
 
+#include "QTermGlyphInk.h"
+
 #include <QFont>
 #include <QGlyphRun>
 #include <QPainter>
@@ -172,10 +174,14 @@ const QTermGlyphAtlas::Glyph *QTermGlyphAtlas::glyphFor(char32_t codePoint, Styl
         if (!raster.isNull()) {
             QRect region;
             if (packInto(raster, &region)) {
-                // boundingRect() is relative to the pen position on the
-                // baseline, which is exactly the offset the geometry needs.
+                // boundingRect() is relative to the pen position on the baseline, which
+                // is exactly the offset the geometry needs -- but it describes the *ink*,
+                // while this raster carries a transparent margin around it (see
+                // QTermGlyphInk.h). Taking boundingRect() as the bitmap's position drew
+                // every glyph one pixel low and one pixel right; subtracting where the
+                // ink actually starts inside the bitmap puts it back on the grid.
                 glyph.region = region;
-                glyph.bearing = face.boundingRect(index).topLeft();
+                glyph.bearing = face.boundingRect(index).topLeft() - inkOffsetIn(raster);
                 glyph.valid = true;
             }
         }

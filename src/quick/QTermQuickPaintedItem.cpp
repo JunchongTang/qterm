@@ -89,6 +89,10 @@ QTermQuickPaintedItem::QTermQuickPaintedItem(QQuickItem *parent)
             this, &QTermQuickPaintedItem::wheelScrolled);
     connect(m_controller, &QTermViewController::copyRequested,
             this, &QTermQuickPaintedItem::copyRequested);
+    connect(m_controller, &QTermViewController::selectionFinished,
+            this, &QTermQuickPaintedItem::selectionFinished);
+    connect(m_controller, &QTermViewController::middleButtonPressed,
+            this, &QTermQuickPaintedItem::middleButtonPressed);
     connect(m_controller, &QTermViewController::hyperlinkActivated,
             this, &QTermQuickPaintedItem::hyperlinkActivated);
     connect(m_controller, &QTermViewController::contextMenuRequested,
@@ -125,6 +129,20 @@ void QTermQuickPaintedItem::setFontFamily(const QString &fontFamily)
     if (m_controller->fontFamily() == fontFamily)
         return;
     m_controller->setFontFamily(fontFamily);
+    update();
+    emit fontChanged();
+}
+
+QStringList QTermQuickPaintedItem::fallbackFamilies() const
+{
+    return m_controller->fallbackFamilies();
+}
+
+void QTermQuickPaintedItem::setFallbackFamilies(const QStringList &families)
+{
+    if (m_controller->fallbackFamilies() == families)
+        return;
+    m_controller->setFallbackFamilies(families);
     update();
     emit fontChanged();
 }
@@ -370,7 +388,11 @@ void QTermQuickPaintedItem::updateMouseAcceptance()
         // contextMenuRequested: a host that had to lay a MouseArea over the item to
         // catch it would take the pointer shape away with it (a MouseArea claims the
         // cursor even when it never assigns cursorShape).
-        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
+        //
+        // The middle button likewise: with no application using the mouse it is the
+        // host's own gesture (paste), announced as middleButtonPressed. It has to be in
+        // this mask -- leave it out and the click never reaches the item at all.
+        setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
         setAcceptHoverEvents(false);
     }
     applyCursorShape();
@@ -423,8 +445,8 @@ void QTermQuickPaintedItem::paint(QPainter *painter)
     QTermTerminal *terminal = m_controller->terminal();
     QTermSurfaceModel *surfaceModel = terminal ? terminal->surfaceModel() : nullptr;
 
-    QFont baseFont(m_controller->fontFamily());
-    baseFont.setPixelSize(m_controller->fontPixelSize());
+    // 同 QTermQuickItem:族列表(含补充字体)在控制器里,别在这儿再拼一份。
+    const QFont baseFont = m_controller->resolvedFont();
 
     // Determine if this is a partial (incremental) paint pass.
     // Qt sets the painter clip to the dirty rect when update(QRect) was called.
